@@ -25,11 +25,14 @@ export default function ProductosPage() {
 
       setTodosProductos(result.data);
       
-      const proveedores = [...new Set(
-        result.data
-          .map((p: any) => p.proveedor_nombre)
-          .filter(Boolean)
-      )] as string[];
+      // CORREGIDO: Usar Array.from en lugar de spread
+      const proveedores = Array.from(
+        new Set(
+          result.data
+            .map((p: any) => p.proveedor_nombre)
+            .filter(Boolean)
+        )
+      ) as string[];
       
       setProveedoresUnicos(proveedores.sort());
       setProductosFiltrados(result.data);
@@ -120,7 +123,7 @@ export default function ProductosPage() {
           <div className="flex gap-4 items-start flex-wrap">
             <div className="flex-1 min-w-[250px]">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                🔍 Buscar por nombre o categoría
+                 Buscar por nombre o categoría
               </label>
               <input
                 type="text"
