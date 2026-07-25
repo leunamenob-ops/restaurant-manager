@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { supabase } from '../lib/supabaseClient';
 
 export default function ProductosPage() {
   const [todosProductos, setTodosProductos] = useState<any[]>([]);
@@ -18,24 +19,35 @@ export default function ProductosPage() {
     setError(null);
     
     try {
-      const res = await fetch('/api/productos');
-      const result = await res.json();
+      const { data, error } = await supabase
+        .from('ingredientes')
+        .select(`
+          *,
+          proveedores:proveedor_id (
+            nombre
+          )
+        `)
+        .order('nombre');
 
-      if (!res.ok) throw new Error(result.error);
+      if (error) throw error;
 
-      setTodosProductos(result.data);
+      const productosTransformados = data?.map((item: any) => ({
+        ...item,
+        proveedor_nombre: item.proveedores?.nombre || item.proveedor_nombre || 'Sin proveedor'
+      })) || [];
+
+      setTodosProductos(productosTransformados);
       
-      // CORREGIDO: Usar Array.from en lugar de spread
       const proveedores = Array.from(
         new Set(
-          result.data
+          productosTransformados
             .map((p: any) => p.proveedor_nombre)
             .filter(Boolean)
         )
       ) as string[];
       
       setProveedoresUnicos(proveedores.sort());
-      setProductosFiltrados(result.data);
+      setProductosFiltrados(productosTransformados);
       
     } catch (err: any) {
       console.error('Error cargando productos:', err);
@@ -199,7 +211,7 @@ export default function ProductosPage() {
                   onClick={limpiarFiltros}
                   className="px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg font-medium transition"
                 >
-                  🗑️ Limpiar
+                  ️ Limpiar
                 </button>
               </div>
             )}
