@@ -54,18 +54,23 @@ export async function POST(request: Request) {
       </div>
     `;
 
-    // Enviar email con Resend
-    const data = await resend.emails.send({
+    // Enviar email con Resend (CORREGIDO PARA TYPESCRIPT)
+    const { data, error } = await resend.emails.send({
       from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
       to: [email],
       cc: [process.env.EMAIL_FROM || 'onboarding@resend.dev'],
-      subject: ` Orden de Compra ${numeroPedido} - Hotel Bonanza`,
+      subject: `📦 Orden de Compra ${numeroPedido} - Hotel Bonanza`,
       html: html,
     });
 
-    console.log('✅ [RESEND] Email enviado exitosamente. ID:', data.id);
+    if (error) {
+      console.error('❌ [RESEND] Error al enviar email:', error);
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
 
-    return NextResponse.json({ success: true, id: data.id });
+    console.log('✅ [RESEND] Email enviado exitosamente. ID:', data?.id);
+
+    return NextResponse.json({ success: true, id: data?.id });
     
   } catch (error: any) {
     console.error('❌ [RESEND] Error al enviar email:', error.message);
