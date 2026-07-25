@@ -112,28 +112,32 @@ export default function EditarReceta() {
       .eq('receta_id', recetaId);
 
     if (detalleData) {
-      const items: ItemEditado[] = detalleData.map(d => {
-        if (d.ingredientes) {
+      // CORRECCIÓN DEFINITIVA: Usamos (d: any) para evitar el error de tipos de Supabase
+      const items: ItemEditado[] = detalleData.map((d: any) => {
+        const ing = Array.isArray(d.ingredientes) ? d.ingredientes[0] : d.ingredientes;
+        const sub = Array.isArray(d.subreceta) ? d.subreceta[0] : d.subreceta;
+
+        if (ing) {
           return {
             id: d.id,
             tipo: 'ingrediente',
             ingrediente_id: d.ingrediente_id,
-            nombre: d.ingredientes.nombre,
+            nombre: ing?.nombre || 'Desconocido',
             cantidad: d.cantidad_necesaria,
             coste: d.coste_linea,
-            unidad: d.ingredientes.unidad_receta,
-            costeUnitario: d.ingredientes.precio_receta_real
+            unidad: ing?.unidad_receta || '',
+            costeUnitario: ing?.precio_receta_real || 0
           };
         }
-        if (d.subreceta) {
-          const costePorGramo = d.subreceta.produccion_gramos && d.subreceta.produccion_gramos > 0
-            ? d.subreceta.coste_total / d.subreceta.produccion_gramos
+        if (sub) {
+          const costePorGramo = sub?.produccion_gramos && sub.produccion_gramos > 0
+            ? sub.coste_total / sub.produccion_gramos
             : 0;
           return {
             id: d.id,
             tipo: 'subreceta',
             subreceta_id: d.subreceta_id,
-            nombre: d.subreceta.nombre,
+            nombre: sub?.nombre || 'Desconocido',
             cantidad: d.cantidad_necesaria,
             coste: d.coste_linea,
             unidad: 'g',
@@ -258,12 +262,12 @@ export default function EditarReceta() {
 
   async function guardarReceta() {
     if (!nombre.trim()) {
-      setMensaje('️ El nombre es obligatorio');
+      setMensaje('⚠️ El nombre es obligatorio');
       return;
     }
 
     if (itemsEditados.length === 0) {
-      setMensaje('️ Añade al menos un ingrediente o sub-receta');
+      setMensaje('⚠️ Añade al menos un ingrediente o sub-receta');
       return;
     }
 
@@ -314,7 +318,7 @@ export default function EditarReceta() {
       setMensaje('✅ Receta actualizada correctamente');
 
       setTimeout(() => {
-        router.push('/');
+        router.push('/recetas');
       }, 1500);
 
     } catch (error: any) {
@@ -338,7 +342,7 @@ export default function EditarReceta() {
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900">✏️ Editar Receta</h1>
           <button
-            onClick={() => router.push('/')}
+            onClick={() => router.push('/recetas')}
             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
           >
             ← Volver al listado
@@ -348,7 +352,7 @@ export default function EditarReceta() {
         {mensaje && (
           <div className={`mb-6 p-4 rounded-lg ${
             mensaje.includes('✅') ? 'bg-green-100 text-green-800' :
-            mensaje.includes('️') ? 'bg-yellow-100 text-yellow-800' :
+            mensaje.includes('⚠️') ? 'bg-yellow-100 text-yellow-800' :
             'bg-red-100 text-red-800'
           }`}>
             {mensaje}
@@ -709,7 +713,7 @@ export default function EditarReceta() {
             guardando ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
           }`}
         >
-          {guardando ? ' Guardando...' : '💾 Actualizar receta'}
+          {guardando ? '⏳ Guardando...' : '💾 Actualizar receta'}
         </button>
       </div>
     </div>
