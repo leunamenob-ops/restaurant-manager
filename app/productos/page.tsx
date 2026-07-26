@@ -19,21 +19,17 @@ export default function ProductosPage() {
     setError(null);
     
     try {
+      // SIN JOIN - usamos proveedor_nombre directamente
       const { data, error } = await supabase
         .from('ingredientes')
-        .select(`
-          *,
-          proveedores:proveedor_id (
-            nombre
-          )
-        `)
+        .select('*')
         .order('nombre');
 
       if (error) throw error;
 
       const productosTransformados = data?.map((item: any) => ({
         ...item,
-        proveedor_nombre: item.proveedores?.nombre || item.proveedor_nombre || 'Sin proveedor'
+        proveedor_nombre: item.proveedor_nombre || 'Sin proveedor'
       })) || [];
 
       setTodosProductos(productosTransformados);
@@ -135,7 +131,7 @@ export default function ProductosPage() {
           <div className="flex gap-4 items-start flex-wrap">
             <div className="flex-1 min-w-[250px]">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                 Buscar por nombre o categoría
+                🔍 Buscar por nombre o categoría
               </label>
               <input
                 type="text"
@@ -148,7 +144,7 @@ export default function ProductosPage() {
 
             <div className="relative" ref={filtroRef}>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                 Proveedores
+                🏭 Proveedores
               </label>
               <button
                 onClick={() => setMostrarFiltroProveedores(!mostrarFiltroProveedores)}
@@ -222,7 +218,7 @@ export default function ProductosPage() {
               <div className="flex gap-2 flex-wrap">
                 {busquedaNombre && (
                   <span className="px-3 py-1 bg-cyan-100 text-cyan-700 rounded-full text-sm">
-                     "{busquedaNombre}"
+                    🔍 "{busquedaNombre}"
                   </span>
                 )}
                 {proveedoresSeleccionados.map(p => (
