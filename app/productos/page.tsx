@@ -23,11 +23,17 @@ export default function ProductosPage() {
     setError(null);
     
     try {
-      const { data, error } = await supabase
+      console.log('🔍 Iniciando carga de productos...');
+      
+      const { data, error, count } = await supabase
         .from('ingredientes')
-        .select('*')
+        .select('*', { count: 'exact' })
         .order('nombre')
         .range(0, 10000);
+
+      console.log('📦 Datos recibidos:', data?.length);
+      console.log('📊 Count total:', count);
+      console.log('❌ Error:', error);
 
       if (error) throw error;
 
@@ -35,6 +41,8 @@ export default function ProductosPage() {
         ...item,
         proveedor_nombre: item.proveedor_nombre || 'Sin proveedor'
       })) || [];
+
+      console.log('✅ Productos transformados:', productosTransformados.length);
 
       setTodosProductos(productosTransformados);
       
