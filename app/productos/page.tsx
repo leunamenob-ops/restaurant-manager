@@ -12,6 +12,12 @@ export default function ProductosPage() {
   const [mostrarFiltroProveedores, setMostrarFiltroProveedores] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Paginación
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [productosPorPagina] = useState(50);
+  const [totalProductos, setTotalProductos] = useState(0);
+  
   const filtroRef = useRef<HTMLDivElement>(null);
 
   const cargarProductos = useCallback(async () => {
@@ -19,10 +25,9 @@ export default function ProductosPage() {
     setError(null);
     
     try {
-      // SIN JOIN - usamos proveedor_nombre directamente
-      const { data, error } = await supabase
+      const { data, error, count } = await supabase
         .from('ingredientes')
-        .select('*')
+        .select('*', { count: 'exact' })
         .order('nombre');
 
       if (error) throw error;
@@ -33,6 +38,7 @@ export default function ProductosPage() {
       })) || [];
 
       setTodosProductos(productosTransformados);
+      setTotalProductos(count || 0);
       
       const proveedores = Array.from(
         new Set(
@@ -44,6 +50,7 @@ export default function ProductosPage() {
       
       setProveedoresUnicos(proveedores.sort());
       setProductosFiltrados(productosTransformados);
+      setPaginaActual(1); // Reset a primera página
       
     } catch (err: any) {
       console.error('Error cargando productos:', err);
@@ -75,6 +82,7 @@ export default function ProductosPage() {
     }
 
     setProductosFiltrados(filtrados);
+    setPaginaActual(1); // Reset a primera página al filtrar
   }, [busquedaNombre, proveedoresSeleccionados, todosProductos]);
 
   useEffect(() => {
@@ -108,6 +116,17 @@ export default function ProductosPage() {
     setProveedoresSeleccionados([]);
   }
 
+  // Cálculos de paginación
+  const indiceUltimo = paginaActual * productosPorPagina;
+  const indicePrimero = indiceUltimo - productosPorPagina;
+  const productosPagina = productosFiltrados.slice(indicePrimero, indiceUltimo);
+  const totalPaginas = Math.ceil(productosFiltrados.length / productosPorPagina);
+
+  const irAPagina = (pagina: number) => {
+    setPaginaActual(pagina);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <div className="min-h-screen bg-cyan-50">
       <header className="bg-gradient-to-r from-cyan-600 to-teal-600 text-white shadow-lg sticky top-0 z-10">
@@ -116,7 +135,7 @@ export default function ProductosPage() {
             <div>
               <h1 className="text-3xl font-bold">📦 Gestión de Productos</h1>
               <p className="text-cyan-100 mt-1">
-                {productosFiltrados.length} de {todosProductos.length} ingredientes
+                {productosFiltrados.length} de {totalProductos} ingredientes
               </p>
             </div>
             <a href="/dashboard" className="px-6 py-3 bg-white text-cyan-600 rounded-lg hover:bg-cyan-50 font-semibold transition">
@@ -207,7 +226,7 @@ export default function ProductosPage() {
                   onClick={limpiarFiltros}
                   className="px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg font-medium transition"
                 >
-                  ️ Limpiar
+                  🗑️ Limpiar
                 </button>
               </div>
             )}
@@ -256,8 +275,8 @@ export default function ProductosPage() {
               </tr>
             </thead>
             <tbody>
-              {productosFiltrados.length > 0 ? (
-                productosFiltrados.map((p: any) => (
+              {productosPagina.length > 0 ? (
+                productosPagina.map((p: any) => (
                   <tr key={p.id} className="border-t hover:bg-cyan-50 transition-colors">
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{p.nombre}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{p.categoria || '-'}</td>
@@ -285,8 +304,56 @@ export default function ProductosPage() {
           )}
         </div>
 
+        {/* PAGINACIÓN */}
+        {totalPaginas > 1 && (
+          <div className="mt-6 flex items-center justify-between bg-white rounded-lg shadow-md p-4">
+            <div className="text-sm text-gray-600">
+              Mostrando {productosPagina.length} de {productosFiltrados.length} productos
+              <span className="ml-2">(Página {paginaActual} de {totalPaginas})</span>
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={() => irAPagina(1)}
+                disabled={paginaActual === 1}
+                className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                « Primera
+              </button>
+              
+              <button
+                onClick={() => irAPagina(paginaActual - 1)}
+                disabled={paginaActual === 1}
+                className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                 Anterior
+              </button>
+
+              <span className="px-4 py-2 bg-cyan-600 text-white rounded-lg text-sm font-semibold">
+                {paginaActual} / {totalPaginas}
+              </span>
+
+              <button
+                onClick={() => irAPagina(paginaActual + 1)}
+                disabled={paginaActual === totalPaginas}
+                className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                Siguiente ›
+              </button>
+              
+              <button
+                onClick={() => irAPagina(totalPaginas)}
+                disabled={paginaActual === totalPaginas}
+                className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                Última »
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="mt-4 text-sm text-gray-500 text-center">
-          Mostrando {productosFiltrados.length} de {todosProductos.length} productos
+          Total: {totalProductos} productos en base de datos
         </div>
       </div>
     </div>
