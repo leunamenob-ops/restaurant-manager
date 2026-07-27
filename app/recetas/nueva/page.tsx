@@ -7,8 +7,8 @@ import { supabase } from '../../lib/supabaseClient';
 interface Ingrediente {
   id: string;
   nombre: string;
-  unidad_receta: string;
-  precio_receta_real: number;
+  unidad_compra: string;
+  precio_compra_actual: number;
 }
 
 interface SubReceta {
@@ -51,13 +51,16 @@ export default function NuevaReceta() {
   }, []);
 
   async function cargarDatos() {
+    // CORRECCIÓN: Traer TODOS los ingredientes (no solo 1000)
     const { data: ingredientesData } = await supabase
       .from('ingredientes')
-      .select('id, nombre, unidad_receta, precio_receta_real')
-      .order('nombre');
+      .select('id, nombre, unidad_compra, precio_compra_actual')
+      .order('nombre')
+      .range(0, 10000);
     
     if (ingredientesData) setIngredientes(ingredientesData);
 
+    // CORRECCIÓN: Traer sub-recetas existentes
     const { data: subRecetasData } = await supabase
       .from('recetas')
       .select('id, nombre, coste_total, produccion_gramos, tipo')
@@ -72,13 +75,12 @@ export default function NuevaReceta() {
       tipo: 'ingrediente' as const,
       id: i.id,
       nombre: i.nombre,
-      costeUnitario: i.precio_receta_real,
-      unidad: i.unidad_receta
+      costeUnitario: i.precio_compra_actual || 0,
+      unidad: i.unidad_compra || 'Kg.'
     })),
     ...subRecetas.map(s => {
-      const costePorGramo = s.produccion_gramos && s.produccion_gramos > 0 
-        ? s.coste_total / s.produccion_gramos 
-        : 0;
+      const gramos = s.produccion_gramos ? parseFloat(s.produccion_gramos as unknown as string) : 0;
+      const costePorGramo = gramos > 0 ? s.coste_total / gramos : 0;
       return {
         tipo: 'subreceta' as const,
         id: s.id,
@@ -95,7 +97,7 @@ export default function NuevaReceta() {
 
   function agregarItem() {
     if (!itemSeleccionado || cantidadActual <= 0) {
-      setMensaje('️ Selecciona un elemento y una cantidad válida');
+      setMensaje('⚠️ Selecciona un elemento y una cantidad válida');
       return;
     }
 
@@ -163,7 +165,7 @@ export default function NuevaReceta() {
     }
 
     if (itemsSeleccionados.length === 0) {
-      setMensaje('️ Añade al menos un ingrediente o sub-receta');
+      setMensaje('⚠️ Añade al menos un ingrediente o sub-receta');
       return;
     }
 
@@ -176,27 +178,32 @@ export default function NuevaReceta() {
     setMensaje('');
 
     try {
-      const { data: recetaData, error: recetaError } = await supabase
+      // Generar ID único
+      const recetaId = crypto.randomUUID();
+
+      const { error: recetaError } = await supabase
         .from('recetas')
         .insert({
+          id: recetaId,
           nombre: nombre.trim(),
           tipo,
           porciones,
-          produccion_gramos: tipo === 'sub_receta' ? produccionGramos : null,
+          produccion_gramos: tipo === 'sub_receta' ? String(produccionGramos) : null,
           precio_venta: precioVenta,
           coste_total: calcularCosteTotal(),
-        })
-        .select()
-        .single();
+          created_at: new Date().toISOString()
+        });
 
       if (recetaError) throw recetaError;
 
       const detalles = itemsSeleccionados.map((item) => ({
-        receta_id: recetaData.id,
+        id: crypto.randomUUID(),
+        receta_id: recetaId,
         ingrediente_id: item.tipo === 'ingrediente' ? item.id : null,
         subreceta_id: item.tipo === 'subreceta' ? item.id : null,
         cantidad_necesaria: item.cantidad,
         coste_linea: item.coste,
+        created_at: new Date().toISOString()
       }));
 
       const { error: detalleError } = await supabase
@@ -208,7 +215,7 @@ export default function NuevaReceta() {
       setMensaje('✅ Receta guardada correctamente');
 
       setTimeout(() => {
-        router.push('/');
+        router.push('/recetas');
       }, 1500);
 
     } catch (error: any) {
@@ -222,9 +229,9 @@ export default function NuevaReceta() {
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900">Nueva Receta</h1>
+          <h1 className="text-4xl font-bold text-gray-900"> Nueva Receta</h1>
           <button
-            onClick={() => router.push('/')}
+            onClick={() => router.push('/recetas')}
             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
           >
             ← Volver al listado
@@ -343,7 +350,7 @@ export default function NuevaReceta() {
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">🥬 Añadir ingredientes o sub-recetas</h2>
+          <h2 className="text-xl font-semibold mb-4"> Añadir ingredientes o sub-recetas</h2>
           
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -442,14 +449,6 @@ export default function NuevaReceta() {
                   + Añadir
                 </button>
               </div>
-              {itemSeleccionado && (
-                <p className="mt-2 text-sm text-gray-600">
-                  Seleccionado: <span className="font-semibold">
-                    {todosLosItems.find(i => i.id === itemSeleccionado.id && i.tipo === itemSeleccionado.tipo)?.nombre}
-                  </span>
-                  {itemSeleccionado.tipo === 'subreceta' && ' (coste por gramo)'}
-                </p>
-              )}
             </div>
           )}
 
@@ -477,7 +476,7 @@ export default function NuevaReceta() {
                         onClick={() => eliminarItem(index)}
                         className="text-red-600 hover:text-red-800"
                       >
-                        🗑️
+                        ️
                       </button>
                     </div>
                   </li>
@@ -564,7 +563,7 @@ export default function NuevaReceta() {
                   ? 'text-yellow-600' 
                   : 'text-red-600'
               }`}>
-                 Margen Neto
+                💵 Margen Neto
               </p>
               <p className={`text-2xl font-bold ${
                 parseFloat(calcularMargenNeto()) >= 60 
@@ -589,7 +588,7 @@ export default function NuevaReceta() {
             guardando ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
           }`}
         >
-          {guardando ? '💾 Guardando...' : '💾 Guardar receta'}
+          {guardando ? '⏳ Guardando...' : '💾 Guardar receta'}
         </button>
       </div>
     </div>
