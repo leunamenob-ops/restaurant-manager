@@ -16,6 +16,9 @@ export default function ProductosPage() {
   // Modales
   const [mostrarModalIngrediente, setMostrarModalIngrediente] = useState(false);
   const [mostrarModalProveedor, setMostrarModalProveedor] = useState(false);
+  const [mostrarModalEditar, setMostrarModalEditar] = useState(false);
+  const [productoEditando, setProductoEditando] = useState<any>(null);
+  const [productoEliminando, setProductoEliminando] = useState<any>(null);
   
   // Formulario ingrediente
   const [nuevoIngrediente, setNuevoIngrediente] = useState({
@@ -215,6 +218,61 @@ export default function ProductosPage() {
     }
   }
 
+  // EDITAR INGREDIENTE
+  function abrirEditar(producto: any) {
+    setProductoEditando({
+      ...producto,
+      precio_compra_actual: producto.precio_compra_actual || ''
+    });
+    setMostrarModalEditar(true);
+  }
+
+  async function guardarEdicion() {
+    try {
+      const { error } = await supabase
+        .from('ingredientes')
+        .update({
+          nombre: productoEditando.nombre,
+          categoria: productoEditando.categoria,
+          unidad_compra: productoEditando.unidad_compra,
+          precio_compra_actual: productoEditando.precio_compra_actual ? parseFloat(productoEditando.precio_compra_actual) : null,
+          proveedor_nombre: productoEditando.proveedor_nombre
+        })
+        .eq('id', productoEditando.id);
+
+      if (error) throw error;
+
+      alert('Ingrediente actualizado correctamente');
+      setMostrarModalEditar(false);
+      setProductoEditando(null);
+      cargarProductos();
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    }
+  }
+
+  // ELIMINAR INGREDIENTE
+  function abrirEliminar(producto: any) {
+    setProductoEliminando(producto);
+  }
+
+  async function confirmarEliminar() {
+    try {
+      const { error } = await supabase
+        .from('ingredientes')
+        .delete()
+        .eq('id', productoEliminando.id);
+
+      if (error) throw error;
+
+      alert('Ingrediente eliminado correctamente');
+      setProductoEliminando(null);
+      cargarProductos();
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    }
+  }
+
   const indiceUltimo = paginaActual * productosPorPagina;
   const indicePrimero = indiceUltimo - productosPorPagina;
   const productosPagina = productosFiltrados.slice(indicePrimero, indiceUltimo);
@@ -375,6 +433,7 @@ export default function ProductosPage() {
                 <th className="px-6 py-3 text-left text-sm font-semibold text-cyan-900">Proveedor</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-cyan-900">Unidad</th>
                 <th className="px-6 py-3 text-right text-sm font-semibold text-cyan-900">Precio</th>
+                <th className="px-6 py-3 text-right text-sm font-semibold text-cyan-900">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -388,11 +447,27 @@ export default function ProductosPage() {
                     <td className="px-6 py-4 text-sm text-right font-semibold text-green-600">
                       {p.precio_compra_actual ? Number(p.precio_compra_actual).toFixed(2) + '€' : '-'}
                     </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          onClick={() => abrirEditar(p)}
+                          className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-xs font-medium transition"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => abrirEliminar(p)}
+                          className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-xs font-medium transition"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))
               ) : !loading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                     No se encontraron productos.
                   </td>
                 </tr>
@@ -654,6 +729,126 @@ export default function ProductosPage() {
               </button>
               <button
                 onClick={() => setMostrarModalProveedor(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDITAR INGREDIENTE */}
+      {mostrarModalEditar && productoEditando && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h2 className="text-2xl font-bold text-cyan-900 mb-4">Editar Ingrediente</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+                <input
+                  type="text"
+                  value={productoEditando.nombre || ''}
+                  onChange={(e) => setProductoEditando({...productoEditando, nombre: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+                <select
+                  value={productoEditando.categoria || 'Comida'}
+                  onChange={(e) => setProductoEditando({...productoEditando, categoria: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none"
+                >
+                  <option value="Comida">Comida</option>
+                  <option value="Bebida">Bebida</option>
+                  <option value="Limpieza">Limpieza</option>
+                  <option value="Otros">Otros</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Unidad</label>
+                <select
+                  value={productoEditando.unidad_compra || 'Kg.'}
+                  onChange={(e) => setProductoEditando({...productoEditando, unidad_compra: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none"
+                >
+                  <option value="Kg.">Kg.</option>
+                  <option value="Ud.">Ud.</option>
+                  <option value="CAJA">CAJA</option>
+                  <option value="L.">L.</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Precio (€)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={productoEditando.precio_compra_actual || ''}
+                  onChange={(e) => setProductoEditando({...productoEditando, precio_compra_actual: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Proveedor</label>
+                <select
+                  value={productoEditando.proveedor_nombre || ''}
+                  onChange={(e) => setProductoEditando({...productoEditando, proveedor_nombre: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none"
+                >
+                  <option value="">Seleccionar proveedor...</option>
+                  {proveedoresUnicos.map((prov) => (
+                    <option key={prov} value={prov}>{prov}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={guardarEdicion}
+                disabled={!productoEditando.nombre}
+                className="flex-1 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed transition font-semibold"
+              >
+                Actualizar
+              </button>
+              <button
+                onClick={() => { setMostrarModalEditar(false); setProductoEditando(null); }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIRMAR ELIMINAR */}
+      {productoEliminando && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">Confirmar Eliminación</h2>
+            <p className="text-gray-700 mb-6">
+              ¿Estás seguro de que quieres eliminar <strong>{productoEliminando.nombre}</strong>?
+            </p>
+            <p className="text-sm text-gray-500 mb-6">
+              Esta acción no se puede deshacer.
+            </p>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={confirmarEliminar}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-semibold"
+              >
+                Sí, Eliminar
+              </button>
+              <button
+                onClick={() => setProductoEliminando(null)}
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
               >
                 Cancelar
