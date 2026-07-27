@@ -57,9 +57,9 @@ export default function RecetasPage() {
     }
   }
 
-  function calcularFoodCost(coste: number, precioVenta: number) {
+  function calcularFoodCost(coste: number, precioVenta: number): number {
     if (precioVenta <= 0) return 0;
-    return ((coste / precioVenta) * 100).toFixed(1);
+    return (coste / precioVenta) * 100;
   }
 
   const recetasFiltradas = recetas.filter(receta => {
@@ -91,7 +91,7 @@ export default function RecetasPage() {
             <div className="flex-1 min-w-[300px]">
               <input
                 type="text"
-                placeholder="🔍 Buscar receta por nombre..."
+                placeholder=" Buscar receta por nombre..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
@@ -104,8 +104,8 @@ export default function RecetasPage() {
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
               >
                 <option value="todas">Todas las recetas</option>
-                <option value="plato">🍽️ Platos</option>
-                <option value="sub_receta"> Sub-recetas</option>
+                <option value="plato">️ Platos</option>
+                <option value="sub_receta">🥘 Sub-recetas</option>
               </select>
             </div>
           </div>
@@ -160,7 +160,7 @@ export default function RecetasPage() {
                             ? 'bg-purple-100 text-purple-800' 
                             : 'bg-blue-100 text-blue-800'
                         }`}>
-                          {esSubReceta ? '🥘 Sub-receta' : '️ Plato'}
+                          {esSubReceta ? '🥘 Sub-receta' : '🍽️ Plato'}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-center text-gray-600">{receta.porciones}</td>
@@ -172,13 +172,13 @@ export default function RecetasPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          parseFloat(foodCost) < 25 
+                          foodCost < 25 
                             ? 'bg-green-100 text-green-800' 
-                            : parseFloat(foodCost) <= 33 
+                            : foodCost <= 33 
                             ? 'bg-yellow-100 text-yellow-800' 
                             : 'bg-red-100 text-red-800'
                         }`}>
-                          {foodCost}%
+                          {foodCost.toFixed(1)}%
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
