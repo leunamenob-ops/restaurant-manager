@@ -73,38 +73,59 @@ export default function NuevaReceta() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  async function cargarDatos() {
-    // Obtener hotel_id del sessionStorage
-    const storedHotelId = sessionStorage.getItem('hotel_id');
-    if (storedHotelId) {
-      setHotelId(storedHotelId);
-    }
+ async function cargarDatos() {
+  // Cargar TODOS los ingredientes (igual que en productos)
+  let todosLosIngredientes: Ingrediente[] = [];
+  let desde = 0;
+  const lote = 1000;
+  let hayMas = true;
 
-    // Cargar TODOS los ingredientes (no solo 1000)
-    const { data: ingredientesData, error: ingredientesError } = await supabase
+  while (hayMas) {
+    const { data, error } = await supabase
       .from('ingredientes')
       .select('id, nombre, unidad_compra, precio_compra_actual, proveedor_nombre, categoria')
       .order('nombre')
-      .range(0, 10000);
-    
-    if (ingredientesError) {
-      console.error('Error cargando ingredientes:', ingredientesError);
-      return;
+      .range(desde, desde + lote - 1);
+
+    if (error) {
+      console.error('Error cargando lote:', error);
+      break;
     }
 
-    if (ingredientesData) {
-      setTodosIngredientes(ingredientesData);
+    if (!data || data.length === 0) {
+      hayMas = false;
+    } else {
+      todosLosIngredientes = todosLosIngredientes.concat(data);
       
-      // Extraer proveedores únicos (filtrar nulls y vacíos)
-      const proveedores = Array.from(
-        new Set(
-          ingredientesData
-            .map(i => i.proveedor_nombre)
-            .filter(p => p && p.trim() !== '')
-        )
-      ) as string[];
-      setProveedoresUnicos(proveedores.sort());
+      if (data.length < lote) {
+        hayMas = false;
+      } else {
+        desde += lote;
+      }
     }
+  }
+
+  setTodosIngredientes(todosLosIngredientes);
+  
+  // Extraer proveedores únicos (manejando nulls)
+  const proveedores = Array.from(
+    new Set(
+      todosLosIngredientes
+        .map(i => i.proveedor_nombre)
+        .filter(p => p && p.trim() !== '')
+    )
+  ) as string[];
+  setProveedoresUnicos(proveedores.sort());
+
+  // Cargar sub-recetas existentes
+  const { data: subRecetasData } = await supabase
+    .from('recetas')
+    .select('id, nombre, coste_total, produccion_gramos, tipo')
+    .eq('tipo', 'sub_receta')
+    .order('nombre');
+  
+  if (subRecetasData) setSubRecetas(subRecetasData);
+}
 
     // Cargar sub-recetas existentes
     const { data: subRecetasData } = await supabase
