@@ -4,48 +4,30 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 export default function ProductosPage() {
+  const [todosProductos, setTodosProductos] = useState<any[]>([]);
   const [productosFiltrados, setProductosFiltrados] = useState<any[]>([]);
   const [busquedaNombre, setBusquedaNombre] = useState('');
   const [proveedoresUnicos, setProveedoresUnicos] = useState<string[]>([]);
   const [proveedoresSeleccionados, setProveedoresSeleccionados] = useState<string[]>([]);
   const [mostrarFiltroProveedores, setMostrarFiltroProveedores] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   
   // Paginación
   const [paginaActual, setPaginaActual] = useState(1);
   const productosPorPagina = 50;
-  const [totalProductos, setTotalProductos] = useState(0);
   
   const filtroRef = useRef<HTMLDivElement>(null);
 
+  // CARGAR TODOS LOS PRODUCTOS (hasta 10,000)
   const cargarProductos = useCallback(async () => {
     setLoading(true);
-    setError(null);
     
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('ingredientes')
-        .select('*', { count: 'exact' });
-
-      // FILTRO POR BÚSQUEDA (lado del servidor)
-      if (busquedaNombre.trim()) {
-        query = query.ilike('nombre', `%${busquedaNombre}%`);
-      }
-
-      // FILTRO POR PROVEEDOR (lado del servidor)
-      if (proveedoresSeleccionados.length > 0) {
-        query = query.in('proveedor_nombre', proveedoresSeleccionados);
-      }
-
-      // ORDENAR
-      query = query.order('nombre');
-
-      // TRAER DATOS CON PAGINACIÓN DEL SERVIDOR
-      const start = (paginaActual - 1) * productosPorPagina;
-      const end = start + productosPorPagina - 1;
-      
-      const { data, error, count } = await query.range(start, end);
+        .select('*')
+        .order('nombre')
+        .range(0, 10000); // Trae TODOS, no solo 1000
 
       if (error) throw error;
 
@@ -54,46 +36,57 @@ export default function ProductosPage() {
         proveedor_nombre: item.proveedor_nombre || 'Sin proveedor'
       })) || [];
 
-      setProductosFiltrados(productosTransformados);
-      setTotalProductos(count || 0);
+      setTodosProductos(productosTransformados);
       
-    } catch (err: any) {
-      console.error('Error cargando productos:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [busquedaNombre, proveedoresSeleccionados, paginaActual]);
-
-  // Cargar proveedores únicos (solo una vez)
-  const cargarProveedores = useCallback(async () => {
-    try {
-      const { data } = await supabase
-        .from('ingredientes')
-        .select('proveedor_nombre')
-        .not('proveedor_nombre', 'is', null)
-        .order('proveedor_nombre');
-
+      // Extraer proveedores únicos
       const proveedores = Array.from(
         new Set(
-          data?.map((p: any) => p.proveedor_nombre).filter(Boolean)
+          productosTransformados
+            .map((p: any) => p.proveedor_nombre)
+            .filter(Boolean)
         )
       ) as string[];
       
       setProveedoresUnicos(proveedores.sort());
-    } catch (err) {
-      console.error('Error cargando proveedores:', err);
+      setProductosFiltrados(productosTransformados);
+      setPaginaActual(1);
+      
+    } catch (err: any) {
+      console.error('Error:', err);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    cargarProveedores();
     cargarProductos();
-  }, [cargarProveedores, cargarProductos]);
+  }, [cargarProductos]);
 
+  // FILTRADO EN CLIENTE - INSTANTÁNEO
   useEffect(() => {
-    setPaginaActual(1); // Resetear página al cambiar filtros
-  }, [busquedaNombre, proveedoresSeleccionados]);
+    let filtrados = [...todosProductos];
+
+    // OPCIÓN A: Filtrar por nombre/categoría
+    if (busquedaNombre.trim()) {
+      const busqueda = busquedaNombre.toLowerCase();
+      filtrados = filtrados.filter((p: any) => {
+        const nombreMatch = p.nombre.toLowerCase().includes(busqueda);
+        const categoriaMatch = p.categoria?.toLowerCase().includes(busqueda) || false;
+        return nombreMatch || categoriaMatch;
+      });
+    }
+
+    // OPCIÓN B: Filtrar por proveedor
+    if (proveedoresSeleccionados.length > 0) {
+      filtrados = filtrados.filter((p: any) => 
+        proveedoresSeleccionados.includes(p.proveedor_nombre)
+      );
+    }
+
+    // OPCIÓN C: Combina A + B automáticamente
+    setProductosFiltrados(filtrados);
+    setPaginaActual(1);
+  }, [busquedaNombre, proveedoresSeleccionados, todosProductos]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -126,8 +119,11 @@ export default function ProductosPage() {
     setProveedoresSeleccionados([]);
   }
 
-  // Cálculos de paginación
-  const totalPaginas = Math.ceil(totalProductos / productosPorPagina);
+  // PAGINACIÓN
+  const indiceUltimo = paginaActual * productosPorPagina;
+  const indicePrimero = indiceUltimo - productosPorPagina;
+  const productosPagina = productosFiltrados.slice(indicePrimero, indiceUltimo);
+  const totalPaginas = Math.ceil(productosFiltrados.length / productosPorPagina);
 
   const irAPagina = (pagina: number) => {
     if (pagina < 1 || pagina > totalPaginas) return;
@@ -160,9 +156,9 @@ export default function ProductosPage() {
         <div className="px-8 py-6">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold"> Gestión de Productos</h1>
+              <h1 className="text-3xl font-bold">📦 Gestión de Productos</h1>
               <p className="text-cyan-100 mt-1">
-                {totalProductos} ingredientes {proveedoresSeleccionados.length > 0 && `(filtrado)`}
+                {productosFiltrados.length} de {todosProductos.length} ingredientes
               </p>
             </div>
             <a href="/dashboard" className="px-6 py-3 bg-white text-cyan-600 rounded-lg hover:bg-cyan-50 font-semibold transition">
@@ -190,7 +186,7 @@ export default function ProductosPage() {
 
             <div className="relative" ref={filtroRef}>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                🏭 Proveedores
+                 Proveedores
               </label>
               <button
                 onClick={() => setMostrarFiltroProveedores(!mostrarFiltroProveedores)}
@@ -221,7 +217,10 @@ export default function ProductosPage() {
                   </div>
                   <div className="max-h-64 overflow-y-auto p-2">
                     {proveedoresUnicos.map((proveedor) => (
-                      <label key={proveedor} className="flex items-center gap-3 p-2 hover:bg-cyan-50 rounded cursor-pointer">
+                      <label
+                        key={proveedor}
+                        className="flex items-center gap-3 p-2 hover:bg-cyan-50 rounded cursor-pointer"
+                      >
                         <input
                           type="checkbox"
                           checked={proveedoresSeleccionados.includes(proveedor)}
@@ -229,8 +228,16 @@ export default function ProductosPage() {
                           className="w-4 h-4 text-cyan-600 border-cyan-300 rounded focus:ring-cyan-500"
                         />
                         <span className="text-sm text-gray-700 flex-1">{proveedor}</span>
+                        <span className="text-xs text-gray-400">
+                          {todosProductos.filter((p: any) => p.proveedor_nombre === proveedor).length}
+                        </span>
                       </label>
                     ))}
+                    {proveedoresUnicos.length === 0 && (
+                      <p className="text-sm text-gray-500 text-center py-4">
+                        No hay proveedores disponibles
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -238,107 +245,137 @@ export default function ProductosPage() {
 
             {(busquedaNombre || proveedoresSeleccionados.length > 0) && (
               <div className="pt-8">
-                <button onClick={limpiarFiltros} className="px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg font-medium transition">
-                  ️ Limpiar
+                <button
+                  onClick={limpiarFiltros}
+                  className="px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg font-medium transition"
+                >
+                  🗑️ Limpiar
                 </button>
               </div>
             )}
           </div>
         </div>
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 p-6 rounded-lg mb-6">
-            <h2 className="text-red-700 font-bold text-xl mb-2">Error al cargar</h2>
-            <p className="text-red-600 text-sm mb-4">{error}</p>
-            <button onClick={cargarProductos} className="text-cyan-600 underline font-medium">Reintentar</button>
+        {loading && (
+          <div className="bg-white rounded-lg shadow-md p-8 text-center">
+            <p className="text-cyan-600 text-lg">Cargando {todosProductos.length > 0 ? todosProductos.length : 'productos'}...</p>
           </div>
         )}
 
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-cyan-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-cyan-900">Nombre</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-cyan-900">Categoría</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-cyan-900">Proveedor</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-cyan-900">Unidad</th>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-cyan-900">Precio</th>
-              </tr>
-            </thead>
-            <tbody>
-              {productosFiltrados.length > 0 ? (
-                productosFiltrados.map((p: any) => (
-                  <tr key={p.id} className="border-t hover:bg-cyan-50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{p.nombre}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{p.categoria || '-'}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{p.proveedor_nombre || '-'}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{p.unidad_compra || '-'}</td>
-                    <td className="px-6 py-4 text-sm text-right font-semibold text-green-600">
-                      {p.precio_compra_actual ? `${Number(p.precio_compra_actual).toFixed(2)}€` : '-'}
-                    </td>
+        {!loading && (
+          <>
+            <div className="bg-white rounded-lg shadow-md overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-cyan-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-cyan-900">Nombre</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-cyan-900">Categoría</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-cyan-900">Proveedor</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-cyan-900">Unidad</th>
+                    <th className="px-6 py-3 text-right text-sm font-semibold text-cyan-900">Precio</th>
                   </tr>
-                ))
-              ) : !loading ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">No se encontraron productos.</td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-
-          {loading && (
-            <div className="py-8 text-center text-cyan-600">
-              <p className="text-lg">Cargando productos...</p>
-            </div>
-          )}
-        </div>
-
-        {/* PAGINACIÓN */}
-        {totalPaginas > 1 && (
-          <div className="mt-6 bg-white rounded-lg shadow-md p-4">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-sm text-gray-600">
-                Mostrando <span className="font-semibold">{(paginaActual - 1) * productosPorPagina + 1}</span> a <span className="font-semibold">{Math.min(paginaActual * productosPorPagina, totalProductos)}</span> de <span className="font-semibold">{totalProductos}</span> productos
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <span>Página</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={totalPaginas}
-                  value={paginaActual}
-                  onChange={(e) => {
-                    const num = parseInt(e.target.value);
-                    if (num >= 1 && num <= totalPaginas) irAPagina(num);
-                  }}
-                  className="w-16 px-2 py-1 border border-cyan-200 rounded text-center font-semibold"
-                />
-                <span>de {totalPaginas}</span>
-              </div>
+                </thead>
+                <tbody>
+                  {productosPagina.length > 0 ? (
+                    productosPagina.map((p: any) => (
+                      <tr key={p.id} className="border-t hover:bg-cyan-50 transition-colors">
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{p.nombre}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{p.categoria || '-'}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{p.proveedor_nombre || '-'}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{p.unidad_compra || '-'}</td>
+                        <td className="px-6 py-4 text-sm text-right font-semibold text-green-600">
+                          {p.precio_compra_actual ? `${Number(p.precio_compra_actual).toFixed(2)}€` : '-'}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                        No se encontraron productos.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
 
-            <div className="flex items-center justify-center gap-1 flex-wrap">
-              <button onClick={() => irAPagina(1)} disabled={paginaActual === 1} className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-30 disabled:cursor-not-allowed transition">« Primera</button>
-              <button onClick={() => irAPagina(paginaActual - 1)} disabled={paginaActual === 1} className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-30 disabled:cursor-not-allowed transition">‹ Anterior</button>
+            {totalPaginas > 1 && (
+              <div className="mt-6 bg-white rounded-lg shadow-md p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="text-sm text-gray-600">
+                    Mostrando <span className="font-semibold">{indicePrimero + 1}</span> a <span className="font-semibold">{Math.min(indiceUltimo, productosFiltrados.length)}</span> de <span className="font-semibold">{productosFiltrados.length}</span> productos
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <span>Página</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={totalPaginas}
+                      value={paginaActual}
+                      onChange={(e) => {
+                        const num = parseInt(e.target.value);
+                        if (num >= 1 && num <= totalPaginas) irAPagina(num);
+                      }}
+                      className="w-16 px-2 py-1 border border-cyan-200 rounded text-center font-semibold"
+                    />
+                    <span>de {totalPaginas}</span>
+                  </div>
+                </div>
 
-              {obtenerNumerosPagina().map((num, idx) => (
-                num === -1 ? (
-                  <span key={`dots-${idx}`} className="px-2 py-2 text-gray-400">...</span>
-                ) : (
+                <div className="flex items-center justify-center gap-1 flex-wrap">
                   <button
-                    key={num}
-                    onClick={() => irAPagina(num)}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition ${paginaActual === num ? 'bg-cyan-600 text-white' : 'border border-cyan-200 text-cyan-600 hover:bg-cyan-50'}`}
+                    onClick={() => irAPagina(1)}
+                    disabled={paginaActual === 1}
+                    className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
                   >
-                    {num}
+                    « Primera
                   </button>
-                )
-              ))}
+                  
+                  <button
+                    onClick={() => irAPagina(paginaActual - 1)}
+                    disabled={paginaActual === 1}
+                    className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                  >
+                    ‹ Anterior
+                  </button>
 
-              <button onClick={() => irAPagina(paginaActual + 1)} disabled={paginaActual === totalPaginas} className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-30 disabled:cursor-not-allowed transition">Siguiente ›</button>
-              <button onClick={() => irAPagina(totalPaginas)} disabled={paginaActual === totalPaginas} className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-30 disabled:cursor-not-allowed transition">Última »</button>
-            </div>
-          </div>
+                  {obtenerNumerosPagina().map((num, idx) => (
+                    num === -1 ? (
+                      <span key={`dots-${idx}`} className="px-2 py-2 text-gray-400">...</span>
+                    ) : (
+                      <button
+                        key={num}
+                        onClick={() => irAPagina(num)}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+                          paginaActual === num
+                            ? 'bg-cyan-600 text-white'
+                            : 'border border-cyan-200 text-cyan-600 hover:bg-cyan-50'
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    )
+                  ))}
+
+                  <button
+                    onClick={() => irAPagina(paginaActual + 1)}
+                    disabled={paginaActual === totalPaginas}
+                    className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                  >
+                    Siguiente ›
+                  </button>
+                  
+                  <button
+                    onClick={() => irAPagina(totalPaginas)}
+                    disabled={paginaActual === totalPaginas}
+                    className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                  >
+                    Última »
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
