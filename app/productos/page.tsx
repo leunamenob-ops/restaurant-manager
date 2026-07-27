@@ -41,7 +41,7 @@ export default function ProductosPage() {
           .range(desde, desde + lote - 1);
 
         if (error) {
-          console.error(' Error en lote:', error);
+          console.error('❌ Error en lote:', error);
           throw error;
         }
 
@@ -59,7 +59,7 @@ export default function ProductosPage() {
         }
       }
 
-      console.log(' Total productos cargados:', todosLosProductos.length);
+      console.log('📊 Total productos cargados:', todosLosProductos.length);
 
       const productosTransformados = todosLosProductos.map((item: any) => ({
         ...item,
@@ -92,15 +92,17 @@ export default function ProductosPage() {
     cargarProductos();
   }, [cargarProductos]);
 
+  // FILTRADO SEGURO - Maneja valores null
   useEffect(() => {
     let filtrados = [...todosProductos];
 
     if (busquedaNombre.trim()) {
       const busqueda = busquedaNombre.toLowerCase();
-      filtrados = filtrados.filter((p: any) => 
-        p.nombre.toLowerCase().includes(busqueda) ||
-        (p.categoria && p.categoria.toLowerCase().includes(busqueda))
-      );
+      filtrados = filtrados.filter((p: any) => {
+        const nombre = p.nombre?.toLowerCase() || '';
+        const categoria = p.categoria?.toLowerCase() || '';
+        return nombre.includes(busqueda) || categoria.includes(busqueda);
+      });
     }
 
     if (proveedoresSeleccionados.length > 0) {
