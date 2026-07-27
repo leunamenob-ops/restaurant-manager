@@ -24,12 +24,13 @@ export default function ProductosPage() {
     setError(null);
     
     try {
-      // Traer TODOS los productos (hasta 10000)
+      // ¡IMPORTANTE! Rango de 0 a 10000 para asegurar que traemos TODOS los productos
+      // y no solo los primeros 1000 alfabéticamente (donde no llegaría "Tomate")
       const { data, error } = await supabase
         .from('ingredientes')
         .select('*')
         .order('nombre')
-        .range(0, 9999);
+        .range(0, 10000);
 
       if (error) throw error;
 
@@ -64,6 +65,7 @@ export default function ProductosPage() {
     cargarProductos();
   }, [cargarProductos]);
 
+  // FILTRADO EN CLIENTE (Instantáneo y sin recargar la base de datos)
   useEffect(() => {
     let filtrados = [...todosProductos];
 
@@ -71,7 +73,7 @@ export default function ProductosPage() {
       const busqueda = busquedaNombre.toLowerCase();
       filtrados = filtrados.filter((p: any) => 
         p.nombre.toLowerCase().includes(busqueda) ||
-        p.categoria?.toLowerCase().includes(busqueda)
+        (p.categoria && p.categoria.toLowerCase().includes(busqueda))
       );
     }
 
@@ -82,7 +84,7 @@ export default function ProductosPage() {
     }
 
     setProductosFiltrados(filtrados);
-    setPaginaActual(1);
+    setPaginaActual(1); // Resetear a la primera página al filtrar
   }, [busquedaNombre, proveedoresSeleccionados, todosProductos]);
 
   useEffect(() => {
@@ -138,14 +140,14 @@ export default function ProductosPage() {
       for (let i = 1; i <= total; i++) numeros.push(i);
     } else {
       numeros.push(1);
-      if (actual > 3) numeros.push(-1); // "..."
+      if (actual > 3) numeros.push(-1);
       
       const inicio = Math.max(2, actual - 1);
       const fin = Math.min(total - 1, actual + 1);
       
       for (let i = inicio; i <= fin; i++) numeros.push(i);
       
-      if (actual < total - 2) numeros.push(-1); // "..."
+      if (actual < total - 2) numeros.push(-1);
       numeros.push(total);
     }
     
