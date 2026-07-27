@@ -25,7 +25,6 @@ export default function ProductosPage() {
     
     try {
       // ¡IMPORTANTE! Rango de 0 a 10000 para asegurar que traemos TODOS los productos
-      // y no solo los primeros 1000 alfabéticamente (donde no llegaría "Tomate")
       const { data, error } = await supabase
         .from('ingredientes')
         .select('*')
@@ -65,8 +64,13 @@ export default function ProductosPage() {
     cargarProductos();
   }, [cargarProductos]);
 
-  // FILTRADO EN CLIENTE (Instantáneo y sin recargar la base de datos)
+  // FILTRADO EN CLIENTE CON LOGS DE DEBUG
   useEffect(() => {
+    console.log('🔍 INICIANDO FILTRADO...');
+    console.log('📦 Total productos cargados:', todosProductos.length);
+    console.log('🔤 Búsqueda actual:', `"${busquedaNombre}"`);
+    console.log('🏭 Proveedores seleccionados:', proveedoresSeleccionados);
+    
     let filtrados = [...todosProductos];
 
     if (busquedaNombre.trim()) {
@@ -75,12 +79,29 @@ export default function ProductosPage() {
         p.nombre.toLowerCase().includes(busqueda) ||
         (p.categoria && p.categoria.toLowerCase().includes(busqueda))
       );
+      console.log('✅ Productos después de filtrar por nombre:', filtrados.length);
     }
 
     if (proveedoresSeleccionados.length > 0) {
-      filtrados = filtrados.filter((p: any) => 
-        proveedoresSeleccionados.includes(p.proveedor_nombre)
-      );
+      console.log('📋 Proveedores únicos en los datos filtrados hasta ahora:', [...new Set(filtrados.map(p => p.proveedor_nombre))]);
+      
+      filtrados = filtrados.filter((p: any) => {
+        const coincide = proveedoresSeleccionados.includes(p.proveedor_nombre);
+        
+        // Log específico para depurar el caso de TOMATE + CHEF FRUITS
+        if (p.nombre.toLowerCase().includes('tomate') && p.proveedor_nombre.toUpperCase().includes('CHEF')) {
+          console.log('🍅 DEBUG TOMATE+CHEF:', {
+            nombre: p.nombre,
+            proveedorEnDato: `"${p.proveedor_nombre}"`,
+            proveedorSeleccionado: proveedoresSeleccionados,
+            coincideExacto: coincide
+          });
+        }
+        
+        return coincide;
+      });
+      
+      console.log('✅ Productos finales después de filtrar por proveedor:', filtrados.length);
     }
 
     setProductosFiltrados(filtrados);
