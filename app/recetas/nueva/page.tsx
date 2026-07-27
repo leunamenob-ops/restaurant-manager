@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -9,6 +9,8 @@ interface Ingrediente {
   nombre: string;
   unidad_compra: string;
   precio_compra_actual: number;
+  proveedor_nombre: string;
+  categoria: string;
 }
 
 interface SubReceta {
@@ -31,7 +33,8 @@ interface ItemSeleccionado {
 
 export default function NuevaReceta() {
   const router = useRouter();
-  const [ingredientes, setIngredientes] = useState<Ingrediente[]>([]);
+  const [todosIngredientes, setTodosIngredientes] = useState<Ingrediente[]>([]);
+  const [ingredientesFiltrados, setIngredientesFiltrados] = useState<Ingrediente[]>([]);
   const [subRecetas, setSubRecetas] = useState<SubReceta[]>([]);
   const [nombre, setNombre] = useState('');
   const [tipo, setTipo] = useState<'plato' | 'sub_receta'>('plato');
@@ -41,26 +44,57 @@ export default function NuevaReceta() {
   const [ivaPorcentaje, setIvaPorcentaje] = useState(10);
   const [itemsSeleccionados, setItemsSeleccionados] = useState<ItemSeleccionado[]>([]);
   const [busqueda, setBusqueda] = useState('');
+  const [proveedoresUnicos, setProveedoresUnicos] = useState<string[]>([]);
+  const [proveedoresSeleccionados, setProveedoresSeleccionados] = useState<string[]>([]);
+  const [mostrarFiltroProveedores, setMostrarFiltroProveedores] = useState(false);
   const [itemSeleccionado, setItemSeleccionado] = useState<{tipo: 'ingrediente' | 'subreceta', id: string} | null>(null);
   const [cantidadActual, setCantidadActual] = useState(0);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState('');
+  
+  const filtroRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     cargarDatos();
   }, []);
 
+  useEffect(() => {
+    filtrarIngredientes();
+  }, [busqueda, proveedoresSeleccionados, todosIngredientes]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (filtroRef.current && !filtroRef.current.contains(event.target as Node)) {
+        setMostrarFiltroProveedores(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   async function cargarDatos() {
-    // CORRECCIÓN: Traer TODOS los ingredientes (no solo 1000)
+    // Cargar TODOS los ingredientes (no solo 1000)
     const { data: ingredientesData } = await supabase
       .from('ingredientes')
-      .select('id, nombre, unidad_compra, precio_compra_actual')
+      .select('id, nombre, unidad_compra, precio_compra_actual, proveedor_nombre, categoria')
       .order('nombre')
       .range(0, 10000);
     
-    if (ingredientesData) setIngredientes(ingredientesData);
+    if (ingredientesData) {
+      setTodosIngredientes(ingredientesData);
+      
+      // Extraer proveedores únicos
+      const proveedores = Array.from(
+        new Set(
+          ingredientesData
+            .map(i => i.proveedor_nombre)
+            .filter(Boolean)
+        )
+      ) as string[];
+      setProveedoresUnicos(proveedores.sort());
+    }
 
-    // CORRECCIÓN: Traer sub-recetas existentes
+    // Cargar sub-recetas existentes
     const { data: subRecetasData } = await supabase
       .from('recetas')
       .select('id, nombre, coste_total, produccion_gramos, tipo')
@@ -70,8 +104,49 @@ export default function NuevaReceta() {
     if (subRecetasData) setSubRecetas(subRecetasData);
   }
 
+  function filtrarIngredientes() {
+    let filtrados = [...todosIngredientes];
+
+    if (busqueda.trim()) {
+      const busquedaLower = busqueda.toLowerCase();
+      filtrados = filtrados.filter(i => 
+        i.nombre.toLowerCase().includes(busquedaLower) ||
+        (i.categoria && i.categoria.toLowerCase().includes(busquedaLower))
+      );
+    }
+
+    if (proveedoresSeleccionados.length > 0) {
+      filtrados = filtrados.filter(i => 
+        proveedoresSeleccionados.includes(i.proveedor_nombre)
+      );
+    }
+
+    setIngredientesFiltrados(filtrados);
+  }
+
+  function toggleProveedor(proveedor: string) {
+    setProveedoresSeleccionados(prev => 
+      prev.includes(proveedor)
+        ? prev.filter(p => p !== proveedor)
+        : [...prev, proveedor]
+    );
+  }
+
+  function toggleTodosProveedores() {
+    if (proveedoresSeleccionados.length === proveedoresUnicos.length) {
+      setProveedoresSeleccionados([]);
+    } else {
+      setProveedoresSeleccionados([...proveedoresUnicos]);
+    }
+  }
+
+  function limpiarFiltros() {
+    setBusqueda('');
+    setProveedoresSeleccionados([]);
+  }
+
   const todosLosItems = [
-    ...ingredientes.map(i => ({
+    ...ingredientesFiltrados.map(i => ({
       tipo: 'ingrediente' as const,
       id: i.id,
       nombre: i.nombre,
@@ -90,10 +165,6 @@ export default function NuevaReceta() {
       };
     })
   ];
-
-  const itemsFiltrados = todosLosItems.filter(item =>
-    item.nombre.toLowerCase().includes(busqueda.toLowerCase())
-  );
 
   function agregarItem() {
     if (!itemSeleccionado || cantidadActual <= 0) {
@@ -160,7 +231,7 @@ export default function NuevaReceta() {
 
   async function guardarReceta() {
     if (!nombre.trim()) {
-      setMensaje('️ El nombre es obligatorio');
+      setMensaje('⚠️ El nombre es obligatorio');
       return;
     }
 
@@ -178,7 +249,6 @@ export default function NuevaReceta() {
     setMensaje('');
 
     try {
-      // Generar ID único
       const recetaId = crypto.randomUUID();
 
       const { error: recetaError } = await supabase
@@ -229,7 +299,7 @@ export default function NuevaReceta() {
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900"> Nueva Receta</h1>
+          <h1 className="text-4xl font-bold text-gray-900">🍳 Nueva Receta</h1>
           <button
             onClick={() => router.push('/recetas')}
             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
@@ -280,7 +350,7 @@ export default function NuevaReceta() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="plato">🍽️ Plato Principal</option>
-                <option value="sub_receta">🥘 Sub-receta</option>
+                <option value="sub_receta"> Sub-receta</option>
               </select>
             </div>
 
@@ -353,50 +423,87 @@ export default function NuevaReceta() {
           <h2 className="text-xl font-semibold mb-4"> Añadir ingredientes o sub-recetas</h2>
           
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Buscar ingrediente o sub-receta
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (itemsFiltrados.length > 0 && !itemSeleccionado) {
-                      setItemSeleccionado({
-                        tipo: itemsFiltrados[0].tipo,
-                        id: itemsFiltrados[0].id
-                      });
-                    }
-                  }
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                placeholder="Escribe para buscar... (ej: pollo, salsa, patatas)"
-              />
-              {busqueda && (
+            <div className="flex gap-4 mb-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Buscar ingrediente
+                </label>
+                <input
+                  type="text"
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ej: Tomate, Pollo, Aceite..."
+                />
+              </div>
+
+              <div className="relative" ref={filtroRef}>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Proveedores
+                </label>
                 <button
-                  onClick={() => {
-                    setBusqueda('');
-                    setItemSeleccionado(null);
-                  }}
-                  className="absolute right-2 top-2 text-gray-400 hover:text-gray-600"
+                  onClick={() => setMostrarFiltroProveedores(!mostrarFiltroProveedores)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg font-medium transition flex items-center gap-2 hover:border-blue-300"
                 >
-                  ✕
+                  {proveedoresSeleccionados.length > 0 
+                    ? `${proveedoresSeleccionados.length} seleccionado(s)`
+                    : 'Todos'
+                  }
+                  <span>▼</span>
                 </button>
+
+                {mostrarFiltroProveedores && (
+                  <div className="absolute top-full left-0 mt-2 w-64 bg-white border-2 border-gray-200 rounded-lg shadow-xl z-20 max-h-64 overflow-y-auto">
+                    <div className="p-3 border-b border-gray-200">
+                      <button
+                        onClick={toggleTodosProveedores}
+                        className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        {proveedoresSeleccionados.length === proveedoresUnicos.length 
+                          ? 'Deseleccionar todos' 
+                          : 'Seleccionar todos'}
+                      </button>
+                    </div>
+                    <div className="p-2">
+                      {proveedoresUnicos.map((proveedor) => (
+                        <label
+                          key={proveedor}
+                          className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={proveedoresSeleccionados.includes(proveedor)}
+                            onChange={() => toggleProveedor(proveedor)}
+                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">{proveedor}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {(busqueda || proveedoresSeleccionados.length > 0) && (
+                <div className="pt-6">
+                  <button
+                    onClick={limpiarFiltros}
+                    className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium transition"
+                  >
+                    Limpiar
+                  </button>
+                </div>
               )}
             </div>
 
-            {busqueda && itemsFiltrados.length > 0 && (
-              <div className="mt-2 border border-gray-200 rounded-lg bg-white max-h-60 overflow-y-auto shadow-lg z-10 relative">
-                {itemsFiltrados.map((item) => (
+            {todosLosItems.length > 0 && (
+              <div className="border border-gray-200 rounded-lg bg-white max-h-60 overflow-y-auto shadow-lg">
+                {todosLosItems.map((item) => (
                   <button
                     key={`${item.tipo}-${item.id}`}
                     onClick={() => {
                       setItemSeleccionado({tipo: item.tipo, id: item.id});
                       setCantidadActual(0);
-                      setBusqueda('');
                     }}
                     className="w-full px-4 py-3 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0 flex justify-between items-center"
                   >
@@ -414,15 +521,15 @@ export default function NuevaReceta() {
               </div>
             )}
 
-            {busqueda && itemsFiltrados.length === 0 && (
+            {busqueda && todosLosItems.length === 0 && (
               <div className="mt-2 p-3 text-gray-500 bg-gray-50 rounded-lg text-center">
-                No se encontraron ingredientes o sub-recetas
+                No se encontraron ingredientes
               </div>
             )}
           </div>
 
           {itemSeleccionado && (
-            <div className="mb-4">
+            <div className="mb-4 p-4 bg-blue-50 rounded-lg">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Cantidad ({itemSeleccionado && todosLosItems.find(i => i.id === itemSeleccionado.id && i.tipo === itemSeleccionado.tipo)?.unidad})
               </label>
