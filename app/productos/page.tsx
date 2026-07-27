@@ -27,7 +27,7 @@ export default function ProductosPage() {
         .from('ingredientes')
         .select('*')
         .order('nombre')
-        .range(0, 10000);
+        .range(0, 20000);
 
       if (error) throw error;
 
