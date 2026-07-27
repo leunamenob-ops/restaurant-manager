@@ -112,7 +112,6 @@ export default function NuevaReceta() {
     console.log('Total ingredientes cargados:', todosLosIngredientes.length);
     setTodosIngredientes(todosLosIngredientes);
     
-    // Extraer proveedores únicos (manejando nulls de forma segura)
     const proveedores = Array.from(
       new Set(
         todosLosIngredientes
@@ -131,26 +130,41 @@ export default function NuevaReceta() {
     if (subRecetasData) setSubRecetas(subRecetasData);
   }
 
-  function normalizarUnidad(unidad: string | null | undefined): string {
-    if (!unidad) return 'gr';
+  function normalizarUnidad(unidad: string | null | undefined): { unidad: string; factor: number } {
+    if (!unidad) return { unidad: 'gr', factor: 1 };
     
     try {
       const unidadLower = unidad.toLowerCase().trim();
       
-      if (unidadLower.includes('ud') || unidadLower.includes('unidad') || unidadLower.includes('pieza')) {
-        return 'ud';
-      }
-      if (unidadLower.includes('kg') || unidadLower.includes('kilo') || unidadLower.includes('gr') || unidadLower.includes('gramo')) {
-        return 'gr';
-      }
-      if (unidadLower.includes('l') || unidadLower.includes('litro') || unidadLower.includes('ml')) {
-        return 'ml';
+      // Kg → gr (1 Kg = 1000 gr, el precio se divide por 1000)
+      if (unidadLower.includes('kg') || unidadLower.includes('kilo')) {
+        return { unidad: 'gr', factor: 1000 };
       }
       
-      return 'gr';
+      // Litros → ml (1 L = 1000 ml)
+      if (unidadLower.includes('l') && !unidadLower.includes('ml')) {
+        return { unidad: 'ml', factor: 1000 };
+      }
+      
+      // Unidades
+      if (unidadLower.includes('ud') || unidadLower.includes('unidad') || unidadLower.includes('pieza')) {
+        return { unidad: 'ud', factor: 1 };
+      }
+      
+      // Gramos (ya está en gr)
+      if (unidadLower.includes('gr') || unidadLower.includes('gramo')) {
+        return { unidad: 'gr', factor: 1 };
+      }
+      
+      // Mililitros (ya está en ml)
+      if (unidadLower.includes('ml')) {
+        return { unidad: 'ml', factor: 1 };
+      }
+      
+      // Por defecto (CAJA, etc.) → ud sin conversión
+      return { unidad: 'ud', factor: 1 };
     } catch (error) {
-      console.error('Error normalizando unidad:', unidad, error);
-      return 'gr';
+      return { unidad: 'gr', factor: 1 };
     }
   }
 
@@ -201,13 +215,16 @@ export default function NuevaReceta() {
   }
 
   const todosLosItems = [
-    ...ingredientesFiltrados.map(i => ({
-      tipo: 'ingrediente' as const,
-      id: i.id,
-      nombre: i.nombre || 'Sin nombre',
-      costeUnitario: i.precio_compra_actual || 0,
-      unidad: normalizarUnidad(i.unidad_compra)
-    })),
+    ...ingredientesFiltrados.map(i => {
+      const conversion = normalizarUnidad(i.unidad_compra);
+      return {
+        tipo: 'ingrediente' as const,
+        id: i.id,
+        nombre: i.nombre || 'Sin nombre',
+        costeUnitario: (i.precio_compra_actual || 0) / conversion.factor,
+        unidad: conversion.unidad
+      };
+    }),
     ...subRecetas.map(s => {
       const gramos = s.produccion_gramos ? parseFloat(s.produccion_gramos as unknown as string) : 0;
       const costePorGramo = gramos > 0 ? s.coste_total / gramos : 0;
@@ -357,7 +374,7 @@ export default function NuevaReceta() {
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900">🍳 Nueva Receta</h1>
+          <h1 className="text-4xl font-bold text-gray-900"> Nueva Receta</h1>
           <button
             onClick={() => router.push('/recetas')}
             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
@@ -369,7 +386,7 @@ export default function NuevaReceta() {
         {mensaje && (
           <div className={`mb-6 p-4 rounded-lg ${
             mensaje.includes('✅') ? 'bg-green-100 text-green-800' :
-            mensaje.includes('️') ? 'bg-yellow-100 text-yellow-800' :
+            mensaje.includes('⚠️') ? 'bg-yellow-100 text-yellow-800' :
             'bg-red-100 text-red-800'
           }`}>
             {mensaje}
@@ -408,7 +425,7 @@ export default function NuevaReceta() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="plato">🍽️ Plato Principal</option>
-                <option value="sub_receta"> Sub-receta</option>
+                <option value="sub_receta">🥘 Sub-receta</option>
               </select>
             </div>
 
@@ -641,7 +658,7 @@ export default function NuevaReceta() {
                         onClick={() => eliminarItem(index)}
                         className="text-red-600 hover:text-red-800"
                       >
-                        ️
+                        🗑️
                       </button>
                     </div>
                   </li>
@@ -652,7 +669,7 @@ export default function NuevaReceta() {
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">💰 Resumen de costes</h2>
+          <h2 className="text-xl font-semibold mb-4"> Resumen de costes</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
@@ -753,7 +770,7 @@ export default function NuevaReceta() {
             guardando ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
           }`}
         >
-          {guardando ? '⏳ Guardando...' : '💾 Guardar receta'}
+          {guardando ? ' Guardando...' : '💾 Guardar receta'}
         </button>
       </div>
     </div>
