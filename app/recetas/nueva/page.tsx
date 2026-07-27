@@ -136,32 +136,26 @@ export default function NuevaReceta() {
     try {
       const unidadLower = unidad.toLowerCase().trim();
       
-      // Kg → gr (1 Kg = 1000 gr, el precio se divide por 1000)
       if (unidadLower.includes('kg') || unidadLower.includes('kilo')) {
         return { unidad: 'gr', factor: 1000 };
       }
       
-      // Litros → ml (1 L = 1000 ml)
       if (unidadLower.includes('l') && !unidadLower.includes('ml')) {
         return { unidad: 'ml', factor: 1000 };
       }
       
-      // Unidades
       if (unidadLower.includes('ud') || unidadLower.includes('unidad') || unidadLower.includes('pieza')) {
         return { unidad: 'ud', factor: 1 };
       }
       
-      // Gramos (ya está en gr)
       if (unidadLower.includes('gr') || unidadLower.includes('gramo')) {
         return { unidad: 'gr', factor: 1 };
       }
       
-      // Mililitros (ya está en ml)
       if (unidadLower.includes('ml')) {
         return { unidad: 'ml', factor: 1 };
       }
       
-      // Por defecto (CAJA, etc.) → ud sin conversión
       return { unidad: 'ud', factor: 1 };
     } catch (error) {
       return { unidad: 'gr', factor: 1 };
@@ -212,6 +206,8 @@ export default function NuevaReceta() {
   function limpiarFiltros() {
     setBusqueda('');
     setProveedoresSeleccionados([]);
+    setItemSeleccionado(null);
+    setCantidadActual(0);
   }
 
   const todosLosItems = [
@@ -271,6 +267,16 @@ export default function NuevaReceta() {
     setItemsSeleccionados(itemsSeleccionados.filter((_, i) => i !== index));
   }
 
+  function actualizarCantidad(index: number, nuevaCantidad: number) {
+    const nuevosItems = [...itemsSeleccionados];
+    const item = nuevosItems[index];
+    
+    item.cantidad = nuevaCantidad;
+    item.coste = nuevaCantidad * item.costeUnitario;
+    
+    setItemsSeleccionados(nuevosItems);
+  }
+
   function calcularCosteTotal() {
     return itemsSeleccionados.reduce((sum, item) => sum + item.coste, 0);
   }
@@ -313,7 +319,7 @@ export default function NuevaReceta() {
     }
 
     if (tipo === 'sub_receta' && (!produccionGramos || produccionGramos <= 0)) {
-      setMensaje('⚠️ Para sub-recetas, debes especificar la producción en gramos');
+      setMensaje('️ Para sub-recetas, debes especificar la producción en gramos');
       return;
     }
 
@@ -650,13 +656,25 @@ export default function NuevaReceta() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="text-gray-600">
-                        {item.cantidad} {item.unidad} × {item.costeUnitario.toFixed(4)}€ = {item.coste.toFixed(4)}€
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          value={item.cantidad}
+                          onChange={(e) => actualizarCantidad(index, Number(e.target.value))}
+                          min="0"
+                          step="0.01"
+                          className="w-20 px-2 py-1 border border-gray-300 rounded text-right text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                        <span className="text-gray-600 text-sm">{item.unidad}</span>
+                      </div>
+                      <span className="text-gray-700 font-semibold text-sm w-24 text-right">
+                        {item.coste.toFixed(4)}€
                       </span>
                       <button
                         onClick={() => eliminarItem(index)}
-                        className="text-red-600 hover:text-red-800"
+                        className="text-red-600 hover:text-red-800 p-1"
+                        title="Eliminar"
                       >
                         🗑️
                       </button>
@@ -770,7 +788,7 @@ export default function NuevaReceta() {
             guardando ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
           }`}
         >
-          {guardando ? ' Guardando...' : '💾 Guardar receta'}
+          {guardando ? ' Guardando...' : ' Guardar receta'}
         </button>
       </div>
     </div>
