@@ -15,8 +15,7 @@ export default function ProductosPage() {
   
   // Paginación
   const [paginaActual, setPaginaActual] = useState(1);
-  const [productosPorPagina] = useState(50);
-  const [totalProductos, setTotalProductos] = useState(0);
+  const productosPorPagina = 50;
   
   const filtroRef = useRef<HTMLDivElement>(null);
 
@@ -25,10 +24,12 @@ export default function ProductosPage() {
     setError(null);
     
     try {
-      const { data, error, count } = await supabase
+      // Traer TODOS los productos (hasta 10000)
+      const { data, error } = await supabase
         .from('ingredientes')
-        .select('*', { count: 'exact' })
-        .order('nombre');
+        .select('*')
+        .order('nombre')
+        .range(0, 9999);
 
       if (error) throw error;
 
@@ -38,7 +39,6 @@ export default function ProductosPage() {
       })) || [];
 
       setTodosProductos(productosTransformados);
-      setTotalProductos(count || 0);
       
       const proveedores = Array.from(
         new Set(
@@ -50,7 +50,7 @@ export default function ProductosPage() {
       
       setProveedoresUnicos(proveedores.sort());
       setProductosFiltrados(productosTransformados);
-      setPaginaActual(1); // Reset a primera página
+      setPaginaActual(1);
       
     } catch (err: any) {
       console.error('Error cargando productos:', err);
@@ -82,7 +82,7 @@ export default function ProductosPage() {
     }
 
     setProductosFiltrados(filtrados);
-    setPaginaActual(1); // Reset a primera página al filtrar
+    setPaginaActual(1);
   }, [busquedaNombre, proveedoresSeleccionados, todosProductos]);
 
   useEffect(() => {
@@ -123,8 +123,33 @@ export default function ProductosPage() {
   const totalPaginas = Math.ceil(productosFiltrados.length / productosPorPagina);
 
   const irAPagina = (pagina: number) => {
+    if (pagina < 1 || pagina > totalPaginas) return;
     setPaginaActual(pagina);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Generar números de página para mostrar
+  const obtenerNumerosPagina = () => {
+    const numeros: number[] = [];
+    const total = totalPaginas;
+    const actual = paginaActual;
+    
+    if (total <= 7) {
+      for (let i = 1; i <= total; i++) numeros.push(i);
+    } else {
+      numeros.push(1);
+      if (actual > 3) numeros.push(-1); // "..."
+      
+      const inicio = Math.max(2, actual - 1);
+      const fin = Math.min(total - 1, actual + 1);
+      
+      for (let i = inicio; i <= fin; i++) numeros.push(i);
+      
+      if (actual < total - 2) numeros.push(-1); // "..."
+      numeros.push(total);
+    }
+    
+    return numeros;
   };
 
   return (
@@ -135,7 +160,7 @@ export default function ProductosPage() {
             <div>
               <h1 className="text-3xl font-bold">📦 Gestión de Productos</h1>
               <p className="text-cyan-100 mt-1">
-                {productosFiltrados.length} de {totalProductos} ingredientes
+                {productosFiltrados.length} ingredientes {proveedoresSeleccionados.length > 0 && `(filtrado por ${proveedoresSeleccionados.length} proveedor(es))`}
               </p>
             </div>
             <a href="/dashboard" className="px-6 py-3 bg-white text-cyan-600 rounded-lg hover:bg-cyan-50 font-semibold transition">
@@ -304,19 +329,35 @@ export default function ProductosPage() {
           )}
         </div>
 
-        {/* PAGINACIÓN */}
+        {/* PAGINACIÓN COMPLETA */}
         {totalPaginas > 1 && (
-          <div className="mt-6 flex items-center justify-between bg-white rounded-lg shadow-md p-4">
-            <div className="text-sm text-gray-600">
-              Mostrando {productosPagina.length} de {productosFiltrados.length} productos
-              <span className="ml-2">(Página {paginaActual} de {totalPaginas})</span>
+          <div className="mt-6 bg-white rounded-lg shadow-md p-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-sm text-gray-600">
+                Mostrando <span className="font-semibold">{indicePrimero + 1}</span> a <span className="font-semibold">{Math.min(indiceUltimo, productosFiltrados.length)}</span> de <span className="font-semibold">{productosFiltrados.length}</span> productos
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <span>Página</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={totalPaginas}
+                  value={paginaActual}
+                  onChange={(e) => {
+                    const num = parseInt(e.target.value);
+                    if (num >= 1 && num <= totalPaginas) irAPagina(num);
+                  }}
+                  className="w-16 px-2 py-1 border border-cyan-200 rounded text-center font-semibold"
+                />
+                <span>de {totalPaginas}</span>
+              </div>
             </div>
-            
-            <div className="flex gap-2">
+
+            <div className="flex items-center justify-center gap-1 flex-wrap">
               <button
                 onClick={() => irAPagina(1)}
                 disabled={paginaActual === 1}
-                className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
               >
                 « Primera
               </button>
@@ -324,19 +365,33 @@ export default function ProductosPage() {
               <button
                 onClick={() => irAPagina(paginaActual - 1)}
                 disabled={paginaActual === 1}
-                className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
               >
-                 Anterior
+                ‹ Anterior
               </button>
 
-              <span className="px-4 py-2 bg-cyan-600 text-white rounded-lg text-sm font-semibold">
-                {paginaActual} / {totalPaginas}
-              </span>
+              {obtenerNumerosPagina().map((num, idx) => (
+                num === -1 ? (
+                  <span key={`dots-${idx}`} className="px-2 py-2 text-gray-400">...</span>
+                ) : (
+                  <button
+                    key={num}
+                    onClick={() => irAPagina(num)}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+                      paginaActual === num
+                        ? 'bg-cyan-600 text-white'
+                        : 'border border-cyan-200 text-cyan-600 hover:bg-cyan-50'
+                    }`}
+                  >
+                    {num}
+                  </button>
+                )
+              ))}
 
               <button
                 onClick={() => irAPagina(paginaActual + 1)}
                 disabled={paginaActual === totalPaginas}
-                className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
               >
                 Siguiente ›
               </button>
@@ -344,17 +399,23 @@ export default function ProductosPage() {
               <button
                 onClick={() => irAPagina(totalPaginas)}
                 disabled={paginaActual === totalPaginas}
-                className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                className="px-3 py-2 border border-cyan-200 rounded-lg text-sm font-medium text-cyan-600 hover:bg-cyan-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
               >
                 Última »
               </button>
             </div>
+
+            <div className="mt-3 text-center text-xs text-gray-500">
+              {productosFiltrados.length} productos encontrados • 50 por página
+            </div>
           </div>
         )}
 
-        <div className="mt-4 text-sm text-gray-500 text-center">
-          Total: {totalProductos} productos en base de datos
-        </div>
+        {productosFiltrados.length === 0 && !loading && (
+          <div className="mt-4 text-sm text-gray-500 text-center">
+            No hay productos que coincidan con los filtros
+          </div>
+        )}
       </div>
     </div>
   );
