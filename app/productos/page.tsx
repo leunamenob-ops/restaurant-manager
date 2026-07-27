@@ -18,6 +18,7 @@ export default function ProductosPage() {
   
   const filtroRef = useRef<HTMLDivElement>(null);
 
+  // CARGAR TODOS LOS PRODUCTOS EN LOTES DE 1000
   const cargarProductos = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -25,24 +26,45 @@ export default function ProductosPage() {
     try {
       console.log('🔍 Iniciando carga de productos...');
       
-      const { data, error, count } = await supabase
-        .from('ingredientes')
-        .select('*', { count: 'exact' })
-        .order('nombre')
-        .range(0, 10000);
+      let todosLosProductos: any[] = [];
+      let desde = 0;
+      const lote = 1000;
+      let hayMas = true;
 
-      console.log('📦 Datos recibidos:', data?.length);
-      console.log('📊 Count total:', count);
-      console.log('❌ Error:', error);
+      while (hayMas) {
+        console.log(`📦 Cargando lote desde ${desde} hasta ${desde + lote - 1}...`);
+        
+        const { data, error } = await supabase
+          .from('ingredientes')
+          .select('*')
+          .order('nombre')
+          .range(desde, desde + lote - 1);
 
-      if (error) throw error;
+        if (error) {
+          console.error(' Error en lote:', error);
+          throw error;
+        }
 
-      const productosTransformados = data?.map((item: any) => ({
+        if (!data || data.length === 0) {
+          hayMas = false;
+        } else {
+          todosLosProductos = todosLosProductos.concat(data);
+          console.log(`✅ Lote cargado: ${data.length} productos (total acumulado: ${todosLosProductos.length})`);
+          
+          if (data.length < lote) {
+            hayMas = false;
+          } else {
+            desde += lote;
+          }
+        }
+      }
+
+      console.log(' Total productos cargados:', todosLosProductos.length);
+
+      const productosTransformados = todosLosProductos.map((item: any) => ({
         ...item,
         proveedor_nombre: item.proveedor_nombre || 'Sin proveedor'
-      })) || [];
-
-      console.log('✅ Productos transformados:', productosTransformados.length);
+      }));
 
       setTodosProductos(productosTransformados);
       
