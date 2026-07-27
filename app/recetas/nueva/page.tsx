@@ -51,6 +51,7 @@ export default function NuevaReceta() {
   const [cantidadActual, setCantidadActual] = useState(0);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState('');
+  const [hotelId, setHotelId] = useState<string>('');
   
   const filtroRef = useRef<HTMLDivElement>(null);
 
@@ -73,22 +74,33 @@ export default function NuevaReceta() {
   }, []);
 
   async function cargarDatos() {
+    // Obtener hotel_id del sessionStorage
+    const storedHotelId = sessionStorage.getItem('hotel_id');
+    if (storedHotelId) {
+      setHotelId(storedHotelId);
+    }
+
     // Cargar TODOS los ingredientes (no solo 1000)
-    const { data: ingredientesData } = await supabase
+    const { data: ingredientesData, error: ingredientesError } = await supabase
       .from('ingredientes')
       .select('id, nombre, unidad_compra, precio_compra_actual, proveedor_nombre, categoria')
       .order('nombre')
       .range(0, 10000);
     
+    if (ingredientesError) {
+      console.error('Error cargando ingredientes:', ingredientesError);
+      return;
+    }
+
     if (ingredientesData) {
       setTodosIngredientes(ingredientesData);
       
-      // Extraer proveedores únicos
+      // Extraer proveedores únicos (filtrar nulls y vacíos)
       const proveedores = Array.from(
         new Set(
           ingredientesData
             .map(i => i.proveedor_nombre)
-            .filter(Boolean)
+            .filter(p => p && p.trim() !== '')
         )
       ) as string[];
       setProveedoresUnicos(proveedores.sort());
@@ -104,6 +116,24 @@ export default function NuevaReceta() {
     if (subRecetasData) setSubRecetas(subRecetasData);
   }
 
+  function normalizarUnidad(unidad: string): string {
+    // Normalizar unidades a: ud, gr, ml
+    const unidadLower = unidad.toLowerCase().trim();
+    
+    if (unidadLower.includes('ud') || unidadLower.includes('unidad') || unidadLower.includes('pieza')) {
+      return 'ud';
+    }
+    if (unidadLower.includes('kg') || unidadLower.includes('kilo') || unidadLower.includes('gr') || unidadLower.includes('gramo')) {
+      return 'gr';
+    }
+    if (unidadLower.includes('l') || unidadLower.includes('litro') || unidadLower.includes('ml')) {
+      return 'ml';
+    }
+    
+    // Por defecto, mantener la original
+    return unidad;
+  }
+
   function filtrarIngredientes() {
     let filtrados = [...todosIngredientes];
 
@@ -115,10 +145,15 @@ export default function NuevaReceta() {
       );
     }
 
+    // FILTRO DE PROVEEDORES - Solo filtrar si hay proveedores seleccionados
     if (proveedoresSeleccionados.length > 0) {
-      filtrados = filtrados.filter(i => 
-        proveedoresSeleccionados.includes(i.proveedor_nombre)
-      );
+      filtrados = filtrados.filter(i => {
+        // Si el ingrediente no tiene proveedor, lo incluimos si "Todos" está seleccionado
+        if (!i.proveedor_nombre || i.proveedor_nombre.trim() === '') {
+          return false; // Solo mostramos ingredientes con proveedor si hay filtro activo
+        }
+        return proveedoresSeleccionados.includes(i.proveedor_nombre);
+      });
     }
 
     setIngredientesFiltrados(filtrados);
@@ -151,7 +186,7 @@ export default function NuevaReceta() {
       id: i.id,
       nombre: i.nombre,
       costeUnitario: i.precio_compra_actual || 0,
-      unidad: i.unidad_compra || 'Kg.'
+      unidad: normalizarUnidad(i.unidad_compra)
     })),
     ...subRecetas.map(s => {
       const gramos = s.produccion_gramos ? parseFloat(s.produccion_gramos as unknown as string) : 0;
@@ -161,7 +196,7 @@ export default function NuevaReceta() {
         id: s.id,
         nombre: s.nombre,
         costeUnitario: costePorGramo,
-        unidad: 'g'
+        unidad: 'gr'
       };
     })
   ];
@@ -241,7 +276,7 @@ export default function NuevaReceta() {
     }
 
     if (tipo === 'sub_receta' && (!produccionGramos || produccionGramos <= 0)) {
-      setMensaje('⚠️ Para sub-recetas, debes especificar la producción en gramos');
+      setMensaje('️ Para sub-recetas, debes especificar la producción en gramos');
       return;
     }
 
@@ -251,6 +286,7 @@ export default function NuevaReceta() {
     try {
       const recetaId = crypto.randomUUID();
 
+      // CORRECCIÓN: Añadir hotel_id a la inserción
       const { error: recetaError } = await supabase
         .from('recetas')
         .insert({
@@ -261,6 +297,7 @@ export default function NuevaReceta() {
           produccion_gramos: tipo === 'sub_receta' ? String(produccionGramos) : null,
           precio_venta: precioVenta,
           coste_total: calcularCosteTotal(),
+          hotel_id: hotelId || '00000000-0000-0000-0000-000000000001', // Valor por defecto si no hay
           created_at: new Date().toISOString()
         });
 
@@ -273,6 +310,7 @@ export default function NuevaReceta() {
         subreceta_id: item.tipo === 'subreceta' ? item.id : null,
         cantidad_necesaria: item.cantidad,
         coste_linea: item.coste,
+        hotel_id: hotelId || '00000000-0000-0000-0000-000000000001',
         created_at: new Date().toISOString()
       }));
 
@@ -289,6 +327,7 @@ export default function NuevaReceta() {
       }, 1500);
 
     } catch (error: any) {
+      console.error('Error guardando receta:', error);
       setMensaje(`❌ Error: ${error.message}`);
     } finally {
       setGuardando(false);
@@ -640,7 +679,7 @@ export default function NuevaReceta() {
                   ? 'text-yellow-600' 
                   : 'text-red-600'
               }`}>
-                📊 Food Cost
+                 Food Cost
               </p>
               <p className={`text-2xl font-bold ${
                 parseFloat(calcularFoodCostPorcentaje()) < 25 
