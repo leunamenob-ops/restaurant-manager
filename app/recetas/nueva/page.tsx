@@ -134,21 +134,24 @@ export default function NuevaReceta() {
     if (subRecetasData) setSubRecetas(subRecetasData);
   }
 
-  function normalizarUnidad(unidad: string): string {
-    const unidadLower = unidad.toLowerCase().trim();
-    
-    if (unidadLower.includes('ud') || unidadLower.includes('unidad') || unidadLower.includes('pieza')) {
-      return 'ud';
-    }
-    if (unidadLower.includes('kg') || unidadLower.includes('kilo') || unidadLower.includes('gr') || unidadLower.includes('gramo')) {
-      return 'gr';
-    }
-    if (unidadLower.includes('l') || unidadLower.includes('litro') || unidadLower.includes('ml')) {
-      return 'ml';
-    }
-    
-    return unidad;
+  function normalizarUnidad(unidad: string | null | undefined): string {
+  // Si es null o undefined, devolver 'gr' por defecto
+  if (!unidad) return 'gr';
+  
+  const unidadLower = unidad.toLowerCase().trim();
+  
+  if (unidadLower.includes('ud') || unidadLower.includes('unidad') || unidadLower.includes('pieza')) {
+    return 'ud';
   }
+  if (unidadLower.includes('kg') || unidadLower.includes('kilo') || unidadLower.includes('gr') || unidadLower.includes('gramo')) {
+    return 'gr';
+  }
+  if (unidadLower.includes('l') || unidadLower.includes('litro') || unidadLower.includes('ml')) {
+    return 'ml';
+  }
+  
+  return 'gr'; // Por defecto
+}
 
   function filtrarIngredientes() {
     let filtrados = [...todosIngredientes];
