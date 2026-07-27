@@ -74,13 +74,11 @@ export default function NuevaReceta() {
   }, []);
 
   async function cargarDatos() {
-    // Obtener hotel_id del sessionStorage
     const storedHotelId = sessionStorage.getItem('hotel_id');
     if (storedHotelId) {
       setHotelId(storedHotelId);
     }
 
-    // Cargar TODOS los ingredientes en lotes (como en el módulo de productos)
     let todosLosIngredientes: Ingrediente[] = [];
     let desde = 0;
     const lote = 1000;
@@ -114,17 +112,16 @@ export default function NuevaReceta() {
     console.log('Total ingredientes cargados:', todosLosIngredientes.length);
     setTodosIngredientes(todosLosIngredientes);
     
-    // Extraer proveedores únicos (manejando nulls)
+    // Extraer proveedores únicos (manejando nulls de forma segura)
     const proveedores = Array.from(
       new Set(
         todosLosIngredientes
-          .map(i => i.proveedor_nombre)
+          .map(i => i.proveedor_nombre || '')
           .filter(p => p && p.trim() !== '')
       )
     ) as string[];
     setProveedoresUnicos(proveedores.sort());
 
-    // Cargar sub-recetas existentes
     const { data: subRecetasData } = await supabase
       .from('recetas')
       .select('id, nombre, coste_total, produccion_gramos, tipo')
@@ -135,44 +132,47 @@ export default function NuevaReceta() {
   }
 
   function normalizarUnidad(unidad: string | null | undefined): string {
-  // Si es null o undefined, devolver 'gr' por defecto
-  if (!unidad) return 'gr';
-  
-  const unidadLower = unidad.toLowerCase().trim();
-  
-  if (unidadLower.includes('ud') || unidadLower.includes('unidad') || unidadLower.includes('pieza')) {
-    return 'ud';
+    if (!unidad) return 'gr';
+    
+    try {
+      const unidadLower = unidad.toLowerCase().trim();
+      
+      if (unidadLower.includes('ud') || unidadLower.includes('unidad') || unidadLower.includes('pieza')) {
+        return 'ud';
+      }
+      if (unidadLower.includes('kg') || unidadLower.includes('kilo') || unidadLower.includes('gr') || unidadLower.includes('gramo')) {
+        return 'gr';
+      }
+      if (unidadLower.includes('l') || unidadLower.includes('litro') || unidadLower.includes('ml')) {
+        return 'ml';
+      }
+      
+      return 'gr';
+    } catch (error) {
+      console.error('Error normalizando unidad:', unidad, error);
+      return 'gr';
+    }
   }
-  if (unidadLower.includes('kg') || unidadLower.includes('kilo') || unidadLower.includes('gr') || unidadLower.includes('gramo')) {
-    return 'gr';
-  }
-  if (unidadLower.includes('l') || unidadLower.includes('litro') || unidadLower.includes('ml')) {
-    return 'ml';
-  }
-  
-  return 'gr'; // Por defecto
-}
 
   function filtrarIngredientes() {
     let filtrados = [...todosIngredientes];
 
-    // Filtrar por búsqueda (nombre o categoría)
     if (busqueda.trim()) {
       const busquedaLower = busqueda.toLowerCase();
       filtrados = filtrados.filter(i => {
-        const nombreMatch = i.nombre?.toLowerCase().includes(busquedaLower);
-        const categoriaMatch = i.categoria?.toLowerCase().includes(busquedaLower);
-        return nombreMatch || categoriaMatch;
+        const nombre = (i.nombre || '').toLowerCase();
+        const categoria = (i.categoria || '').toLowerCase();
+        return nombre.includes(busquedaLower) || categoria.includes(busquedaLower);
       });
     }
 
-    // Filtrar por proveedores (SOLO si hay seleccionados)
     if (proveedoresSeleccionados.length > 0) {
       filtrados = filtrados.filter(i => {
-        if (!i.proveedor_nombre || i.proveedor_nombre.trim() === '') {
+        const proveedor = i.proveedor_nombre || '';
+        if (proveedor.trim() === '') {
           return false;
         }
-        return proveedoresSeleccionados.includes(i.proveedor_nombre);
+        return proveedoresSeleccionados.includes(proveedor);
       });
     }
 
@@ -204,7 +204,7 @@ export default function NuevaReceta() {
     ...ingredientesFiltrados.map(i => ({
       tipo: 'ingrediente' as const,
       id: i.id,
-      nombre: i.nombre,
+      nombre: i.nombre || 'Sin nombre',
       costeUnitario: i.precio_compra_actual || 0,
       unidad: normalizarUnidad(i.unidad_compra)
     })),
@@ -214,7 +214,7 @@ export default function NuevaReceta() {
       return {
         tipo: 'subreceta' as const,
         id: s.id,
-        nombre: s.nombre,
+        nombre: s.nombre || 'Sin nombre',
         costeUnitario: costePorGramo,
         unidad: 'gr'
       };
@@ -286,12 +286,12 @@ export default function NuevaReceta() {
 
   async function guardarReceta() {
     if (!nombre.trim()) {
-      setMensaje('⚠️ El nombre es obligatorio');
+      setMensaje('️ El nombre es obligatorio');
       return;
     }
 
     if (itemsSeleccionados.length === 0) {
-      setMensaje('️ Añade al menos un ingrediente o sub-receta');
+      setMensaje('⚠️ Añade al menos un ingrediente o sub-receta');
       return;
     }
 
@@ -369,7 +369,7 @@ export default function NuevaReceta() {
         {mensaje && (
           <div className={`mb-6 p-4 rounded-lg ${
             mensaje.includes('✅') ? 'bg-green-100 text-green-800' :
-            mensaje.includes('⚠️') ? 'bg-yellow-100 text-yellow-800' :
+            mensaje.includes('️') ? 'bg-yellow-100 text-yellow-800' :
             'bg-red-100 text-red-800'
           }`}>
             {mensaje}
@@ -523,9 +523,9 @@ export default function NuevaReceta() {
                       </button>
                     </div>
                     <div className="p-2">
-                      {proveedoresUnicos.map((proveedor) => (
+                      {proveedoresUnicos.map((proveedor, idx) => (
                         <label
-                          key={proveedor}
+                          key={idx}
                           className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
                         >
                           <input
@@ -556,9 +556,9 @@ export default function NuevaReceta() {
 
             {todosLosItems.length > 0 && (
               <div className="border border-gray-200 rounded-lg bg-white max-h-60 overflow-y-auto shadow-lg">
-                {todosLosItems.map((item) => (
+                {todosLosItems.map((item, idx) => (
                   <button
-                    key={`${item.tipo}-${item.id}`}
+                    key={idx}
                     onClick={() => {
                       setItemSeleccionado({tipo: item.tipo, id: item.id});
                       setCantidadActual(0);
