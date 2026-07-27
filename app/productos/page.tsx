@@ -13,44 +13,56 @@ export default function ProductosPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  // Modales
+  const [mostrarModalIngrediente, setMostrarModalIngrediente] = useState(false);
+  const [mostrarModalProveedor, setMostrarModalProveedor] = useState(false);
+  
+  // Formulario ingrediente
+  const [nuevoIngrediente, setNuevoIngrediente] = useState({
+    nombre: '',
+    categoria: 'Comida',
+    unidad_compra: 'Kg.',
+    precio_compra_actual: '',
+    proveedor_nombre: ''
+  });
+  
+  // Formulario proveedor
+  const [nuevoProveedor, setNuevoProveedor] = useState({
+    nombre: '',
+    codigo: '',
+    contacto: '',
+    telefono: '',
+    email: ''
+  });
+  
   const [paginaActual, setPaginaActual] = useState(1);
   const productosPorPagina = 50;
   
   const filtroRef = useRef<HTMLDivElement>(null);
 
-  // CARGAR TODOS LOS PRODUCTOS EN LOTES DE 1000
   const cargarProductos = useCallback(async () => {
     setLoading(true);
     setError(null);
     
     try {
-      console.log('🔍 Iniciando carga de productos...');
-      
       let todosLosProductos: any[] = [];
       let desde = 0;
       const lote = 1000;
       let hayMas = true;
 
       while (hayMas) {
-        console.log(`📦 Cargando lote desde ${desde} hasta ${desde + lote - 1}...`);
-        
         const { data, error } = await supabase
           .from('ingredientes')
           .select('*')
           .order('nombre')
           .range(desde, desde + lote - 1);
 
-        if (error) {
-          console.error('❌ Error en lote:', error);
-          throw error;
-        }
+        if (error) throw error;
 
         if (!data || data.length === 0) {
           hayMas = false;
         } else {
           todosLosProductos = todosLosProductos.concat(data);
-          console.log(`✅ Lote cargado: ${data.length} productos (total acumulado: ${todosLosProductos.length})`);
-          
           if (data.length < lote) {
             hayMas = false;
           } else {
@@ -58,8 +70,6 @@ export default function ProductosPage() {
           }
         }
       }
-
-      console.log('📊 Total productos cargados:', todosLosProductos.length);
 
       const productosTransformados = todosLosProductos.map((item: any) => ({
         ...item,
@@ -92,7 +102,6 @@ export default function ProductosPage() {
     cargarProductos();
   }, [cargarProductos]);
 
-  // FILTRADO SEGURO - Maneja valores null
   useEffect(() => {
     let filtrados = [...todosProductos];
 
@@ -146,6 +155,66 @@ export default function ProductosPage() {
     setProveedoresSeleccionados([]);
   }
 
+  // GUARDAR NUEVO INGREDIENTE
+  async function guardarIngrediente() {
+    try {
+      const { error } = await supabase
+        .from('ingredientes')
+        .insert([{
+          nombre: nuevoIngrediente.nombre,
+          categoria: nuevoIngrediente.categoria,
+          unidad_compra: nuevoIngrediente.unidad_compra,
+          precio_compra_actual: nuevoIngrediente.precio_compra_actual ? parseFloat(nuevoIngrediente.precio_compra_actual) : null,
+          proveedor_nombre: nuevoIngrediente.proveedor_nombre
+        }]);
+
+      if (error) throw error;
+
+      alert('Ingrediente guardado correctamente');
+      setMostrarModalIngrediente(false);
+      setNuevoIngrediente({
+        nombre: '',
+        categoria: 'Comida',
+        unidad_compra: 'Kg.',
+        precio_compra_actual: '',
+        proveedor_nombre: ''
+      });
+      cargarProductos();
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    }
+  }
+
+  // GUARDAR NUEVO PROVEEDOR
+  async function guardarProveedor() {
+    try {
+      const { error } = await supabase
+        .from('proveedores')
+        .insert([{
+          nombre: nuevoProveedor.nombre,
+          codigo: nuevoProveedor.codigo,
+          contacto: nuevoProveedor.contacto,
+          telefono: nuevoProveedor.telefono,
+          email: nuevoProveedor.email
+        }]);
+
+      if (error) throw error;
+
+      alert('Proveedor guardado correctamente');
+      setMostrarModalProveedor(false);
+      setNuevoProveedor({
+        nombre: '',
+        codigo: '',
+        contacto: '',
+        telefono: '',
+        email: ''
+      });
+      cargarProductos();
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    }
+  }
+
   const indiceUltimo = paginaActual * productosPorPagina;
   const indicePrimero = indiceUltimo - productosPorPagina;
   const productosPagina = productosFiltrados.slice(indicePrimero, indiceUltimo);
@@ -187,9 +256,23 @@ export default function ProductosPage() {
                 {productosFiltrados.length} de {todosProductos.length} ingredientes
               </p>
             </div>
-            <a href="/dashboard" className="px-6 py-3 bg-white text-cyan-600 rounded-lg hover:bg-cyan-50 font-semibold transition">
-              Volver al Dashboard
-            </a>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setMostrarModalIngrediente(true)}
+                className="px-4 py-2 bg-white text-cyan-600 rounded-lg hover:bg-cyan-50 font-semibold transition"
+              >
+                + Ingrediente
+              </button>
+              <button
+                onClick={() => setMostrarModalProveedor(true)}
+                className="px-4 py-2 bg-white text-cyan-600 rounded-lg hover:bg-cyan-50 font-semibold transition"
+              >
+                + Proveedor
+              </button>
+              <a href="/dashboard" className="px-6 py-3 bg-white text-cyan-600 rounded-lg hover:bg-cyan-50 font-semibold transition">
+                Volver al Dashboard
+              </a>
+            </div>
           </div>
         </div>
       </header>
@@ -405,6 +488,180 @@ export default function ProductosPage() {
           Total: {todosProductos.length} productos en base de datos
         </div>
       </div>
+
+      {/* MODAL AÑADIR INGREDIENTE */}
+      {mostrarModalIngrediente && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h2 className="text-2xl font-bold text-cyan-900 mb-4">Nuevo Ingrediente</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+                <input
+                  type="text"
+                  value={nuevoIngrediente.nombre}
+                  onChange={(e) => setNuevoIngrediente({...nuevoIngrediente, nombre: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none"
+                  placeholder="Ej: Tomate Raf"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+                <select
+                  value={nuevoIngrediente.categoria}
+                  onChange={(e) => setNuevoIngrediente({...nuevoIngrediente, categoria: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none"
+                >
+                  <option value="Comida">Comida</option>
+                  <option value="Bebida">Bebida</option>
+                  <option value="Limpieza">Limpieza</option>
+                  <option value="Otros">Otros</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Unidad</label>
+                <select
+                  value={nuevoIngrediente.unidad_compra}
+                  onChange={(e) => setNuevoIngrediente({...nuevoIngrediente, unidad_compra: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none"
+                >
+                  <option value="Kg.">Kg.</option>
+                  <option value="Ud.">Ud.</option>
+                  <option value="CAJA">CAJA</option>
+                  <option value="L.">L.</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Precio (€)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={nuevoIngrediente.precio_compra_actual}
+                  onChange={(e) => setNuevoIngrediente({...nuevoIngrediente, precio_compra_actual: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none"
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Proveedor</label>
+                <select
+                  value={nuevoIngrediente.proveedor_nombre}
+                  onChange={(e) => setNuevoIngrediente({...nuevoIngrediente, proveedor_nombre: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none"
+                >
+                  <option value="">Seleccionar proveedor...</option>
+                  {proveedoresUnicos.map((prov) => (
+                    <option key={prov} value={prov}>{prov}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={guardarIngrediente}
+                disabled={!nuevoIngrediente.nombre}
+                className="flex-1 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-semibold"
+              >
+                Guardar
+              </button>
+              <button
+                onClick={() => setMostrarModalIngrediente(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL AÑADIR PROVEEDOR */}
+      {mostrarModalProveedor && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h2 className="text-2xl font-bold text-cyan-900 mb-4">Nuevo Proveedor</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+                <input
+                  type="text"
+                  value={nuevoProveedor.nombre}
+                  onChange={(e) => setNuevoProveedor({...nuevoProveedor, nombre: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none"
+                  placeholder="Ej: CHEF FRUITS"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Código</label>
+                <input
+                  type="text"
+                  value={nuevoProveedor.codigo}
+                  onChange={(e) => setNuevoProveedor({...nuevoProveedor, codigo: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none"
+                  placeholder="Ej: 960000"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contacto</label>
+                <input
+                  type="text"
+                  value={nuevoProveedor.contacto}
+                  onChange={(e) => setNuevoProveedor({...nuevoProveedor, contacto: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none"
+                  placeholder="Nombre del contacto"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                <input
+                  type="tel"
+                  value={nuevoProveedor.telefono}
+                  onChange={(e) => setNuevoProveedor({...nuevoProveedor, telefono: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none"
+                  placeholder="600 000 000"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={nuevoProveedor.email}
+                  onChange={(e) => setNuevoProveedor({...nuevoProveedor, email: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none"
+                  placeholder="email@ejemplo.com"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={guardarProveedor}
+                disabled={!nuevoProveedor.nombre}
+                className="flex-1 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-semibold"
+              >
+                Guardar
+              </button>
+              <button
+                onClick={() => setMostrarModalProveedor(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
