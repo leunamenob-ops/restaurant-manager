@@ -73,59 +73,56 @@ export default function NuevaReceta() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
- async function cargarDatos() {
-  // Cargar TODOS los ingredientes (igual que en productos)
-  let todosLosIngredientes: Ingrediente[] = [];
-  let desde = 0;
-  const lote = 1000;
-  let hayMas = true;
-
-  while (hayMas) {
-    const { data, error } = await supabase
-      .from('ingredientes')
-      .select('id, nombre, unidad_compra, precio_compra_actual, proveedor_nombre, categoria')
-      .order('nombre')
-      .range(desde, desde + lote - 1);
-
-    if (error) {
-      console.error('Error cargando lote:', error);
-      break;
+  async function cargarDatos() {
+    // Obtener hotel_id del sessionStorage
+    const storedHotelId = sessionStorage.getItem('hotel_id');
+    if (storedHotelId) {
+      setHotelId(storedHotelId);
     }
 
-    if (!data || data.length === 0) {
-      hayMas = false;
-    } else {
-      todosLosIngredientes = todosLosIngredientes.concat(data);
-      
-      if (data.length < lote) {
+    // Cargar TODOS los ingredientes en lotes (como en el módulo de productos)
+    let todosLosIngredientes: Ingrediente[] = [];
+    let desde = 0;
+    const lote = 1000;
+    let hayMas = true;
+
+    while (hayMas) {
+      const { data, error } = await supabase
+        .from('ingredientes')
+        .select('id, nombre, unidad_compra, precio_compra_actual, proveedor_nombre, categoria')
+        .order('nombre')
+        .range(desde, desde + lote - 1);
+
+      if (error) {
+        console.error('Error cargando lote:', error);
+        break;
+      }
+
+      if (!data || data.length === 0) {
         hayMas = false;
       } else {
-        desde += lote;
+        todosLosIngredientes = todosLosIngredientes.concat(data);
+        
+        if (data.length < lote) {
+          hayMas = false;
+        } else {
+          desde += lote;
+        }
       }
     }
-  }
 
-  setTodosIngredientes(todosLosIngredientes);
-  
-  // Extraer proveedores únicos (manejando nulls)
-  const proveedores = Array.from(
-    new Set(
-      todosLosIngredientes
-        .map(i => i.proveedor_nombre)
-        .filter(p => p && p.trim() !== '')
-    )
-  ) as string[];
-  setProveedoresUnicos(proveedores.sort());
-
-  // Cargar sub-recetas existentes
-  const { data: subRecetasData } = await supabase
-    .from('recetas')
-    .select('id, nombre, coste_total, produccion_gramos, tipo')
-    .eq('tipo', 'sub_receta')
-    .order('nombre');
-  
-  if (subRecetasData) setSubRecetas(subRecetasData);
-}
+    console.log('Total ingredientes cargados:', todosLosIngredientes.length);
+    setTodosIngredientes(todosLosIngredientes);
+    
+    // Extraer proveedores únicos (manejando nulls)
+    const proveedores = Array.from(
+      new Set(
+        todosLosIngredientes
+          .map(i => i.proveedor_nombre)
+          .filter(p => p && p.trim() !== '')
+      )
+    ) as string[];
+    setProveedoresUnicos(proveedores.sort());
 
     // Cargar sub-recetas existentes
     const { data: subRecetasData } = await supabase
@@ -138,7 +135,6 @@ export default function NuevaReceta() {
   }
 
   function normalizarUnidad(unidad: string): string {
-    // Normalizar unidades a: ud, gr, ml
     const unidadLower = unidad.toLowerCase().trim();
     
     if (unidadLower.includes('ud') || unidadLower.includes('unidad') || unidadLower.includes('pieza')) {
@@ -151,27 +147,27 @@ export default function NuevaReceta() {
       return 'ml';
     }
     
-    // Por defecto, mantener la original
     return unidad;
   }
 
   function filtrarIngredientes() {
     let filtrados = [...todosIngredientes];
 
+    // Filtrar por búsqueda (nombre o categoría)
     if (busqueda.trim()) {
       const busquedaLower = busqueda.toLowerCase();
-      filtrados = filtrados.filter(i => 
-        i.nombre.toLowerCase().includes(busquedaLower) ||
-        (i.categoria && i.categoria.toLowerCase().includes(busquedaLower))
-      );
+      filtrados = filtrados.filter(i => {
+        const nombreMatch = i.nombre?.toLowerCase().includes(busquedaLower);
+        const categoriaMatch = i.categoria?.toLowerCase().includes(busquedaLower);
+        return nombreMatch || categoriaMatch;
+      });
     }
 
-    // FILTRO DE PROVEEDORES - Solo filtrar si hay proveedores seleccionados
+    // Filtrar por proveedores (SOLO si hay seleccionados)
     if (proveedoresSeleccionados.length > 0) {
       filtrados = filtrados.filter(i => {
-        // Si el ingrediente no tiene proveedor, lo incluimos si "Todos" está seleccionado
         if (!i.proveedor_nombre || i.proveedor_nombre.trim() === '') {
-          return false; // Solo mostramos ingredientes con proveedor si hay filtro activo
+          return false;
         }
         return proveedoresSeleccionados.includes(i.proveedor_nombre);
       });
@@ -292,12 +288,12 @@ export default function NuevaReceta() {
     }
 
     if (itemsSeleccionados.length === 0) {
-      setMensaje('⚠️ Añade al menos un ingrediente o sub-receta');
+      setMensaje('️ Añade al menos un ingrediente o sub-receta');
       return;
     }
 
     if (tipo === 'sub_receta' && (!produccionGramos || produccionGramos <= 0)) {
-      setMensaje('️ Para sub-recetas, debes especificar la producción en gramos');
+      setMensaje('⚠️ Para sub-recetas, debes especificar la producción en gramos');
       return;
     }
 
@@ -307,7 +303,6 @@ export default function NuevaReceta() {
     try {
       const recetaId = crypto.randomUUID();
 
-      // CORRECCIÓN: Añadir hotel_id a la inserción
       const { error: recetaError } = await supabase
         .from('recetas')
         .insert({
@@ -318,7 +313,7 @@ export default function NuevaReceta() {
           produccion_gramos: tipo === 'sub_receta' ? String(produccionGramos) : null,
           precio_venta: precioVenta,
           coste_total: calcularCosteTotal(),
-          hotel_id: hotelId || '00000000-0000-0000-0000-000000000001', // Valor por defecto si no hay
+          hotel_id: hotelId || '00000000-0000-0000-0000-000000000001',
           created_at: new Date().toISOString()
         });
 
