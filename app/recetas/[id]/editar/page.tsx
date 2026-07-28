@@ -61,6 +61,7 @@ export default function EditarReceta() {
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
   const [fotoFile, setFotoFile] = useState<File | null>(null);
   const [subiendoFoto, setSubiendoFoto] = useState(false);
+  const [procedimiento, setProcedimiento] = useState('');
   
   const filtroRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -158,6 +159,7 @@ export default function EditarReceta() {
     setTipo(recetaData.tipo);
     setPorciones(recetaData.porciones);
     setPrecioVenta(recetaData.precio_venta);
+    setProcedimiento(recetaData.procedimiento || '');
     
     if (recetaData.foto_url) {
       console.log('Foto actual:', recetaData.foto_url);
@@ -558,6 +560,7 @@ export default function EditarReceta() {
         .update({
           nombre: nombre.trim(),
           tipo,
+          procedimiento: procedimiento.trim(),
           porciones,
           produccion_gramos: tipo === 'sub_receta' ? String(produccionGramos) : null,
           precio_venta: precioVenta,
@@ -792,6 +795,26 @@ export default function EditarReceta() {
                   </button>
                 )}
               </div>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {tipo === 'sub_receta' ? 'Procedimiento de elaboracion' : 'Descripcion de ejecucion'}
+              </label>
+              <textarea
+                value={procedimiento}
+                onChange={(e) => setProcedimiento(e.target.value)}
+                rows={6}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                placeholder={tipo === 'sub_receta' 
+                  ? 'Describe aqui el procedimiento de elaboracion de la sub-receta...' 
+                  : 'Describe aqui el proceso de ejecucion del plato...'}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                {tipo === 'sub_receta' 
+                  ? 'Procedimiento de elaboracion de la sub-receta' 
+                  : 'Descripcion del proceso de ejecucion del plato'}
+              </p>
             </div>
           </div>
         </div>
