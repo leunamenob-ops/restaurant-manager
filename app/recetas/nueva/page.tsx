@@ -351,10 +351,46 @@ export default function NuevaReceta() {
   }
 
   async function subirFoto(recetaId: string): Promise<string | null> {
-    if (!fotoFile) {
-      console.log('️ No hay fotoFile');
-      return null;
+  console.log('=== INICIO subirFoto ===');
+  console.log('fotoFile:', fotoFile);
+  
+  if (!fotoFile) {
+    console.log('❌ No hay fotoFile');
+    return null;
+  }
+
+  try {
+    setSubiendoFoto(true);
+    const fileExt = fotoFile.name.split('.').pop();
+    const fileName = `${recetaId}-${Date.now()}.${fileExt}`;
+    
+    console.log('📁 fileName:', fileName);
+    console.log('📦 Bucket: recetas-fotos');
+
+    const { data, error } = await supabase.storage
+      .from('recetas-fotos')
+      .upload(fileName, fotoFile);
+
+    console.log('Respuesta upload:', { data, error });
+
+    if (error) {
+      console.error('❌ Error:', error);
+      throw error;
     }
+
+    const { data: urlData } = supabase.storage
+      .from('recetas-fotos')
+      .getPublicUrl(fileName);
+
+    console.log('✅ URL:', urlData.publicUrl);
+    return urlData.publicUrl;
+  } catch (error) {
+    console.error('❌ Excepción:', error);
+    return null;
+  } finally {
+    setSubiendoFoto(false);
+  }
+}
 
     console.log('📸 Iniciando subida de foto...');
 
