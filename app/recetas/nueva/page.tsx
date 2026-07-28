@@ -217,20 +217,20 @@ export default function NuevaReceta() {
   function handleFotoChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (file) {
-      console.log('📁 Archivo seleccionado:', {
+      console.log('Archivo seleccionado:', {
         nombre: file.name,
         tipo: file.type,
-        tamaño: file.size,
-        tamañoMB: (file.size / 1024 / 1024).toFixed(2)
+        tamano: file.size,
+        tamanoMB: (file.size / 1024 / 1024).toFixed(2)
       });
 
       if (file.size > 5 * 1024 * 1024) {
-        setMensaje('⚠️ La imagen no puede superar los 5MB');
+        setMensaje('La imagen no puede superar los 5MB');
         return;
       }
       
       if (!file.type.startsWith('image/')) {
-        setMensaje('⚠️ Solo se permiten imágenes');
+        setMensaje('Solo se permiten imagenes');
         return;
       }
 
@@ -238,7 +238,6 @@ export default function NuevaReceta() {
       const reader = new FileReader();
       reader.onloadend = () => {
         setFotoPreview(reader.result as string);
-        console.log('✅ Preview generado');
       };
       reader.readAsDataURL(file);
       setMensaje('');
@@ -279,7 +278,7 @@ export default function NuevaReceta() {
 
   function agregarItem() {
     if (!itemSeleccionado || cantidadActual <= 0) {
-      setMensaje('⚠️ Selecciona un elemento y una cantidad válida');
+      setMensaje('Selecciona un elemento y una cantidad valida');
       return;
     }
 
@@ -351,56 +350,14 @@ export default function NuevaReceta() {
   }
 
   async function subirFoto(recetaId: string): Promise<string | null> {
-  console.log('=== INICIO subirFoto ===');
-  console.log('fotoFile:', fotoFile);
-  
-  if (!fotoFile) {
-    console.log('❌ No hay fotoFile');
-    return null;
-  }
-
-  try {
-    setSubiendoFoto(true);
-    const fileExt = fotoFile.name.split('.').pop();
-    const fileName = `${recetaId}-${Date.now()}.${fileExt}`;
-    
-    console.log('📁 fileName:', fileName);
-    console.log('📦 Bucket: recetas-fotos');
-
-    const { data, error } = await supabase.storage
-      .from('recetas-fotos')
-      .upload(fileName, fotoFile);
-
-    console.log('Respuesta upload:', { data, error });
-
-    if (error) {
-      console.error('❌ Error:', error);
-      throw error;
+    if (!fotoFile) {
+      return null;
     }
-
-    const { data: urlData } = supabase.storage
-      .from('recetas-fotos')
-      .getPublicUrl(fileName);
-
-    console.log('✅ URL:', urlData.publicUrl);
-    return urlData.publicUrl;
-  } catch (error) {
-    console.error('❌ Excepción:', error);
-    return null;
-  } finally {
-    setSubiendoFoto(false);
-  }
-}
-
-    console.log('📸 Iniciando subida de foto...');
 
     try {
       setSubiendoFoto(true);
       const fileExt = fotoFile.name.split('.').pop();
       const fileName = `${recetaId}-${Date.now()}.${fileExt}`;
-      
-      console.log('📁 Nombre archivo:', fileName);
-      console.log('📦 Bucket: recetas-fotos');
 
       const { data, error: uploadError } = await supabase.storage
         .from('recetas-fotos')
@@ -410,21 +367,17 @@ export default function NuevaReceta() {
         });
 
       if (uploadError) {
-        console.error('❌ Error subiendo:', uploadError);
+        console.error('Error subiendo foto:', uploadError);
         throw uploadError;
       }
-
-      console.log('✅ Foto subida:', data);
 
       const { data: urlData } = supabase.storage
         .from('recetas-fotos')
         .getPublicUrl(fileName);
 
-      console.log(' URL:', urlData.publicUrl);
-
       return urlData.publicUrl;
     } catch (error) {
-      console.error('❌ Error en subirFoto:', error);
+      console.error('Error en subirFoto:', error);
       return null;
     } finally {
       setSubiendoFoto(false);
@@ -433,17 +386,17 @@ export default function NuevaReceta() {
 
   async function guardarReceta() {
     if (!nombre.trim()) {
-      setMensaje('⚠️ El nombre es obligatorio');
+      setMensaje('El nombre es obligatorio');
       return;
     }
 
     if (itemsSeleccionados.length === 0) {
-      setMensaje('️ Añade al menos un ingrediente o sub-receta');
+      setMensaje('Anade al menos un ingrediente o sub-receta');
       return;
     }
 
     if (tipo === 'sub_receta' && (!produccionGramos || produccionGramos <= 0)) {
-      setMensaje('⚠️ Para sub-recetas, debes especificar la producción en gramos');
+      setMensaje('Para sub-recetas, debes especificar la produccion en gramos');
       return;
     }
 
@@ -452,44 +405,28 @@ export default function NuevaReceta() {
 
     try {
       const recetaId = crypto.randomUUID();
-      console.log('🆔 recetaId:', recetaId);
 
       let fotoUrl = null;
       if (fotoFile) {
-        console.log('📸 Subiendo foto...');
         fotoUrl = await subirFoto(recetaId);
-        console.log('✅ fotoUrl:', fotoUrl);
-      } else {
-        console.log('ℹ️ Sin foto');
       }
 
-      const recetaData = {
-        id: recetaId,
-        nombre: nombre.trim(),
-        tipo,
-        porciones,
-        produccion_gramos: tipo === 'sub_receta' ? String(produccionGramos) : null,
-        precio_venta: precioVenta,
-        coste_total: calcularCosteTotal(),
-        foto_url: fotoUrl,
-        hotel_id: hotelId || '00000000-0000-0000-0000-000000000001',
-        created_at: new Date().toISOString()
-      };
-
-      console.log('💾 Guardando:', recetaData);
-
-      const { data, error: recetaError } = await supabase
+      const { error: recetaError } = await supabase
         .from('recetas')
-        .insert(recetaData)
-        .select()
-        .single();
+        .insert({
+          id: recetaId,
+          nombre: nombre.trim(),
+          tipo,
+          porciones,
+          produccion_gramos: tipo === 'sub_receta' ? String(produccionGramos) : null,
+          precio_venta: precioVenta,
+          coste_total: calcularCosteTotal(),
+          foto_url: fotoUrl,
+          hotel_id: hotelId || '00000000-0000-0000-0000-000000000001',
+          created_at: new Date().toISOString()
+        });
 
-      if (recetaError) {
-        console.error('❌ Error:', recetaError);
-        throw recetaError;
-      }
-
-      console.log('✅ Receta guardada:', data);
+      if (recetaError) throw recetaError;
 
       const detalles = itemsSeleccionados.map((item) => ({
         id: crypto.randomUUID(),
@@ -509,15 +446,15 @@ export default function NuevaReceta() {
 
       if (detalleError) throw detalleError;
 
-      setMensaje('✅ Receta guardada correctamente');
+      setMensaje('Receta guardada correctamente');
 
       setTimeout(() => {
         router.push('/recetas');
       }, 1500);
 
     } catch (error: any) {
-      console.error(' Error:', error);
-      setMensaje(`❌ Error: ${error.message}`);
+      console.error('Error guardando receta:', error);
+      setMensaje(`Error: ${error.message}`);
     } finally {
       setGuardando(false);
     }
@@ -527,27 +464,27 @@ export default function NuevaReceta() {
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900">🍳 Nueva Receta</h1>
+          <h1 className="text-4xl font-bold text-gray-900">Nueva Receta</h1>
           <button
             onClick={() => router.push('/recetas')}
             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
           >
-            ← Volver al listado
+            Volver al listado
           </button>
         </div>
 
         {mensaje && (
           <div className={`mb-6 p-4 rounded-lg ${
-            mensaje.includes('✅') ? 'bg-green-100 text-green-800' :
-            mensaje.includes('⚠️') ? 'bg-yellow-100 text-yellow-800' :
-            'bg-red-100 text-red-800'
+            mensaje.includes('correctamente') ? 'bg-green-100 text-green-800' :
+            mensaje.includes('Error') ? 'bg-red-100 text-red-800' :
+            'bg-yellow-100 text-yellow-800'
           }`}>
             {mensaje}
           </div>
         )}
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">📋 Datos básicos</h2>
+          <h2 className="text-xl font-semibold mb-4">Datos basicos</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -577,8 +514,8 @@ export default function NuevaReceta() {
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
-                <option value="plato">🍽️ Plato Principal</option>
-                <option value="sub_receta">🥘 Sub-receta</option>
+                <option value="plato">Plato Principal</option>
+                <option value="sub_receta">Sub-receta</option>
               </select>
             </div>
 
@@ -598,7 +535,7 @@ export default function NuevaReceta() {
             {tipo === 'sub_receta' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Producción total (gramos) *
+                  Produccion total (gramos) *
                 </label>
                 <input
                   type="number"
@@ -610,14 +547,14 @@ export default function NuevaReceta() {
                   placeholder="Ej: 1000"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  ¿Cuántos gramos produces de esta sub-receta?
+                  Cuantos gramos produces de esta sub-receta?
                 </p>
               </div>
             )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Precio de venta (€) - INCLUIDO IVA
+                Precio de venta (EUR) - INCLUIDO IVA
               </label>
               <input
                 type="number"
@@ -639,7 +576,7 @@ export default function NuevaReceta() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="4">4% - Superreducido</option>
-                <option value="10">10% - Reducido (Restauración)</option>
+                <option value="10">10% - Reducido (Restauracion)</option>
                 <option value="21">21% - General</option>
                 <option value="0">0% - Sin IVA</option>
               </select>
@@ -647,7 +584,7 @@ export default function NuevaReceta() {
 
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                📸 Foto de la receta (opcional)
+                Foto de la receta (opcional)
               </label>
               <div className="flex items-start gap-4">
                 <div className="flex-1">
@@ -659,7 +596,7 @@ export default function NuevaReceta() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Máximo 5MB. Formatos: JPG, PNG, GIF, WEBP
+                    Maximo 5MB. Formatos: JPG, PNG, GIF, WEBP
                   </p>
                 </div>
                 {fotoPreview && (
@@ -668,7 +605,7 @@ export default function NuevaReceta() {
                     className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm"
                     title="Eliminar foto"
                   >
-                    🗑️
+                    X
                   </button>
                 )}
               </div>
@@ -686,7 +623,7 @@ export default function NuevaReceta() {
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">🥬 Añadir ingredientes o sub-recetas</h2>
+          <h2 className="text-xl font-semibold mb-4">Anadir ingredientes o sub-recetas</h2>
           
           <div className="mb-4">
             <div className="flex gap-4 mb-4">
@@ -715,7 +652,7 @@ export default function NuevaReceta() {
                     ? `${proveedoresSeleccionados.length} seleccionado(s)`
                     : 'Todos'
                   }
-                  <span>▼</span>
+                  <span>v</span>
                 </button>
 
                 {mostrarFiltroProveedores && (
@@ -776,11 +713,11 @@ export default function NuevaReceta() {
                     <div>
                       <span className="font-medium text-gray-900">{item.nombre}</span>
                       <span className="ml-2 text-xs text-gray-500">
-                        {item.tipo === 'subreceta' ? ' Sub-receta' : `📦 ${item.unidad}`}
+                        {item.tipo === 'subreceta' ? 'Sub-receta' : item.unidad}
                       </span>
                     </div>
                     <span className="text-sm text-gray-500">
-                      {item.costeUnitario.toFixed(6)}€/{item.unidad}
+                      {item.costeUnitario.toFixed(6)}EUR/{item.unidad}
                     </span>
                   </button>
                 ))}
@@ -819,7 +756,7 @@ export default function NuevaReceta() {
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
                 >
-                  + Añadir
+                  + Anadir
                 </button>
               </div>
             </div>
@@ -828,7 +765,7 @@ export default function NuevaReceta() {
           {itemsSeleccionados.length > 0 && (
             <div className="border-t pt-4">
               <h3 className="font-semibold text-gray-700 mb-3">
-                Elementos añadidos:
+                Elementos anadidos:
               </h3>
               <ul className="space-y-2">
                 {itemsSeleccionados.map((item, index) => (
@@ -854,14 +791,14 @@ export default function NuevaReceta() {
                         <span className="text-gray-600 text-sm">{item.unidad}</span>
                       </div>
                       <span className="text-gray-700 font-semibold text-sm w-24 text-right">
-                        {item.coste.toFixed(4)}€
+                        {item.coste.toFixed(4)}EUR
                       </span>
                       <button
                         onClick={() => eliminarItem(index)}
                         className="text-red-600 hover:text-red-800 p-1"
                         title="Eliminar"
                       >
-                        🗑️
+                        X
                       </button>
                     </div>
                   </li>
@@ -872,23 +809,23 @@ export default function NuevaReceta() {
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">💰 Resumen de costes</h2>
+          <h2 className="text-xl font-semibold mb-4">Resumen de costes</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
               <p className="text-sm text-gray-600">Precio de venta (IVA {ivaPorcentaje}%)</p>
               <p className="text-2xl font-bold text-gray-900">
-                {precioVenta.toFixed(2)}€
+                {precioVenta.toFixed(2)}EUR
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                Precio neto: {calcularPrecioNeto().toFixed(2)}€
+                Precio neto: {calcularPrecioNeto().toFixed(2)}EUR
               </p>
             </div>
 
             <div className="bg-blue-50 p-4 rounded-lg">
               <p className="text-sm text-blue-600">Coste total</p>
               <p className="text-2xl font-bold text-blue-900">
-                {calcularCosteTotal().toFixed(2)}€
+                {calcularCosteTotal().toFixed(2)}EUR
               </p>
             </div>
 
@@ -896,10 +833,10 @@ export default function NuevaReceta() {
               <div className="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
                 <p className="text-sm text-orange-600">Coste por gramo</p>
                 <p className="text-2xl font-bold text-orange-900">
-                  {calcularCostePorGramo().toFixed(6)}€
+                  {calcularCostePorGramo().toFixed(6)}EUR
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  Producción: {produccionGramos}g
+                  Produccion: {produccionGramos}g
                 </p>
               </div>
             )}
@@ -918,7 +855,7 @@ export default function NuevaReceta() {
                   ? 'text-yellow-600' 
                   : 'text-red-600'
               }`}>
-                📊 Food Cost
+                Food Cost
               </p>
               <p className={`text-2xl font-bold ${
                 parseFloat(calcularFoodCostPorcentaje()) < 25 
@@ -948,7 +885,7 @@ export default function NuevaReceta() {
                   ? 'text-yellow-600' 
                   : 'text-red-600'
               }`}>
-                💵 Margen Neto
+                Margen Neto
               </p>
               <p className={`text-2xl font-bold ${
                 parseFloat(calcularMargenNeto()) >= 60 
@@ -973,7 +910,7 @@ export default function NuevaReceta() {
             guardando || subiendoFoto ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
           }`}
         >
-          {guardando ? '⏳ Guardando...' : subiendoFoto ? '📸 Subiendo foto...' : '💾 Guardar receta'}
+          {guardando ? 'Guardando...' : subiendoFoto ? 'Subiendo foto...' : 'Guardar receta'}
         </button>
       </div>
     </div>
