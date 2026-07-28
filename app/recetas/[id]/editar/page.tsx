@@ -181,6 +181,10 @@ export default function EditarReceta() {
         if (detalle.ingrediente_id) {
           const ing = todosLosIngredientes.find(i => i.id === detalle.ingrediente_id);
           if (ing) {
+            // ✅ CORRECCIÓN: Normalizar el precio según la unidad de compra original
+            const conversion = normalizarUnidad(ing.unidad_compra);
+            const precioNormalizado = (ing.precio_compra_actual || 0) / conversion.factor;
+            
             items.push({
               id: detalle.id,
               tipo: 'ingrediente',
@@ -188,8 +192,8 @@ export default function EditarReceta() {
               nombre: ing.nombre,
               cantidad: detalle.cantidad_necesaria,
               coste: detalle.coste_linea,
-              unidad: detalle.unidad || ing.unidad_compra || 'gr',
-              costeUnitario: ing.precio_compra_actual || 0
+              unidad: detalle.unidad || conversion.unidad,
+              costeUnitario: precioNormalizado // ✅ Usar precio normalizado
             });
           } else {
             console.warn('⚠️ Ingrediente no encontrado:', detalle.ingrediente_id);
@@ -403,7 +407,7 @@ export default function EditarReceta() {
     }
 
     if (itemsEditados.length === 0) {
-      setMensaje('️ Añade al menos un ingrediente o sub-receta');
+      setMensaje('⚠️ Añade al menos un ingrediente o sub-receta');
       return;
     }
 
@@ -776,7 +780,7 @@ export default function EditarReceta() {
                         className="text-red-600 hover:text-red-800 p-1"
                         title="Eliminar"
                       >
-                        ️
+                        🗑️
                       </button>
                     </div>
                   </li>
