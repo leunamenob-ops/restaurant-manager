@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { supabase } from '../../../lib/supabaseClient';
 
@@ -9,6 +9,8 @@ interface Ingrediente {
   nombre: string;
   unidad_compra: string;
   precio_compra_actual: number;
+  proveedor_nombre: string;
+  categoria: string;
 }
 
 interface SubReceta {
@@ -35,7 +37,8 @@ export default function EditarReceta() {
   const params = useParams();
   const recetaId = params.id as string;
   
-  const [ingredientes, setIngredientes] = useState<Ingrediente[]>([]);
+  const [todosIngredientes, setTodosIngredientes] = useState<Ingrediente[]>([]);
+  const [ingredientesFiltrados, setIngredientesFiltrados] = useState<Ingrediente[]>([]);
   const [subRecetas, setSubRecetas] = useState<SubReceta[]>([]);
   const [nombre, setNombre] = useState('');
   const [tipo, setTipo] = useState<'plato' | 'sub_receta'>('plato');
@@ -45,153 +48,279 @@ export default function EditarReceta() {
   const [ivaPorcentaje, setIvaPorcentaje] = useState(10);
   const [itemsEditados, setItemsEditados] = useState<ItemEditado[]>([]);
   const [busqueda, setBusqueda] = useState('');
+  const [proveedoresUnicos, setProveedoresUnicos] = useState<string[]>([]);
+  const [proveedoresSeleccionados, setProveedoresSeleccionados] = useState<string[]>([]);
+  const [mostrarFiltroProveedores, setMostrarFiltroProveedores] = useState(false);
   const [itemSeleccionado, setItemSeleccionado] = useState<{tipo: 'ingrediente' | 'subreceta', id: string} | null>(null);
   const [cantidadActual, setCantidadActual] = useState(0);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState('');
   const [loading, setLoading] = useState(true);
+  
+  const filtroRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    async function cargarTodo() {
-      console.log(' Iniciando carga de receta:', recetaId);
-      
-      // 1. Cargar TODOS los ingredientes primero
-      const { data: ingredientesData } = await supabase
+    cargarTodo();
+  }, []);
+
+  useEffect(() => {
+    filtrarIngredientes();
+  }, [busqueda, proveedoresSeleccionados, todosIngredientes]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (filtroRef.current && !filtroRef.current.contains(event.target as Node)) {
+        setMostrarFiltroProveedores(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  async function cargarTodo() {
+    console.log('🔍 Iniciando carga de receta:', recetaId);
+    
+    // 1. Cargar TODOS los ingredientes en lotes
+    let todosLosIngredientes: Ingrediente[] = [];
+    let desde = 0;
+    const lote = 1000;
+    let hayMas = true;
+
+    while (hayMas) {
+      const { data, error } = await supabase
         .from('ingredientes')
-        .select('id, nombre, unidad_compra, precio_compra_actual')
+        .select('id, nombre, unidad_compra, precio_compra_actual, proveedor_nombre, categoria')
         .order('nombre')
-        .range(0, 10000);
-      
-      if (ingredientesData) {
-        console.log('✅ Ingredientes cargados:', ingredientesData.length);
-        setIngredientes(ingredientesData);
+        .range(desde, desde + lote - 1);
+
+      if (error) {
+        console.error('❌ Error cargando lote:', error);
+        break;
       }
 
-      // 2. Cargar sub-recetas existentes
-      const { data: subRecetasData } = await supabase
-        .from('recetas')
-        .select('id, nombre, coste_total, produccion_gramos, tipo')
-        .eq('tipo', 'sub_receta')
-        .neq('id', recetaId)
-        .order('nombre');
-      
-      if (subRecetasData) {
-        console.log('✅ Sub-recetas cargadas:', subRecetasData.length);
-        setSubRecetas(subRecetasData);
+      if (!data || data.length === 0) {
+        hayMas = false;
+      } else {
+        todosLosIngredientes = todosLosIngredientes.concat(data);
+        
+        if (data.length < lote) {
+          hayMas = false;
+        } else {
+          desde += lote;
+        }
       }
+    }
 
-      // 3. Cargar la receta actual
-      const { data: recetaData, error: recetaError } = await supabase
-        .from('recetas')
-        .select('*')
-        .eq('id', recetaId)
-        .single();
+    console.log('✅ Ingredientes cargados:', todosLosIngredientes.length);
+    setTodosIngredientes(todosLosIngredientes);
+    
+    // Extraer proveedores únicos
+    const proveedores = Array.from(
+      new Set(
+        todosLosIngredientes
+          .map(i => i.proveedor_nombre || '')
+          .filter(p => p && p.trim() !== '')
+      )
+    ) as string[];
+    setProveedoresUnicos(proveedores.sort());
 
-      if (recetaError || !recetaData) {
-        console.error('❌ Error cargando receta:', recetaError);
-        setMensaje('❌ Error cargando la receta');
-        setLoading(false);
-        return;
-      }
+    // 2. Cargar sub-recetas existentes
+    const { data: subRecetasData } = await supabase
+      .from('recetas')
+      .select('id, nombre, coste_total, produccion_gramos, tipo')
+      .eq('tipo', 'sub_receta')
+      .neq('id', recetaId)
+      .order('nombre');
+    
+    if (subRecetasData) {
+      console.log('✅ Sub-recetas cargadas:', subRecetasData.length);
+      setSubRecetas(subRecetasData);
+    }
 
-      console.log('✅ Receta cargada:', recetaData);
-      setNombre(recetaData.nombre);
-      setTipo(recetaData.tipo);
-      setPorciones(recetaData.porciones);
-      setPrecioVenta(recetaData.precio_venta);
-      
-      if (recetaData.produccion_gramos) {
-        setProduccionGramos(parseFloat(recetaData.produccion_gramos) || '');
-      }
+    // 3. Cargar la receta actual
+    const { data: recetaData, error: recetaError } = await supabase
+      .from('recetas')
+      .select('*')
+      .eq('id', recetaId)
+      .single();
 
-      // 4. Cargar detalles de la receta
-      const { data: detalleData, error: detalleError } = await supabase
-        .from('receta_detalle')
-        .select('*')
-        .eq('receta_id', recetaId);
+    if (recetaError || !recetaData) {
+      console.error('❌ Error cargando receta:', recetaError);
+      setMensaje(' Error cargando la receta');
+      setLoading(false);
+      return;
+    }
 
-      if (detalleError) {
-        console.error('❌ Error cargando detalles:', detalleError);
-      }
+    console.log('✅ Receta cargada:', recetaData);
+    setNombre(recetaData.nombre);
+    setTipo(recetaData.tipo);
+    setPorciones(recetaData.porciones);
+    setPrecioVenta(recetaData.precio_venta);
+    
+    if (recetaData.produccion_gramos) {
+      setProduccionGramos(parseFloat(recetaData.produccion_gramos) || '');
+    }
 
-      console.log('✅ Detalles cargados:', detalleData?.length || 0, detalleData);
+    // 4. Cargar detalles de la receta
+    const { data: detalleData, error: detalleError } = await supabase
+      .from('receta_detalle')
+      .select('*')
+      .eq('receta_id', recetaId);
 
-      // 5. Mapear detalles con ingredientes YA CARGADOS
-      if (detalleData && detalleData.length > 0) {
-        const items: ItemEditado[] = [];
+    if (detalleError) {
+      console.error('❌ Error cargando detalles:', detalleError);
+    }
 
-        for (const detalle of detalleData) {
-          if (detalle.ingrediente_id) {
-            const ing = ingredientesData?.find(i => i.id === detalle.ingrediente_id);
-            if (ing) {
-              items.push({
-                id: detalle.id,
-                tipo: 'ingrediente',
-                ingrediente_id: detalle.ingrediente_id,
-                nombre: ing.nombre,
-                cantidad: detalle.cantidad_necesaria,
-                coste: detalle.coste_linea,
-                unidad: ing.unidad_compra || 'gr',
-                costeUnitario: ing.precio_compra_actual || 0
-              });
-            } else {
-              console.warn('⚠️ Ingrediente no encontrado:', detalle.ingrediente_id);
-            }
-          } else if (detalle.subreceta_id) {
-            const sub = subRecetasData?.find(s => s.id === detalle.subreceta_id);
-            if (sub) {
-              const gramos = sub.produccion_gramos ? parseFloat(sub.produccion_gramos as unknown as string) : 0;
-              const costePorGramo = gramos > 0 ? sub.coste_total / gramos : 0;
-              items.push({
-                id: detalle.id,
-                tipo: 'subreceta',
-                subreceta_id: detalle.subreceta_id,
-                nombre: sub.nombre,
-                cantidad: detalle.cantidad_necesaria,
-                coste: detalle.coste_linea,
-                unidad: 'gr',
-                costeUnitario: costePorGramo
-              });
-            } else {
-              console.warn('⚠️ Sub-receta no encontrada:', detalle.subreceta_id);
-            }
+    console.log('✅ Detalles cargados:', detalleData?.length || 0);
+
+    // 5. Mapear detalles con ingredientes
+    if (detalleData && detalleData.length > 0) {
+      const items: ItemEditado[] = [];
+
+      for (const detalle of detalleData) {
+        if (detalle.ingrediente_id) {
+          const ing = todosLosIngredientes.find(i => i.id === detalle.ingrediente_id);
+          if (ing) {
+            items.push({
+              id: detalle.id,
+              tipo: 'ingrediente',
+              ingrediente_id: detalle.ingrediente_id,
+              nombre: ing.nombre,
+              cantidad: detalle.cantidad_necesaria,
+              coste: detalle.coste_linea,
+              unidad: detalle.unidad || ing.unidad_compra || 'gr',
+              costeUnitario: ing.precio_compra_actual || 0
+            });
+          } else {
+            console.warn('️ Ingrediente no encontrado:', detalle.ingrediente_id);
+          }
+        } else if (detalle.subreceta_id) {
+          const sub = subRecetasData.find(s => s.id === detalle.subreceta_id);
+          if (sub) {
+            const gramos = sub.produccion_gramos ? parseFloat(sub.produccion_gramos as unknown as string) : 0;
+            const costePorGramo = gramos > 0 ? sub.coste_total / gramos : 0;
+            items.push({
+              id: detalle.id,
+              tipo: 'subreceta',
+              subreceta_id: detalle.subreceta_id,
+              nombre: sub.nombre,
+              cantidad: detalle.cantidad_necesaria,
+              coste: detalle.coste_linea,
+              unidad: 'gr',
+              costeUnitario: costePorGramo
+            });
           }
         }
-        
-        console.log('✅ Items mapeados:', items);
-        setItemsEditados(items);
       }
-
-      setLoading(false);
+      
+      console.log('✅ Items mapeados:', items.length);
+      setItemsEditados(items);
     }
+
+    setLoading(false);
+  }
+
+  function normalizarUnidad(unidad: string | null | undefined): { unidad: string; factor: number } {
+    if (!unidad) return { unidad: 'gr', factor: 1 };
     
-    cargarTodo();
-  }, [recetaId]);
+    try {
+      const unidadLower = unidad.toLowerCase().trim();
+      
+      if (unidadLower.includes('kg') || unidadLower.includes('kilo')) {
+        return { unidad: 'gr', factor: 1000 };
+      }
+      
+      if (unidadLower.includes('l') && !unidadLower.includes('ml')) {
+        return { unidad: 'ml', factor: 1000 };
+      }
+      
+      if (unidadLower.includes('ud') || unidadLower.includes('unidad') || unidadLower.includes('pieza')) {
+        return { unidad: 'ud', factor: 1 };
+      }
+      
+      if (unidadLower.includes('gr') || unidadLower.includes('gramo')) {
+        return { unidad: 'gr', factor: 1 };
+      }
+      
+      if (unidadLower.includes('ml')) {
+        return { unidad: 'ml', factor: 1 };
+      }
+      
+      return { unidad: 'ud', factor: 1 };
+    } catch (error) {
+      return { unidad: 'gr', factor: 1 };
+    }
+  }
+
+  function filtrarIngredientes() {
+    let filtrados = [...todosIngredientes];
+
+    if (busqueda.trim()) {
+      const busquedaLower = busqueda.toLowerCase();
+      filtrados = filtrados.filter(i => {
+        const nombre = (i.nombre || '').toLowerCase();
+        const categoria = (i.categoria || '').toLowerCase();
+        return nombre.includes(busquedaLower) || categoria.includes(busquedaLower);
+      });
+    }
+
+    if (proveedoresSeleccionados.length > 0) {
+      filtrados = filtrados.filter(i => {
+        const proveedor = i.proveedor_nombre || '';
+        if (proveedor.trim() === '') {
+          return false;
+        }
+        return proveedoresSeleccionados.includes(proveedor);
+      });
+    }
+
+    setIngredientesFiltrados(filtrados);
+  }
+
+  function toggleProveedor(proveedor: string) {
+    setProveedoresSeleccionados(prev => 
+      prev.includes(proveedor)
+        ? prev.filter(p => p !== proveedor)
+        : [...prev, proveedor]
+    );
+  }
+
+  function toggleTodosProveedores() {
+    if (proveedoresSeleccionados.length === proveedoresUnicos.length) {
+      setProveedoresSeleccionados([]);
+    } else {
+      setProveedoresSeleccionados([...proveedoresUnicos]);
+    }
+  }
+
+  function limpiarFiltros() {
+    setBusqueda('');
+    setProveedoresSeleccionados([]);
+  }
 
   const todosLosItems = [
-    ...ingredientes.map(i => ({
-      tipo: 'ingrediente' as const,
-      id: i.id,
-      nombre: i.nombre,
-      costeUnitario: i.precio_compra_actual || 0,
-      unidad: i.unidad_compra || 'Kg.'
-    })),
+    ...ingredientesFiltrados.map(i => {
+      const conversion = normalizarUnidad(i.unidad_compra);
+      return {
+        tipo: 'ingrediente' as const,
+        id: i.id,
+        nombre: i.nombre || 'Sin nombre',
+        costeUnitario: (i.precio_compra_actual || 0) / conversion.factor,
+        unidad: conversion.unidad
+      };
+    }),
     ...subRecetas.map(s => {
       const gramos = s.produccion_gramos ? parseFloat(s.produccion_gramos as unknown as string) : 0;
       const costePorGramo = gramos > 0 ? s.coste_total / gramos : 0;
       return {
         tipo: 'subreceta' as const,
         id: s.id,
-        nombre: s.nombre,
+        nombre: s.nombre || 'Sin nombre',
         costeUnitario: costePorGramo,
         unidad: 'gr'
       };
     })
   ];
-
-  const itemsFiltrados = todosLosItems.filter(item =>
-    item.nombre.toLowerCase().includes(busqueda.toLowerCase())
-  );
 
   function agregarItem() {
     if (!itemSeleccionado || cantidadActual <= 0) {
@@ -274,12 +403,12 @@ export default function EditarReceta() {
     }
 
     if (itemsEditados.length === 0) {
-      setMensaje('️ Añade al menos un ingrediente o sub-receta');
+      setMensaje('⚠️ Añade al menos un ingrediente o sub-receta');
       return;
     }
 
     if (tipo === 'sub_receta' && (!produccionGramos || produccionGramos <= 0)) {
-      setMensaje('⚠️ Para sub-recetas, debes especificar la producción en gramos');
+      setMensaje('️ Para sub-recetas, debes especificar la producción en gramos');
       return;
     }
 
@@ -316,6 +445,7 @@ export default function EditarReceta() {
         subreceta_id: item.tipo === 'subreceta' ? item.subreceta_id : null,
         cantidad_necesaria: item.cantidad,
         coste_linea: item.coste,
+        unidad: item.unidad, // ← GUARDAR UNIDAD NORMALIZADA
         created_at: new Date().toISOString()
       }));
 
@@ -474,57 +604,94 @@ export default function EditarReceta() {
           <h2 className="text-xl font-semibold mb-4"> Añadir ingredientes o sub-recetas</h2>
           
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Buscar ingrediente o sub-receta
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (itemsFiltrados.length > 0 && !itemSeleccionado) {
-                      setItemSeleccionado({
-                        tipo: itemsFiltrados[0].tipo,
-                        id: itemsFiltrados[0].id
-                      });
-                    }
-                  }
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                placeholder="Escribe para buscar... (ej: pollo, salsa, patatas)"
-              />
-              {busqueda && (
+            <div className="flex gap-4 mb-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Buscar ingrediente
+                </label>
+                <input
+                  type="text"
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ej: Tomate, Pollo, Aceite..."
+                />
+              </div>
+
+              <div className="relative" ref={filtroRef}>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Proveedores
+                </label>
                 <button
-                  onClick={() => {
-                    setBusqueda('');
-                    setItemSeleccionado(null);
-                  }}
-                  className="absolute right-2 top-2 text-gray-400 hover:text-gray-600"
+                  onClick={() => setMostrarFiltroProveedores(!mostrarFiltroProveedores)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg font-medium transition flex items-center gap-2 hover:border-blue-300"
                 >
-                  
+                  {proveedoresSeleccionados.length > 0 
+                    ? `${proveedoresSeleccionados.length} seleccionado(s)`
+                    : 'Todos'
+                  }
+                  <span>▼</span>
                 </button>
+
+                {mostrarFiltroProveedores && (
+                  <div className="absolute top-full left-0 mt-2 w-64 bg-white border-2 border-gray-200 rounded-lg shadow-xl z-20 max-h-64 overflow-y-auto">
+                    <div className="p-3 border-b border-gray-200">
+                      <button
+                        onClick={toggleTodosProveedores}
+                        className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        {proveedoresSeleccionados.length === proveedoresUnicos.length 
+                          ? 'Deseleccionar todos' 
+                          : 'Seleccionar todos'}
+                      </button>
+                    </div>
+                    <div className="p-2">
+                      {proveedoresUnicos.map((proveedor, idx) => (
+                        <label
+                          key={idx}
+                          className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={proveedoresSeleccionados.includes(proveedor)}
+                            onChange={() => toggleProveedor(proveedor)}
+                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">{proveedor}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {(busqueda || proveedoresSeleccionados.length > 0) && (
+                <div className="pt-6">
+                  <button
+                    onClick={limpiarFiltros}
+                    className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium transition"
+                  >
+                    Limpiar
+                  </button>
+                </div>
               )}
             </div>
 
-            {busqueda && itemsFiltrados.length > 0 && (
-              <div className="mt-2 border border-gray-200 rounded-lg bg-white max-h-60 overflow-y-auto shadow-lg z-10 relative">
-                {itemsFiltrados.map((item) => (
+            {(busqueda.trim() || proveedoresSeleccionados.length > 0) && todosLosItems.length > 0 && (
+              <div className="border border-gray-200 rounded-lg bg-white max-h-60 overflow-y-auto shadow-lg">
+                {todosLosItems.map((item, idx) => (
                   <button
-                    key={`${item.tipo}-${item.id}`}
+                    key={idx}
                     onClick={() => {
                       setItemSeleccionado({tipo: item.tipo, id: item.id});
                       setCantidadActual(0);
-                      setBusqueda('');
                     }}
                     className="w-full px-4 py-3 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0 flex justify-between items-center"
                   >
                     <div>
                       <span className="font-medium text-gray-900">{item.nombre}</span>
                       <span className="ml-2 text-xs text-gray-500">
-                        {item.tipo === 'subreceta' ? ' Sub-receta' : `📦 ${item.unidad}`}
+                        {item.tipo === 'subreceta' ? '🥘 Sub-receta' : `📦 ${item.unidad}`}
                       </span>
                     </div>
                     <span className="text-sm text-gray-500">
@@ -535,15 +702,15 @@ export default function EditarReceta() {
               </div>
             )}
 
-            {busqueda && itemsFiltrados.length === 0 && (
+            {busqueda && todosLosItems.length === 0 && (
               <div className="mt-2 p-3 text-gray-500 bg-gray-50 rounded-lg text-center">
-                No se encontraron ingredientes o sub-recetas
+                No se encontraron ingredientes
               </div>
             )}
           </div>
 
           {itemSeleccionado && (
-            <div className="mb-4">
+            <div className="mb-4 p-4 bg-blue-50 rounded-lg">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Cantidad ({itemSeleccionado && todosLosItems.find(i => i.id === itemSeleccionado.id && i.tipo === itemSeleccionado.tipo)?.unidad})
               </label>
@@ -597,19 +764,17 @@ export default function EditarReceta() {
                           onChange={(e) => actualizarCantidad(index, Number(e.target.value))}
                           min="0"
                           step="0.01"
-                          className="w-24 px-2 py-1 border border-gray-300 rounded text-right focus:ring-2 focus:ring-blue-500"
+                          className="w-20 px-2 py-1 border border-gray-300 rounded text-right text-sm focus:ring-2 focus:ring-blue-500"
                         />
-                        <span className="text-gray-600 text-sm w-12">
-                          {item.unidad}
-                        </span>
+                        <span className="text-gray-600 text-sm">{item.unidad}</span>
                       </div>
-                      <span className="text-gray-700 font-semibold w-32 text-right">
+                      <span className="text-gray-700 font-semibold text-sm w-24 text-right">
                         {item.coste.toFixed(4)}€
                       </span>
                       <button
                         onClick={() => eliminarItem(index)}
                         className="text-red-600 hover:text-red-800 p-1"
-                        title="Eliminar elemento"
+                        title="Eliminar"
                       >
                         🗑️
                       </button>
@@ -698,7 +863,7 @@ export default function EditarReceta() {
                   ? 'text-yellow-600' 
                   : 'text-red-600'
               }`}>
-                 Margen Neto
+                💵 Margen Neto
               </p>
               <p className={`text-2xl font-bold ${
                 parseFloat(calcularMargenNeto()) >= 60 
