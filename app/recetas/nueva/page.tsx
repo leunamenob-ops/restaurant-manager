@@ -373,11 +373,11 @@ export default function NuevaReceta() {
       const fileName = `${recetaId}-${Date.now()}.${fileExt}`;
       
       console.log('📁 Nombre del archivo:', fileName);
-      console.log('📦 Bucket: RECETAS-FOTOS');
+      console.log('📦 Bucket: recetas-fotos');
 
       console.log('️ Subiendo a Supabase Storage...');
       const { data, error: uploadError } = await supabase.storage
-        .from('RECETAS-FOTOS')
+        .from('recetas-fotos')
         .upload(fileName, fotoFile, {
           cacheControl: '3600',
           upsert: false
