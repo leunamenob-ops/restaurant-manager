@@ -46,15 +46,19 @@ export default function RecetasPage() {
   }
 
   async function eliminarReceta(id: string, nombre: string) {
-    if (!confirm(`¿Estás seguro de eliminar "${nombre}"?`)) return;
+    if (!confirm(`¿Estás seguro de eliminar "${nombre}"?\n\nEsta acción también eliminará sus detalles y no se puede deshacer.`)) return;
 
     try {
       await supabase.from('receta_detalle').delete().eq('receta_id', id);
       const { error } = await supabase.from('recetas').delete().eq('id', id);
       
       if (error) throw error;
-      alert('Receta eliminada correctamente');
-      cargarRecetas();
+      
+      // Pequeño timeout para que la UI se sienta fluida
+      setTimeout(() => {
+        alert('Receta eliminada correctamente');
+        cargarRecetas();
+      }, 100);
     } catch (error: any) {
       alert(`Error: ${error.message}`);
     }
@@ -96,44 +100,68 @@ export default function RecetasPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* HEADER */}
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">📖 Gestión de Recetas</h1>
-            <p className="text-gray-600 mt-1">
-              {recetasFiltradas.length} de {recetas.length} recetas
-            </p>
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+      
+      {/* HEADER MODERNO */}
+      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-emerald-600 to-cyan-600 rounded-xl flex items-center justify-center shadow-md">
+                <span className="text-white font-bold text-lg">K</span>
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-slate-900 tracking-tight">Gestión de Recetas</h1>
+                <p className="text-sm text-slate-500">
+                  {recetasFiltradas.length} de {recetas.length} recetas registradas
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <a 
+                href="/dashboard" 
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium transition-all text-sm flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                Dashboard
+              </a>
+              <button
+                onClick={() => router.push('/recetas/nueva')}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium transition-all shadow-sm hover:shadow-md text-sm flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                Nueva Receta
+              </button>
+            </div>
           </div>
-          <button
-            onClick={() => router.push('/recetas/nueva')}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold shadow-md transition-all"
-          >
-            + Nueva Receta
-          </button>
         </div>
+      </header>
 
-        {/* FILTROS */}
-        <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Buscar</label>
-              <input
-                type="text"
-                placeholder="Nombre..."
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-              />
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        
+        {/* FILTROS AVANZADOS */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="sm:col-span-2 lg:col-span-1">
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Buscar</label>
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                <input
+                  type="text"
+                  placeholder="Nombre de la receta..."
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
+                />
+              </div>
             </div>
             
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Tipo</label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Tipo</label>
               <select
                 value={filtroTipo}
                 onChange={(e) => setFiltroTipo(e.target.value as any)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition bg-white text-slate-700"
               >
                 <option value="todas">Todas</option>
                 <option value="plato">🍽️ Platos</option>
@@ -142,25 +170,25 @@ export default function RecetasPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Rentabilidad</label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Rentabilidad (FC)</label>
               <select
                 value={filtroRentabilidad}
                 onChange={(e) => setFiltroRentabilidad(e.target.value as any)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition bg-white text-slate-700"
               >
                 <option value="todas">Todas</option>
-                <option value="alta">🟢 Alta (&lt;25% FC)</option>
-                <option value="media">🟡 Media (25-33% FC)</option>
-                <option value="baja">🔴 Baja (&gt;33% FC)</option>
+                <option value="alta">🟢 Alta (&lt;25%)</option>
+                <option value="media">🟡 Media (25-33%)</option>
+                <option value="baja">🔴 Baja (&gt;33%)</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Precio Venta</label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Precio Venta</label>
               <select
                 value={filtroPrecio}
                 onChange={(e) => setFiltroPrecio(e.target.value as any)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition bg-white text-slate-700"
               >
                 <option value="todos">Todos</option>
                 <option value="bajo">€ Bajo (&lt;15€)</option>
@@ -170,11 +198,11 @@ export default function RecetasPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Margen Neto</label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Margen Neto</label>
               <select
                 value={filtroMargen}
                 onChange={(e) => setFiltroMargen(e.target.value as any)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition bg-white text-slate-700"
               >
                 <option value="todos">Todos</option>
                 <option value="alto">🟢 Alto (≥70%)</option>
@@ -187,19 +215,26 @@ export default function RecetasPage() {
 
         {/* GRID DE RECETAS CON ANIMACIONES */}
         {loading ? (
-          <div className="text-center py-12 text-gray-600">Cargando recetas...</div>
+          <div className="py-12 text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-200 border-t-emerald-600 mb-3"></div>
+            <p className="text-slate-600 font-medium">Cargando recetas...</p>
+          </div>
         ) : recetasFiltradas.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-md p-12 text-center">
-            <p className="text-gray-500 text-lg mb-4">No se encontraron recetas</p>
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
+            <div className="flex flex-col items-center justify-center text-slate-400 mb-6">
+              <svg className="w-16 h-16 mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              <p className="text-slate-600 font-medium text-lg">No se encontraron recetas</p>
+              <p className="text-sm text-slate-400 mt-1">Prueba ajustando los filtros o crea una nueva</p>
+            </div>
             <button
               onClick={() => router.push('/recetas/nueva')}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold"
+              className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium transition-all shadow-sm"
             >
               Crear primera receta
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
             {recetasFiltradas.map((receta) => {
               const foodCost = calcularFoodCost(receta.coste_total, receta.precio_venta);
               const margen = calcularMargen(receta.coste_total, receta.precio_venta);
@@ -208,26 +243,26 @@ export default function RecetasPage() {
               return (
                 <div
                   key={receta.id}
-                  className="group bg-white rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 overflow-hidden border border-gray-200"
+                  className="group bg-white rounded-xl shadow-sm border border-slate-200 hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1 transition-all duration-300 overflow-hidden flex flex-col"
                 >
                   {/* Foto */}
-                  <div className="relative h-48 bg-gray-100 overflow-hidden">
+                  <div className="relative h-44 bg-slate-100 overflow-hidden">
                     {receta.foto_url ? (
                       <img
                         src={receta.foto_url}
                         alt={receta.nombre}
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-400">
-                        <span className="text-6xl">🍽️</span>
+                      <div className="w-full h-full flex items-center justify-center text-slate-300">
+                        <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                       </div>
                     )}
                     <div className="absolute top-3 right-3">
-                      <span className={`px-3 py-1 text-xs font-semibold rounded-full shadow-md ${
+                      <span className={`px-2.5 py-1 text-xs font-semibold rounded-full shadow-sm backdrop-blur-sm ${
                         esSubReceta 
-                          ? 'bg-purple-100 text-purple-800' 
-                          : 'bg-blue-100 text-blue-800'
+                          ? 'bg-purple-100/90 text-purple-800 border border-purple-200' 
+                          : 'bg-cyan-100/90 text-cyan-800 border border-cyan-200'
                       }`}>
                         {esSubReceta ? 'Sub-receta' : 'Plato'}
                       </span>
@@ -235,50 +270,50 @@ export default function RecetasPage() {
                   </div>
 
                   {/* Contenido */}
-                  <div className="p-4">
-                    <h3 className="font-bold text-gray-900 text-sm mb-3 line-clamp-2 min-h-[2.5rem]" title={receta.nombre}>
+                  <div className="p-4 flex flex-col flex-1">
+                    <h3 className="font-bold text-slate-900 text-sm mb-3 line-clamp-2 min-h-[2.5rem]" title={receta.nombre}>
                       {receta.nombre}
                     </h3>
 
                     {/* Métricas */}
-                    <div className="space-y-2 mb-4">
+                    <div className="space-y-2 mb-4 flex-1">
                       <div className="flex justify-between text-xs">
-                        <span className="text-gray-600">Precio:</span>
-                        <span className="font-semibold text-gray-900">{receta.precio_venta.toFixed(2)}€</span>
+                        <span className="text-slate-500">Precio venta:</span>
+                        <span className="font-semibold text-slate-900">{receta.precio_venta.toFixed(2)} €</span>
                       </div>
                       <div className="flex justify-between text-xs">
-                        <span className="text-gray-600">Coste:</span>
-                        <span className="font-semibold text-blue-700">{receta.coste_total.toFixed(2)}€</span>
+                        <span className="text-slate-500">Coste total:</span>
+                        <span className="font-semibold text-slate-700">{receta.coste_total.toFixed(2)} €</span>
                       </div>
                       <div className="flex justify-between text-xs">
-                        <span className="text-gray-600">Food Cost:</span>
-                        <span className={`font-semibold ${
-                          foodCost < 25 ? 'text-green-700' : foodCost <= 33 ? 'text-yellow-700' : 'text-red-700'
+                        <span className="text-slate-500">Food Cost:</span>
+                        <span className={`font-bold px-1.5 py-0.5 rounded ${
+                          foodCost < 25 ? 'text-emerald-700 bg-emerald-50' : foodCost <= 33 ? 'text-amber-700 bg-amber-50' : 'text-red-700 bg-red-50'
                         }`}>
                           {foodCost.toFixed(1)}%
                         </span>
                       </div>
                       <div className="flex justify-between text-xs">
-                        <span className="text-gray-600">Margen:</span>
-                        <span className={`font-semibold ${
-                          margen >= 70 ? 'text-green-700' : margen >= 60 ? 'text-yellow-700' : 'text-red-700'
+                        <span className="text-slate-500">Margen neto:</span>
+                        <span className={`font-bold px-1.5 py-0.5 rounded ${
+                          margen >= 70 ? 'text-emerald-700 bg-emerald-50' : margen >= 60 ? 'text-amber-700 bg-amber-50' : 'text-red-700 bg-red-50'
                         }`}>
                           {margen.toFixed(1)}%
                         </span>
                       </div>
                     </div>
 
-                    {/* Porciones */}
-                    <div className="flex items-center justify-between text-xs text-gray-500 mb-4 pb-4 border-b border-gray-100">
-                      <span className="flex items-center gap-1">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {/* Porciones / Producción */}
+                    <div className="flex items-center justify-between text-xs text-slate-500 mb-4 pb-4 border-t border-slate-100 pt-3">
+                      <span className="flex items-center gap-1.5">
+                        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                         </svg>
-                        {receta.porciones} porciones
+                        {receta.porciones} porc.
                       </span>
                       {receta.produccion_gramos && (
-                        <span className="flex items-center gap-1">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <span className="flex items-center gap-1.5">
+                          <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-3-1m-6 2l-3 9a5.002 5.002 0 006.001 0M18 7l3 9" />
                           </svg>
                           {parseFloat(receta.produccion_gramos)}g
@@ -286,21 +321,22 @@ export default function RecetasPage() {
                       )}
                     </div>
 
-                    {/* Botones */}
+                    {/* Botones de Acción */}
                     <div className="flex gap-2">
                       <button
                         onClick={() => router.push(`/recetas/${receta.id}`)}
-                        className="flex-1 px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-300 text-xs font-medium flex items-center justify-center gap-1 group/btn"
+                        className="flex-1 px-3 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-all duration-300 text-xs font-medium flex items-center justify-center gap-1.5 group/btn"
                       >
                         <svg className="w-4 h-4 transition-transform duration-300 group-hover/btn:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
-                        Ver
+                        Ver Ficha
                       </button>
                       <button
                         onClick={() => router.push(`/recetas/${receta.id}/editar`)}
-                        className="flex-1 px-3 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-all duration-300 text-xs font-medium flex items-center justify-center group/btn"
+                        className="px-3 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-all duration-300 text-xs font-medium flex items-center justify-center group/btn"
+                        title="Editar"
                       >
                         <svg className="w-4 h-4 transition-transform duration-300 group-hover/btn:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -308,7 +344,8 @@ export default function RecetasPage() {
                       </button>
                       <button
                         onClick={() => eliminarReceta(receta.id, receta.nombre)}
-                        className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all duration-300 text-xs font-medium flex items-center justify-center group/btn"
+                        className="px-3 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all duration-300 text-xs font-medium flex items-center justify-center group/btn"
+                        title="Eliminar"
                       >
                         <svg className="w-4 h-4 transition-transform duration-300 group-hover/btn:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -323,15 +360,16 @@ export default function RecetasPage() {
         )}
 
         {/* Footer */}
-        <div className="mt-8 text-center">
+        <div className="pt-4 pb-8 text-center">
           <button
             onClick={() => router.push('/dashboard')}
-            className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium transition-all"
+            className="px-6 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 font-medium transition-all shadow-sm text-sm flex items-center gap-2 mx-auto"
           >
-            ← Volver al Dashboard
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+            Volver al Dashboard
           </button>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
