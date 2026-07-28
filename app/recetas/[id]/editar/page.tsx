@@ -7,8 +7,8 @@ import { supabase } from '../../../lib/supabaseClient';
 interface Ingrediente {
   id: string;
   nombre: string;
-  unidad_compra: string;
-  precio_compra_actual: number;
+  unidad_receta: string;
+  precio_receta_real: number;
 }
 
 interface SubReceta {
@@ -56,7 +56,8 @@ export default function EditarReceta() {
   }, []);
 
   async function cargarDatos() {
-    // CORRECCIÓN: Traer TODOS los ingredientes con nombres de columna correctos
+    console.log('Cargando receta:', recetaId);
+    
     const { data: ingredientesData } = await supabase
       .from('ingredientes')
       .select('id, nombre, unidad_compra, precio_compra_actual')
@@ -65,7 +66,6 @@ export default function EditarReceta() {
     
     if (ingredientesData) setIngredientes(ingredientesData);
 
-    // CORRECCIÓN: Traer sub-recetas existentes (excluyendo la actual)
     const { data: subRecetasData } = await supabase
       .from('recetas')
       .select('id, nombre, coste_total, produccion_gramos, tipo')
@@ -75,7 +75,6 @@ export default function EditarReceta() {
     
     if (subRecetasData) setSubRecetas(subRecetasData);
 
-    // Cargar datos de la receta actual
     const { data: recetaData, error: recetaError } = await supabase
       .from('recetas')
       .select('*')
@@ -83,33 +82,39 @@ export default function EditarReceta() {
       .single();
 
     if (recetaError || !recetaData) {
+      console.error('Error cargando receta:', recetaError);
       setMensaje('❌ Error cargando la receta');
       setLoading(false);
       return;
     }
 
+    console.log('Receta cargada:', recetaData);
     setNombre(recetaData.nombre);
     setTipo(recetaData.tipo);
     setPorciones(recetaData.porciones);
     setPrecioVenta(recetaData.precio_venta);
     
-    // CORRECCIÓN: Parsear produccion_gramos de text a number
     if (recetaData.produccion_gramos) {
       setProduccionGramos(parseFloat(recetaData.produccion_gramos) || '');
     }
 
     // Cargar detalles de la receta
-    const { data: detalleData } = await supabase
+    const { data: detalleData, error: detalleError } = await supabase
       .from('receta_detalle')
       .select('*')
       .eq('receta_id', recetaId);
 
-    if (detalleData) {
+    if (detalleError) {
+      console.error('Error cargando detalles:', detalleError);
+    }
+
+    console.log('Detalles cargados:', detalleData);
+
+    if (detalleData && detalleData.length > 0) {
       const items: ItemEditado[] = [];
 
       for (const detalle of detalleData) {
         if (detalle.ingrediente_id) {
-          // Buscar el ingrediente en la lista cargada
           const ing = ingredientes.find(i => i.id === detalle.ingrediente_id);
           if (ing) {
             items.push({
@@ -124,7 +129,6 @@ export default function EditarReceta() {
             });
           }
         } else if (detalle.subreceta_id) {
-          // Buscar la sub-receta en la lista cargada
           const sub = subRecetas.find(s => s.id === detalle.subreceta_id);
           if (sub) {
             const gramos = sub.produccion_gramos ? parseFloat(sub.produccion_gramos as unknown as string) : 0;
@@ -143,6 +147,7 @@ export default function EditarReceta() {
         }
       }
       
+      console.log('Items editados:', items);
       setItemsEditados(items);
     }
 
@@ -176,7 +181,7 @@ export default function EditarReceta() {
 
   function agregarItem() {
     if (!itemSeleccionado || cantidadActual <= 0) {
-      setMensaje('️ Selecciona un elemento y una cantidad válida');
+      setMensaje('⚠️ Selecciona un elemento y una cantidad válida');
       return;
     }
 
@@ -260,7 +265,7 @@ export default function EditarReceta() {
     }
 
     if (tipo === 'sub_receta' && (!produccionGramos || produccionGramos <= 0)) {
-      setMensaje('⚠️ Para sub-recetas, debes especificar la producción en gramos');
+      setMensaje('️ Para sub-recetas, debes especificar la producción en gramos');
       return;
     }
 
@@ -268,7 +273,6 @@ export default function EditarReceta() {
     setMensaje('');
 
     try {
-      // Actualizar la receta principal
       const { error: recetaError } = await supabase
         .from('recetas')
         .update({
@@ -284,7 +288,6 @@ export default function EditarReceta() {
 
       if (recetaError) throw recetaError;
 
-      // Eliminar todos los detalles existentes
       const { error: deleteError } = await supabase
         .from('receta_detalle')
         .delete()
@@ -292,7 +295,6 @@ export default function EditarReceta() {
 
       if (deleteError) throw deleteError;
 
-      // Insertar los nuevos detalles
       const detalles = itemsEditados.map((item) => ({
         id: crypto.randomUUID(),
         receta_id: recetaId,
@@ -455,7 +457,7 @@ export default function EditarReceta() {
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">🥬 Añadir ingredientes o sub-recetas</h2>
+          <h2 className="text-xl font-semibold mb-4"> Añadir ingredientes o sub-recetas</h2>
           
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -508,7 +510,7 @@ export default function EditarReceta() {
                     <div>
                       <span className="font-medium text-gray-900">{item.nombre}</span>
                       <span className="ml-2 text-xs text-gray-500">
-                        {item.tipo === 'subreceta' ? '🥘 Sub-receta' : `📦 ${item.unidad}`}
+                        {item.tipo === 'subreceta' ? ' Sub-receta' : `📦 ${item.unidad}`}
                       </span>
                     </div>
                     <span className="text-sm text-gray-500">
@@ -682,7 +684,7 @@ export default function EditarReceta() {
                   ? 'text-yellow-600' 
                   : 'text-red-600'
               }`}>
-                💵 Margen Neto
+                 Margen Neto
               </p>
               <p className={`text-2xl font-bold ${
                 parseFloat(calcularMargenNeto()) >= 60 
@@ -707,7 +709,7 @@ export default function EditarReceta() {
             guardando ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
           }`}
         >
-          {guardando ? ' Guardando...' : '💾 Actualizar receta'}
+          {guardando ? '⏳ Guardando...' : '💾 Actualizar receta'}
         </button>
       </div>
     </div>
