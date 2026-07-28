@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { supabase } from '../../../../lib/supabaseClient';
+import { supabase } from '../../../lib/supabaseClient';
 
 interface Ingrediente {
   id: string;
@@ -43,7 +43,6 @@ export default function VerReceta() {
   async function cargarReceta() {
     console.log('Cargando receta:', recetaId);
     
-    // Cargar receta
     const { data: recetaData } = await supabase
       .from('recetas')
       .select('*')
@@ -57,7 +56,6 @@ export default function VerReceta() {
       }
     }
 
-    // Cargar detalles
     const { data: detallesData } = await supabase
       .from('receta_detalle')
       .select('*')
@@ -164,7 +162,6 @@ export default function VerReceta() {
           </div>
         </div>
 
-        {/* Foto */}
         {fotoUrl && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
             <img
@@ -175,14 +172,13 @@ export default function VerReceta() {
           </div>
         )}
 
-        {/* Datos básicos */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-2xl font-semibold mb-4">📋 Datos básicos</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-600">Tipo</p>
               <p className="font-semibold">
-                {receta.tipo === 'plato' ? '🍽️ Plato Principal' : '🥘 Sub-receta'}
+                {receta.tipo === 'plato' ? '🍽️ Plato Principal' : ' Sub-receta'}
               </p>
             </div>
             <div>
@@ -202,7 +198,6 @@ export default function VerReceta() {
           </div>
         </div>
 
-        {/* Procedimiento */}
         {receta.procedimiento && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
             <h2 className="text-2xl font-semibold mb-4">
@@ -212,7 +207,6 @@ export default function VerReceta() {
           </div>
         )}
 
-        {/* Ingredientes */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-2xl font-semibold mb-4">🥬 Ingredientes</h2>
           <table className="w-full">
@@ -242,7 +236,6 @@ export default function VerReceta() {
           </table>
         </div>
 
-        {/* Resumen de costes */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-2xl font-semibold mb-4">💰 Resumen de costes</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -284,7 +277,6 @@ export default function VerReceta() {
           </div>
         </div>
 
-        {/* Botón PDF */}
         <button
           onClick={() => window.print()}
           className="w-full py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-lg"
@@ -293,7 +285,6 @@ export default function VerReceta() {
         </button>
       </div>
 
-      {/* Estilos para impresión */}
       <style jsx global>{`
         @media print {
           body * {
