@@ -392,7 +392,7 @@ export default function NuevaReceta() {
       console.log('✅ Foto subida exitosamente:', data);
 
       const { data: urlData } = supabase.storage
-        .from('RECETAS-FOTOS')
+        .from('recetas-fotos')
         .getPublicUrl(fileName);
 
       console.log(' URL pública generada:', urlData.publicUrl);
