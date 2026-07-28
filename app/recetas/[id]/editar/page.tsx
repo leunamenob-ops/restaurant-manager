@@ -7,8 +7,8 @@ import { supabase } from '../../../lib/supabaseClient';
 interface Ingrediente {
   id: string;
   nombre: string;
-  unidad_receta: string;
-  precio_receta_real: number;
+  unidad_compra: string;
+  precio_compra_actual: number;
 }
 
 interface SubReceta {
@@ -52,107 +52,121 @@ export default function EditarReceta() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    cargarDatos();
-  }, []);
+    async function cargarTodo() {
+      console.log(' Iniciando carga de receta:', recetaId);
+      
+      // 1. Cargar TODOS los ingredientes primero
+      const { data: ingredientesData } = await supabase
+        .from('ingredientes')
+        .select('id, nombre, unidad_compra, precio_compra_actual')
+        .order('nombre')
+        .range(0, 10000);
+      
+      if (ingredientesData) {
+        console.log('✅ Ingredientes cargados:', ingredientesData.length);
+        setIngredientes(ingredientesData);
+      }
 
-  async function cargarDatos() {
-    console.log('Cargando receta:', recetaId);
-    
-    const { data: ingredientesData } = await supabase
-      .from('ingredientes')
-      .select('id, nombre, unidad_compra, precio_compra_actual')
-      .order('nombre')
-      .range(0, 10000);
-    
-    if (ingredientesData) setIngredientes(ingredientesData);
+      // 2. Cargar sub-recetas existentes
+      const { data: subRecetasData } = await supabase
+        .from('recetas')
+        .select('id, nombre, coste_total, produccion_gramos, tipo')
+        .eq('tipo', 'sub_receta')
+        .neq('id', recetaId)
+        .order('nombre');
+      
+      if (subRecetasData) {
+        console.log('✅ Sub-recetas cargadas:', subRecetasData.length);
+        setSubRecetas(subRecetasData);
+      }
 
-    const { data: subRecetasData } = await supabase
-      .from('recetas')
-      .select('id, nombre, coste_total, produccion_gramos, tipo')
-      .eq('tipo', 'sub_receta')
-      .neq('id', recetaId)
-      .order('nombre');
-    
-    if (subRecetasData) setSubRecetas(subRecetasData);
+      // 3. Cargar la receta actual
+      const { data: recetaData, error: recetaError } = await supabase
+        .from('recetas')
+        .select('*')
+        .eq('id', recetaId)
+        .single();
 
-    const { data: recetaData, error: recetaError } = await supabase
-      .from('recetas')
-      .select('*')
-      .eq('id', recetaId)
-      .single();
+      if (recetaError || !recetaData) {
+        console.error('❌ Error cargando receta:', recetaError);
+        setMensaje('❌ Error cargando la receta');
+        setLoading(false);
+        return;
+      }
 
-    if (recetaError || !recetaData) {
-      console.error('Error cargando receta:', recetaError);
-      setMensaje('❌ Error cargando la receta');
-      setLoading(false);
-      return;
-    }
+      console.log('✅ Receta cargada:', recetaData);
+      setNombre(recetaData.nombre);
+      setTipo(recetaData.tipo);
+      setPorciones(recetaData.porciones);
+      setPrecioVenta(recetaData.precio_venta);
+      
+      if (recetaData.produccion_gramos) {
+        setProduccionGramos(parseFloat(recetaData.produccion_gramos) || '');
+      }
 
-    console.log('Receta cargada:', recetaData);
-    setNombre(recetaData.nombre);
-    setTipo(recetaData.tipo);
-    setPorciones(recetaData.porciones);
-    setPrecioVenta(recetaData.precio_venta);
-    
-    if (recetaData.produccion_gramos) {
-      setProduccionGramos(parseFloat(recetaData.produccion_gramos) || '');
-    }
+      // 4. Cargar detalles de la receta
+      const { data: detalleData, error: detalleError } = await supabase
+        .from('receta_detalle')
+        .select('*')
+        .eq('receta_id', recetaId);
 
-    // Cargar detalles de la receta
-    const { data: detalleData, error: detalleError } = await supabase
-      .from('receta_detalle')
-      .select('*')
-      .eq('receta_id', recetaId);
+      if (detalleError) {
+        console.error('❌ Error cargando detalles:', detalleError);
+      }
 
-    if (detalleError) {
-      console.error('Error cargando detalles:', detalleError);
-    }
+      console.log('✅ Detalles cargados:', detalleData?.length || 0, detalleData);
 
-    console.log('Detalles cargados:', detalleData);
+      // 5. Mapear detalles con ingredientes YA CARGADOS
+      if (detalleData && detalleData.length > 0) {
+        const items: ItemEditado[] = [];
 
-    if (detalleData && detalleData.length > 0) {
-      const items: ItemEditado[] = [];
-
-      for (const detalle of detalleData) {
-        if (detalle.ingrediente_id) {
-          const ing = ingredientes.find(i => i.id === detalle.ingrediente_id);
-          if (ing) {
-            items.push({
-              id: detalle.id,
-              tipo: 'ingrediente',
-              ingrediente_id: detalle.ingrediente_id,
-              nombre: ing.nombre,
-              cantidad: detalle.cantidad_necesaria,
-              coste: detalle.coste_linea,
-              unidad: ing.unidad_compra,
-              costeUnitario: ing.precio_compra_actual
-            });
-          }
-        } else if (detalle.subreceta_id) {
-          const sub = subRecetas.find(s => s.id === detalle.subreceta_id);
-          if (sub) {
-            const gramos = sub.produccion_gramos ? parseFloat(sub.produccion_gramos as unknown as string) : 0;
-            const costePorGramo = gramos > 0 ? sub.coste_total / gramos : 0;
-            items.push({
-              id: detalle.id,
-              tipo: 'subreceta',
-              subreceta_id: detalle.subreceta_id,
-              nombre: sub.nombre,
-              cantidad: detalle.cantidad_necesaria,
-              coste: detalle.coste_linea,
-              unidad: 'g',
-              costeUnitario: costePorGramo
-            });
+        for (const detalle of detalleData) {
+          if (detalle.ingrediente_id) {
+            const ing = ingredientesData?.find(i => i.id === detalle.ingrediente_id);
+            if (ing) {
+              items.push({
+                id: detalle.id,
+                tipo: 'ingrediente',
+                ingrediente_id: detalle.ingrediente_id,
+                nombre: ing.nombre,
+                cantidad: detalle.cantidad_necesaria,
+                coste: detalle.coste_linea,
+                unidad: ing.unidad_compra || 'gr',
+                costeUnitario: ing.precio_compra_actual || 0
+              });
+            } else {
+              console.warn('⚠️ Ingrediente no encontrado:', detalle.ingrediente_id);
+            }
+          } else if (detalle.subreceta_id) {
+            const sub = subRecetasData?.find(s => s.id === detalle.subreceta_id);
+            if (sub) {
+              const gramos = sub.produccion_gramos ? parseFloat(sub.produccion_gramos as unknown as string) : 0;
+              const costePorGramo = gramos > 0 ? sub.coste_total / gramos : 0;
+              items.push({
+                id: detalle.id,
+                tipo: 'subreceta',
+                subreceta_id: detalle.subreceta_id,
+                nombre: sub.nombre,
+                cantidad: detalle.cantidad_necesaria,
+                coste: detalle.coste_linea,
+                unidad: 'gr',
+                costeUnitario: costePorGramo
+              });
+            } else {
+              console.warn('⚠️ Sub-receta no encontrada:', detalle.subreceta_id);
+            }
           }
         }
+        
+        console.log('✅ Items mapeados:', items);
+        setItemsEditados(items);
       }
-      
-      console.log('Items editados:', items);
-      setItemsEditados(items);
-    }
 
-    setLoading(false);
-  }
+      setLoading(false);
+    }
+    
+    cargarTodo();
+  }, [recetaId]);
 
   const todosLosItems = [
     ...ingredientes.map(i => ({
@@ -170,7 +184,7 @@ export default function EditarReceta() {
         id: s.id,
         nombre: s.nombre,
         costeUnitario: costePorGramo,
-        unidad: 'g'
+        unidad: 'gr'
       };
     })
   ];
@@ -260,12 +274,12 @@ export default function EditarReceta() {
     }
 
     if (itemsEditados.length === 0) {
-      setMensaje('⚠️ Añade al menos un ingrediente o sub-receta');
+      setMensaje('️ Añade al menos un ingrediente o sub-receta');
       return;
     }
 
     if (tipo === 'sub_receta' && (!produccionGramos || produccionGramos <= 0)) {
-      setMensaje('️ Para sub-recetas, debes especificar la producción en gramos');
+      setMensaje('⚠️ Para sub-recetas, debes especificar la producción en gramos');
       return;
     }
 
@@ -327,7 +341,7 @@ export default function EditarReceta() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-xl">Cargando...</div>
+        <div className="text-xl">Cargando receta...</div>
       </div>
     );
   }
@@ -387,7 +401,7 @@ export default function EditarReceta() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="plato">🍽️ Plato Principal</option>
-                <option value="sub_receta">🥘 Sub-receta</option>
+                <option value="sub_receta"> Sub-receta</option>
               </select>
             </div>
 
@@ -490,7 +504,7 @@ export default function EditarReceta() {
                   }}
                   className="absolute right-2 top-2 text-gray-400 hover:text-gray-600"
                 >
-                  ✕
+                  
                 </button>
               )}
             </div>
