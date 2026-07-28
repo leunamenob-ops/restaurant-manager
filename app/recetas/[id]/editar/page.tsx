@@ -57,7 +57,14 @@ export default function EditarReceta() {
   const [mensaje, setMensaje] = useState('');
   const [loading, setLoading] = useState(true);
   
+  // NUEVO: Estados para foto
+  const [fotoActual, setFotoActual] = useState<string | null>(null);
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null);
+  const [fotoFile, setFotoFile] = useState<File | null>(null);
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
+  
   const filtroRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     cargarTodo();
@@ -157,6 +164,11 @@ export default function EditarReceta() {
     setPorciones(recetaData.porciones);
     setPrecioVenta(recetaData.precio_venta);
     
+    // NUEVO: Cargar foto actual
+    if (recetaData.foto_url) {
+      setFotoActual(recetaData.foto_url);
+    }
+    
     if (recetaData.produccion_gramos) {
       setProduccionGramos(parseFloat(recetaData.produccion_gramos) || '');
     }
@@ -181,7 +193,6 @@ export default function EditarReceta() {
         if (detalle.ingrediente_id) {
           const ing = todosLosIngredientes.find(i => i.id === detalle.ingrediente_id);
           if (ing) {
-            // ✅ CORRECCIÓN: Normalizar el precio según la unidad de compra original
             const conversion = normalizarUnidad(ing.unidad_compra);
             const precioNormalizado = (ing.precio_compra_actual || 0) / conversion.factor;
             
@@ -193,7 +204,7 @@ export default function EditarReceta() {
               cantidad: detalle.cantidad_necesaria,
               coste: detalle.coste_linea,
               unidad: detalle.unidad || conversion.unidad,
-              costeUnitario: precioNormalizado // ✅ Usar precio normalizado
+              costeUnitario: precioNormalizado
             });
           } else {
             console.warn('⚠️ Ingrediente no encontrado:', detalle.ingrediente_id);
@@ -302,6 +313,90 @@ export default function EditarReceta() {
     setProveedoresSeleccionados([]);
   }
 
+  // NUEVO: Funciones para manejar foto
+  function handleFotoChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setMensaje('⚠️ La imagen no puede superar los 5MB');
+        return;
+      }
+      
+      if (!file.type.startsWith('image/')) {
+        setMensaje('⚠️ Solo se permiten imágenes');
+        return;
+      }
+
+      setFotoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      setMensaje('');
+    }
+  }
+
+  function eliminarFotoActual() {
+    setFotoActual(null);
+    setFotoPreview(null);
+    setFotoFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }
+
+  async function subirFoto(): Promise<string | null> {
+    if (!fotoFile) return null;
+
+    try {
+      setSubiendoFoto(true);
+      const fileExt = fotoFile.name.split('.').pop();
+      const fileName = `${recetaId}-${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('RECETAS-FOTOS')
+        .upload(fileName, fotoFile, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Error subiendo foto:', uploadError);
+        throw uploadError;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('RECETAS-FOTOS')
+        .getPublicUrl(fileName);
+
+      return urlData.publicUrl;
+    } catch (error) {
+      console.error('Error en subirFoto:', error);
+      return null;
+    } finally {
+      setSubiendoFoto(false);
+    }
+  }
+
+  async function eliminarFotoDeStorage(url: string) {
+    try {
+      // Extraer el nombre del archivo de la URL
+      const parts = url.split('/');
+      const fileName = parts[parts.length - 1];
+      
+      const { error } = await supabase.storage
+        .from('RECETAS-FOTOS')
+        .remove([fileName]);
+      
+      if (error) {
+        console.error('Error eliminando foto:', error);
+      }
+    } catch (error) {
+      console.error('Error en eliminarFotoDeStorage:', error);
+    }
+  }
+
   const todosLosItems = [
     ...ingredientesFiltrados.map(i => {
       const conversion = normalizarUnidad(i.unidad_compra);
@@ -328,7 +423,7 @@ export default function EditarReceta() {
 
   function agregarItem() {
     if (!itemSeleccionado || cantidadActual <= 0) {
-      setMensaje('⚠️ Selecciona un elemento y una cantidad válida');
+      setMensaje('️ Selecciona un elemento y una cantidad válida');
       return;
     }
 
@@ -407,7 +502,7 @@ export default function EditarReceta() {
     }
 
     if (itemsEditados.length === 0) {
-      setMensaje('⚠️ Añade al menos un ingrediente o sub-receta');
+      setMensaje('️ Añade al menos un ingrediente o sub-receta');
       return;
     }
 
@@ -420,6 +515,25 @@ export default function EditarReceta() {
     setMensaje('');
 
     try {
+      let fotoUrl = fotoActual;
+      
+      // Si hay nueva foto, subirla
+      if (fotoFile) {
+        // Eliminar foto anterior si existe
+        if (fotoActual) {
+          await eliminarFotoDeStorage(fotoActual);
+        }
+        
+        const nuevaUrl = await subirFoto();
+        if (nuevaUrl) {
+          fotoUrl = nuevaUrl;
+        }
+      } else if (fotoPreview === null && fotoActual) {
+        // Si se eliminó la foto
+        await eliminarFotoDeStorage(fotoActual);
+        fotoUrl = null;
+      }
+
       const { error: recetaError } = await supabase
         .from('recetas')
         .update({
@@ -429,6 +543,7 @@ export default function EditarReceta() {
           produccion_gramos: tipo === 'sub_receta' ? String(produccionGramos) : null,
           precio_venta: precioVenta,
           coste_total: calcularCosteTotal(),
+          foto_url: fotoUrl,
           updated_at: new Date().toISOString()
         })
         .eq('id', recetaId);
@@ -504,7 +619,7 @@ export default function EditarReceta() {
         )}
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">📋 Datos básicos</h2>
+          <h2 className="text-xl font-semibold mb-4"> Datos básicos</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -601,11 +716,66 @@ export default function EditarReceta() {
                 <option value="0">0% - Sin IVA</option>
               </select>
             </div>
+
+            {/* CAMPO DE FOTO */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                📸 Foto de la receta (opcional)
+              </label>
+              
+              {/* Mostrar foto actual si existe */}
+              {fotoActual && !fotoPreview && (
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600 mb-2">Foto actual:</p>
+                  <img
+                    src={fotoActual}
+                    alt="Foto actual"
+                    className="max-w-xs max-h-48 object-cover rounded-lg border-2 border-gray-200 shadow-sm"
+                  />
+                </div>
+              )}
+              
+              {/* Mostrar preview si hay nueva foto */}
+              {fotoPreview && (
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600 mb-2">Nueva foto:</p>
+                  <img
+                    src={fotoPreview}
+                    alt="Nueva foto"
+                    className="max-w-xs max-h-48 object-cover rounded-lg border-2 border-gray-200 shadow-sm"
+                  />
+                </div>
+              )}
+              
+              <div className="flex items-start gap-4">
+                <div className="flex-1">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFotoChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Máximo 5MB. Formatos: JPG, PNG, GIF, WEBP
+                  </p>
+                </div>
+                {(fotoActual || fotoPreview) && (
+                  <button
+                    onClick={eliminarFotoActual}
+                    className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm"
+                    title="Eliminar foto"
+                  >
+                    ️
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4"> Añadir ingredientes o sub-recetas</h2>
+          <h2 className="text-xl font-semibold mb-4">🥬 Añadir ingredientes o sub-recetas</h2>
           
           <div className="mb-4">
             <div className="flex gap-4 mb-4">
@@ -780,7 +950,7 @@ export default function EditarReceta() {
                         className="text-red-600 hover:text-red-800 p-1"
                         title="Eliminar"
                       >
-                        🗑️
+                        ️
                       </button>
                     </div>
                   </li>
@@ -887,12 +1057,12 @@ export default function EditarReceta() {
 
         <button
           onClick={guardarReceta}
-          disabled={guardando}
+          disabled={guardando || subiendoFoto}
           className={`w-full py-4 rounded-lg text-white font-semibold text-lg ${
-            guardando ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
+            guardando || subiendoFoto ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
           }`}
         >
-          {guardando ? '⏳ Guardando...' : '💾 Actualizar receta'}
+          {guardando ? '⏳ Guardando...' : subiendoFoto ? '📸 Subiendo foto...' : '💾 Actualizar receta'}
         </button>
       </div>
     </div>
