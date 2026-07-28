@@ -577,8 +577,8 @@ export default function NuevaReceta() {
               )}
             </div>
 
-            {todosLosItems.length > 0 && (
-              <div className="border border-gray-200 rounded-lg bg-white max-h-60 overflow-y-auto shadow-lg">
+            {(busqueda.trim() || proveedoresSeleccionados.length > 0) && todosLosItems.length > 0 && (
+  <div className="border border-gray-200 rounded-lg bg-white max-h-60 overflow-y-auto shadow-lg">
                 {todosLosItems.map((item, idx) => (
                   <button
                     key={idx}
