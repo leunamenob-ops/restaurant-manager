@@ -52,8 +52,12 @@ export default function NuevaReceta() {
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState('');
   const [hotelId, setHotelId] = useState<string>('');
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null);
+  const [fotoFile, setFotoFile] = useState<File | null>(null);
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
   
   const filtroRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     cargarDatos();
@@ -210,6 +214,37 @@ export default function NuevaReceta() {
     setCantidadActual(0);
   }
 
+  function handleFotoChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setMensaje('⚠️ La imagen no puede superar los 5MB');
+        return;
+      }
+      
+      if (!file.type.startsWith('image/')) {
+        setMensaje('️ Solo se permiten imágenes');
+        return;
+      }
+
+      setFotoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      setMensaje('');
+    }
+  }
+
+  function eliminarFoto() {
+    setFotoFile(null);
+    setFotoPreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }
+
   const todosLosItems = [
     ...ingredientesFiltrados.map(i => {
       const conversion = normalizarUnidad(i.unidad_compra);
@@ -307,9 +342,42 @@ export default function NuevaReceta() {
     return coste / gramos;
   }
 
+  async function subirFoto(recetaId: string): Promise<string | null> {
+    if (!fotoFile) return null;
+
+    try {
+      setSubiendoFoto(true);
+      const fileExt = fotoFile.name.split('.').pop();
+      const fileName = `${recetaId}-${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('RECETAS-FOTOS')
+        .upload(fileName, fotoFile, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Error subiendo foto:', uploadError);
+        throw uploadError;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('RECETAS-FOTOS')
+        .getPublicUrl(fileName);
+
+      return urlData.publicUrl;
+    } catch (error) {
+      console.error('Error en subirFoto:', error);
+      return null;
+    } finally {
+      setSubiendoFoto(false);
+    }
+  }
+
   async function guardarReceta() {
     if (!nombre.trim()) {
-      setMensaje('️ El nombre es obligatorio');
+      setMensaje('⚠️ El nombre es obligatorio');
       return;
     }
 
@@ -319,7 +387,7 @@ export default function NuevaReceta() {
     }
 
     if (tipo === 'sub_receta' && (!produccionGramos || produccionGramos <= 0)) {
-      setMensaje('️ Para sub-recetas, debes especificar la producción en gramos');
+      setMensaje('⚠️ Para sub-recetas, debes especificar la producción en gramos');
       return;
     }
 
@@ -329,26 +397,29 @@ export default function NuevaReceta() {
     try {
       const recetaId = crypto.randomUUID();
 
-     console.log('Intentando guardar con hotel_id:', hotelId);
+      let fotoUrl = null;
+      if (fotoFile) {
+        fotoUrl = await subirFoto(recetaId);
+        if (!fotoUrl) {
+          setMensaje('️ Error al subir la foto, pero la receta se guardará sin imagen');
+        }
+      }
 
-const { error: recetaError } = await supabase
-  .from('recetas')
-  .insert({
-    id: recetaId,
-    nombre: nombre.trim(),
-    tipo,
-    porciones,
-    produccion_gramos: tipo === 'sub_receta' ? String(produccionGramos) : null,
-    precio_venta: precioVenta,
-    coste_total: calcularCosteTotal(),
-    hotel_id: hotelId || null, // Intenta con null si no hay
-    created_at: new Date().toISOString()
-  });
+      const { error: recetaError } = await supabase
+        .from('recetas')
+        .insert({
+          id: recetaId,
+          nombre: nombre.trim(),
+          tipo,
+          porciones,
+          produccion_gramos: tipo === 'sub_receta' ? String(produccionGramos) : null,
+          precio_venta: precioVenta,
+          coste_total: calcularCosteTotal(),
+          foto_url: fotoUrl,
+          hotel_id: hotelId || '00000000-0000-0000-0000-000000000001',
+          created_at: new Date().toISOString()
+        });
 
-if (recetaError) {
-  console.error('Error detallado:', recetaError);
-  throw recetaError;
-}
       if (recetaError) throw recetaError;
 
       const detalles = itemsSeleccionados.map((item) => ({
@@ -358,6 +429,7 @@ if (recetaError) {
         subreceta_id: item.tipo === 'subreceta' ? item.id : null,
         cantidad_necesaria: item.cantidad,
         coste_linea: item.coste,
+        unidad: item.unidad,
         hotel_id: hotelId || '00000000-0000-0000-0000-000000000001',
         created_at: new Date().toISOString()
       }));
@@ -406,7 +478,7 @@ if (recetaError) {
         )}
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">📋 Datos básicos</h2>
+          <h2 className="text-xl font-semibold mb-4"> Datos básicos</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -436,7 +508,7 @@ if (recetaError) {
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
-                <option value="plato">🍽️ Plato Principal</option>
+                <option value="plato">️ Plato Principal</option>
                 <option value="sub_receta">🥘 Sub-receta</option>
               </select>
             </div>
@@ -503,11 +575,50 @@ if (recetaError) {
                 <option value="0">0% - Sin IVA</option>
               </select>
             </div>
+
+            {/* CAMPO DE FOTO */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                📸 Foto de la receta (opcional)
+              </label>
+              <div className="flex items-start gap-4">
+                <div className="flex-1">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFotoChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Máximo 5MB. Formatos: JPG, PNG, GIF, WEBP
+                  </p>
+                </div>
+                {fotoPreview && (
+                  <button
+                    onClick={eliminarFoto}
+                    className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm"
+                    title="Eliminar foto"
+                  >
+                    🗑️
+                  </button>
+                )}
+              </div>
+              {fotoPreview && (
+                <div className="mt-4">
+                  <img
+                    src={fotoPreview}
+                    alt="Vista previa"
+                    className="max-w-xs max-h-48 object-cover rounded-lg border-2 border-gray-200 shadow-sm"
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4"> Añadir ingredientes o sub-recetas</h2>
+          <h2 className="text-xl font-semibold mb-4">🥬 Añadir ingredientes o sub-recetas</h2>
           
           <div className="mb-4">
             <div className="flex gap-4 mb-4">
@@ -584,7 +695,7 @@ if (recetaError) {
             </div>
 
             {(busqueda.trim() || proveedoresSeleccionados.length > 0) && todosLosItems.length > 0 && (
-  <div className="border border-gray-200 rounded-lg bg-white max-h-60 overflow-y-auto shadow-lg">
+              <div className="border border-gray-200 rounded-lg bg-white max-h-60 overflow-y-auto shadow-lg">
                 {todosLosItems.map((item, idx) => (
                   <button
                     key={idx}
@@ -693,7 +804,7 @@ if (recetaError) {
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4"> Resumen de costes</h2>
+          <h2 className="text-xl font-semibold mb-4">💰 Resumen de costes</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
@@ -739,7 +850,7 @@ if (recetaError) {
                   ? 'text-yellow-600' 
                   : 'text-red-600'
               }`}>
-                 Food Cost
+                📊 Food Cost
               </p>
               <p className={`text-2xl font-bold ${
                 parseFloat(calcularFoodCostPorcentaje()) < 25 
@@ -789,12 +900,12 @@ if (recetaError) {
 
         <button
           onClick={guardarReceta}
-          disabled={guardando}
+          disabled={guardando || subiendoFoto}
           className={`w-full py-4 rounded-lg text-white font-semibold text-lg ${
-            guardando ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
+            guardando || subiendoFoto ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
           }`}
         >
-          {guardando ? ' Guardando...' : ' Guardar receta'}
+          {guardando ? '⏳ Guardando...' : subiendoFoto ? '📸 Subiendo foto...' : '💾 Guardar receta'}
         </button>
       </div>
     </div>
