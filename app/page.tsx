@@ -23,7 +23,6 @@ export default function LandingPage() {
     setLoading(true);
     setError('');
   
-    // TEMPORAL: Login sin validación para pruebas
     const usuarioTemp = {
       id: codigo || 'B0001',
       nombre: 'Admin Temporal',
@@ -177,7 +176,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* MODULOS */}
+      {/* MODULOS CON ANIMACIONES AVANZADAS */}
       <section className="py-20 bg-white" id="modulos">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
@@ -186,15 +185,32 @@ export default function LandingPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {modulos.map((modulo, idx) => (
-              <div key={idx} className={`relative p-6 bg-gradient-to-br ${modulo.color} rounded-xl border-2 ${modulo.border} hover:shadow-xl transition-all hover:-translate-y-1 group`}>
-                <div className="flex items-start justify-between mb-4">
-                  <div className={`w-14 h-14 ${modulo.iconBg} rounded-xl flex items-center justify-center shadow-md`}>
-                    {modulo.icon}
+              <div
+                key={idx}
+                className="group relative p-6 bg-gradient-to-br rounded-xl border-2 hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 cursor-pointer"
+                style={{
+                  backgroundImage: `linear-gradient(to bottom right, var(--tw-gradient-stops))`,
+                }}
+              >
+                {/* Aplicamos las clases dinámicas manualmente para asegurar compatibilidad */}
+                <div className={`absolute inset-0 bg-gradient-to-br ${modulo.color} rounded-xl border-2 ${modulo.border} opacity-100 transition-all duration-300 group-hover:shadow-2xl`}></div>
+                
+                <div className="relative z-10">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className={`w-14 h-14 ${modulo.iconBg} rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300`}>
+                      {modulo.icon}
+                    </div>
+                    <div className="text-gray-400 group-hover:text-gray-600 transition-all duration-300 group-hover:translate-x-1 text-2xl">
+                      →
+                    </div>
                   </div>
-                  <span className="text-2xl text-gray-400 group-hover:text-gray-600 transition">→</span>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-cyan-700 transition-colors duration-300">
+                    {modulo.title}
+                  </h3>
+                  <p className="text-gray-600 text-sm leading-relaxed">
+                    {modulo.description}
+                  </p>
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">{modulo.title}</h3>
-                <p className="text-gray-600 text-sm leading-relaxed">{modulo.description}</p>
               </div>
             ))}
           </div>
@@ -210,7 +226,7 @@ export default function LandingPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {valores.map((valor, idx) => (
-              <div key={idx} className="text-center bg-white p-6 rounded-xl shadow-md">
+              <div key={idx} className="text-center bg-white p-6 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300">
                 <div className="text-5xl mb-4">{valor.icon}</div>
                 <h3 className="text-xl font-bold text-gray-900 mb-2">{valor.title}</h3>
                 <p className="text-gray-600 text-sm">{valor.description}</p>
