@@ -89,7 +89,7 @@ export default function LandingPage() {
                 <span className="text-white text-xl font-bold">R</span>
               </div>
               <span className="text-xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent hidden sm:block">
-                Restaurant Manager
+                KOST Software™ Restaurant Manager
               </span>
             </div>
             <button
@@ -274,11 +274,11 @@ export default function LandingPage() {
             <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-teal-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold">R</span>
             </div>
-            <span className="text-white font-bold text-lg">Restaurant Manager™</span>
+            <span className="text-white font-bold text-lg">KOST Software™ Restaurant Manager</span>
           </div>
-          <p className="text-sm text-gray-400 mb-8">Transformando la gestión de restaurantes desde 2024</p>
+          <p className="text-sm text-gray-400 mb-8">Transformando la gestión de restaurantes desde 2026</p>
           <div className="border-t border-gray-800 pt-8 text-sm text-gray-500">
-            <p>© 2024 Restaurant Manager™. Todos los derechos reservados.</p>
+            <p>© 2026 KOST Software™ Restaurant Manager. Todos los derechos reservados.</p>
           </div>
         </div>
       </footer>
