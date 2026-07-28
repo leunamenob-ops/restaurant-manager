@@ -94,129 +94,147 @@ export default function VerReceta() {
   if (loading) return <div className="p-8 text-center">Cargando...</div>;
   if (!receta) return <div className="p-8 text-center text-red-600">Receta no encontrada</div>;
 
+  const foodCost = calcularFoodCost();
+
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900">{receta.nombre}</h1>
-          <div className="flex gap-2">
-            <button
-              onClick={() => router.push(`/recetas/${recetaId}/editar`)}
-              className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
-            >
-              ✏️ Editar
-            </button>
-            <button
-              onClick={() => router.push('/recetas')}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-            >
-              ← Volver
-            </button>
-          </div>
-        </div>
-
-        {receta.foto_url && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <img src={receta.foto_url} alt={receta.nombre} className="w-full max-w-2xl mx-auto rounded-lg" />
-          </div>
-        )}
-
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-2xl font-semibold mb-4">📋 Datos básicos</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-gray-600">Tipo</p>
-              <p className="font-semibold">{receta.tipo === 'plato' ? '🍽️ Plato' : '🥘 Sub-receta'}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Porciones</p>
-              <p className="font-semibold">{receta.porciones}</p>
-            </div>
-            {receta.produccion_gramos && (
-              <div>
-                <p className="text-sm text-gray-600">Producción</p>
-                <p className="font-semibold">{parseFloat(receta.produccion_gramos)}g</p>
-              </div>
-            )}
-            <div>
-              <p className="text-sm text-gray-600">Precio Venta</p>
-              <p className="font-semibold">{receta.precio_venta.toFixed(2)}€</p>
-            </div>
-          </div>
-        </div>
-
-        {receta.procedimiento && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-2xl font-semibold mb-4">📝 {receta.tipo === 'sub_receta' ? 'Procedimiento' : 'Descripción'}</h2>
-            <p className="text-gray-700 whitespace-pre-wrap">{receta.procedimiento}</p>
-          </div>
-        )}
-
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-2xl font-semibold mb-4">🥬 Ingredientes</h2>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-2">Ingrediente</th>
-                <th className="text-right py-2">Cantidad</th>
-                <th className="text-right py-2">Coste</th>
-              </tr>
-            </thead>
-            <tbody>
-              {detalles.map((detalle, idx) => (
-                <tr key={idx} className="border-b">
-                  <td className="py-3">{detalle.nombre}</td>
-                  <td className="text-right">{detalle.cantidad} {detalle.unidad}</td>
-                  <td className="text-right">{detalle.coste.toFixed(4)}€</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="font-semibold">
-                <td className="py-3">TOTAL</td>
-                <td></td>
-                <td className="text-right">{receta.coste_total.toFixed(2)}€</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-2xl font-semibold mb-4">💰 Resumen</h2>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-blue-50 p-4 rounded-lg text-center">
-              <p className="text-sm text-blue-600">Coste Total</p>
-              <p className="text-2xl font-bold text-blue-900">{receta.coste_total.toFixed(2)}€</p>
-            </div>
-            <div className={`p-4 rounded-lg text-center ${calcularFoodCost() < 25 ? 'bg-green-50' : 'bg-yellow-50'}`}>
-              <p className="text-sm">Food Cost</p>
-              <p className={`text-2xl font-bold ${calcularFoodCost() < 25 ? 'text-green-900' : 'text-yellow-900'}`}>
-                {calcularFoodCost().toFixed(1)}%
-              </p>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-lg text-center">
-              <p className="text-sm text-gray-600">Precio Venta</p>
-              <p className="text-2xl font-bold">{receta.precio_venta.toFixed(2)}€</p>
-            </div>
-          </div>
-        </div>
-
+    <div className="min-h-screen bg-gray-100 py-8 px-4">
+      {/* Botones de navegación (no se imprimen) */}
+      <div className="max-w-[210mm] mx-auto mb-4 flex justify-between items-center no-print">
         <button
-          onClick={() => window.print()}
-          className="w-full py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-lg"
+          onClick={() => router.push('/recetas')}
+          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm"
         >
-           Imprimir / Descargar PDF
+          ← Volver al listado
         </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => router.push(`/recetas/${recetaId}/editar`)}
+            className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 text-sm"
+          >
+            ✏️ Editar
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+          >
+            📄 Imprimir / PDF
+          </button>
+        </div>
       </div>
 
-      <style jsx global>{`
-        @media print {
-          body * { visibility: hidden; }
-          .max-w-4xl, .max-w-4xl * { visibility: visible; }
-          .max-w-4xl { position: absolute; left: 0; top: 0; width: 100%; }
-          button { display: none !important; }
-        }
-      `}</style>
+      {/* Ficha A4 */}
+      <div className="ficha-a4 max-w-[210mm] mx-auto bg-white shadow-lg" style={{ minHeight: '297mm' }}>
+        
+        {/* HEADER */}
+        <div className="flex items-start gap-4 px-6 pt-6 pb-4 border-b-2 border-gray-800">
+          {receta.foto_url && (
+            <div className="flex-shrink-0">
+              <img
+                src={receta.foto_url}
+                alt={receta.nombre}
+                className="w-24 h-24 object-cover rounded-lg border-2 border-gray-300"
+              />
+            </div>
+          )}
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-gray-900 uppercase tracking-wide">
+              {receta.nombre}
+            </h1>
+            <div className="flex gap-4 mt-2 text-sm text-gray-600">
+              <span>
+                <strong>Tipo:</strong> {receta.tipo === 'plato' ? 'Plato Principal' : 'Sub-receta'}
+              </span>
+              <span>
+                <strong>Porciones:</strong> {receta.porciones}
+              </span>
+              {receta.produccion_gramos && (
+                <span>
+                  <strong>Producción:</strong> {parseFloat(receta.produccion_gramos)}g
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* CONTENIDO EN 2 COLUMNAS */}
+        <div className="px-6 py-4 grid grid-cols-2 gap-4">
+          
+          {/* COLUMNA IZQUIERDA: INGREDIENTES */}
+          <div>
+            <h2 className="text-sm font-bold text-gray-800 uppercase border-b border-gray-400 pb-1 mb-2">
+              🥬 Ingredientes
+            </h2>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-300">
+                  <th className="text-left py-1 font-semibold text-gray-700">Ingrediente</th>
+                  <th className="text-right py-1 font-semibold text-gray-700">Cant.</th>
+                  <th className="text-right py-1 font-semibold text-gray-700">Coste</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detalles.map((detalle, idx) => (
+                  <tr key={idx} className="border-b border-gray-100">
+                    <td className="py-1 text-gray-800">{detalle.nombre}</td>
+                    <td className="text-right py-1 text-gray-600">{detalle.cantidad} {detalle.unidad}</td>
+                    <td className="text-right py-1 text-gray-600">{detalle.coste.toFixed(3)}€</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-gray-400 font-bold">
+                  <td className="py-1 text-gray-900">TOTAL</td>
+                  <td></td>
+                  <td className="text-right py-1 text-gray-900">{receta.coste_total.toFixed(2)}€</td>
+                </tr>
+              </tfoot>
+            </table>
+
+            {/* RESUMEN ECONÓMICO */}
+            <div className="mt-4 bg-gray-50 rounded-lg p-3 border border-gray-200">
+              <h3 className="text-xs font-bold text-gray-700 uppercase mb-2"> Datos Económicos</h3>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <p className="text-xs text-gray-500">Coste</p>
+                  <p className="text-sm font-bold text-blue-700">{receta.coste_total.toFixed(2)}€</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">P. Venta</p>
+                  <p className="text-sm font-bold text-gray-900">{receta.precio_venta.toFixed(2)}€</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Food Cost</p>
+                  <p className={`text-sm font-bold ${foodCost < 25 ? 'text-green-700' : foodCost <= 33 ? 'text-yellow-700' : 'text-red-700'}`}>
+                    {foodCost.toFixed(1)}%
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* COLUMNA DERECHA: PROCEDIMIENTO */}
+          <div>
+            <h2 className="text-sm font-bold text-gray-800 uppercase border-b border-gray-400 pb-1 mb-2">
+               {receta.tipo === 'sub_receta' ? 'Procedimiento' : 'Descripción / Ejecución'}
+            </h2>
+            {receta.procedimiento ? (
+              <div className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
+                {receta.procedimiento}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400 italic">Sin procedimiento definido</p>
+            )}
+          </div>
+        </div>
+
+        {/* FOOTER */}
+        <div className="px-6 pb-4 pt-2 border-t border-gray-300 mt-auto">
+          <div className="flex justify-between items-center text-xs text-gray-500">
+            <span>Ficha técnica generada el {new Date().toLocaleDateString('es-ES')}</span>
+            <span>Restaurant Manager</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
