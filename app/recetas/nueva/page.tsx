@@ -226,17 +226,14 @@ export default function NuevaReceta() {
 
       if (file.size > 5 * 1024 * 1024) {
         setMensaje('⚠️ La imagen no puede superar los 5MB');
-        console.error('❌ Archivo demasiado grande');
         return;
       }
       
       if (!file.type.startsWith('image/')) {
         setMensaje('⚠️ Solo se permiten imágenes');
-        console.error(' No es una imagen');
         return;
       }
 
-      console.log('✅ Archivo válido, procesando...');
       setFotoFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -245,8 +242,6 @@ export default function NuevaReceta() {
       };
       reader.readAsDataURL(file);
       setMensaje('');
-    } else {
-      console.log('️ No se seleccionó archivo');
     }
   }
 
@@ -357,25 +352,20 @@ export default function NuevaReceta() {
 
   async function subirFoto(recetaId: string): Promise<string | null> {
     if (!fotoFile) {
-      console.log('️ No hay fotoFile para subir');
+      console.log('️ No hay fotoFile');
       return null;
     }
 
-    console.log(' Iniciando subida de foto:', {
-      nombre: fotoFile.name,
-      tamaño: fotoFile.size,
-      recetaId: recetaId
-    });
+    console.log('📸 Iniciando subida de foto...');
 
     try {
       setSubiendoFoto(true);
       const fileExt = fotoFile.name.split('.').pop();
       const fileName = `${recetaId}-${Date.now()}.${fileExt}`;
       
-      console.log('📁 Nombre del archivo:', fileName);
+      console.log('📁 Nombre archivo:', fileName);
       console.log('📦 Bucket: recetas-fotos');
 
-      console.log('️ Subiendo a Supabase Storage...');
       const { data, error: uploadError } = await supabase.storage
         .from('recetas-fotos')
         .upload(fileName, fotoFile, {
@@ -384,18 +374,17 @@ export default function NuevaReceta() {
         });
 
       if (uploadError) {
-        console.error('❌ Error subiendo foto:', uploadError);
-        console.error('Detalles:', JSON.stringify(uploadError, null, 2));
+        console.error('❌ Error subiendo:', uploadError);
         throw uploadError;
       }
 
-      console.log('✅ Foto subida exitosamente:', data);
+      console.log('✅ Foto subida:', data);
 
       const { data: urlData } = supabase.storage
         .from('recetas-fotos')
         .getPublicUrl(fileName);
 
-      console.log(' URL pública generada:', urlData.publicUrl);
+      console.log(' URL:', urlData.publicUrl);
 
       return urlData.publicUrl;
     } catch (error) {
@@ -413,7 +402,7 @@ export default function NuevaReceta() {
     }
 
     if (itemsSeleccionados.length === 0) {
-      setMensaje('⚠️ Añade al menos un ingrediente o sub-receta');
+      setMensaje('️ Añade al menos un ingrediente o sub-receta');
       return;
     }
 
@@ -427,20 +416,15 @@ export default function NuevaReceta() {
 
     try {
       const recetaId = crypto.randomUUID();
-      console.log('🆔 recetaId generado:', recetaId);
+      console.log('🆔 recetaId:', recetaId);
 
       let fotoUrl = null;
       if (fotoFile) {
-        console.log(' Hay fotoFile, iniciando subida...');
+        console.log('📸 Subiendo foto...');
         fotoUrl = await subirFoto(recetaId);
-        console.log('✅ fotoUrl resultante:', fotoUrl);
-        
-        if (!fotoUrl) {
-          console.warn('⚠️ La foto no se subió, pero continuamos sin imagen');
-          setMensaje('⚠️ Error al subir la foto, pero la receta se guardará sin imagen');
-        }
+        console.log('✅ fotoUrl:', fotoUrl);
       } else {
-        console.log('️ No hay fotoFile, receta sin imagen');
+        console.log('ℹ️ Sin foto');
       }
 
       const recetaData = {
@@ -456,7 +440,7 @@ export default function NuevaReceta() {
         created_at: new Date().toISOString()
       };
 
-      console.log('💾 Datos a guardar:', recetaData);
+      console.log('💾 Guardando:', recetaData);
 
       const { data, error: recetaError } = await supabase
         .from('recetas')
@@ -465,11 +449,11 @@ export default function NuevaReceta() {
         .single();
 
       if (recetaError) {
-        console.error('❌ Error guardando receta:', recetaError);
+        console.error('❌ Error:', recetaError);
         throw recetaError;
       }
 
-      console.log('✅ Receta guardada en BD:', data);
+      console.log('✅ Receta guardada:', data);
 
       const detalles = itemsSeleccionados.map((item) => ({
         id: crypto.randomUUID(),
@@ -496,7 +480,7 @@ export default function NuevaReceta() {
       }, 1500);
 
     } catch (error: any) {
-      console.error('❌ Error guardando receta:', error);
+      console.error(' Error:', error);
       setMensaje(`❌ Error: ${error.message}`);
     } finally {
       setGuardando(false);
@@ -507,7 +491,7 @@ export default function NuevaReceta() {
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900"> Nueva Receta</h1>
+          <h1 className="text-4xl font-bold text-gray-900">🍳 Nueva Receta</h1>
           <button
             onClick={() => router.push('/recetas')}
             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
@@ -527,7 +511,7 @@ export default function NuevaReceta() {
         )}
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4"> Datos básicos</h2>
+          <h2 className="text-xl font-semibold mb-4">📋 Datos básicos</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -557,7 +541,7 @@ export default function NuevaReceta() {
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
-                <option value="plato">️ Plato Principal</option>
+                <option value="plato">🍽️ Plato Principal</option>
                 <option value="sub_receta">🥘 Sub-receta</option>
               </select>
             </div>
@@ -625,7 +609,6 @@ export default function NuevaReceta() {
               </select>
             </div>
 
-            {/* CAMPO DE FOTO */}
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 📸 Foto de la receta (opcional)
@@ -649,7 +632,7 @@ export default function NuevaReceta() {
                     className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm"
                     title="Eliminar foto"
                   >
-                    ️
+                    🗑️
                   </button>
                 )}
               </div>
@@ -757,7 +740,7 @@ export default function NuevaReceta() {
                     <div>
                       <span className="font-medium text-gray-900">{item.nombre}</span>
                       <span className="ml-2 text-xs text-gray-500">
-                        {item.tipo === 'subreceta' ? '🥘 Sub-receta' : `📦 ${item.unidad}`}
+                        {item.tipo === 'subreceta' ? ' Sub-receta' : `📦 ${item.unidad}`}
                       </span>
                     </div>
                     <span className="text-sm text-gray-500">
@@ -899,7 +882,7 @@ export default function NuevaReceta() {
                   ? 'text-yellow-600' 
                   : 'text-red-600'
               }`}>
-                 Food Cost
+                📊 Food Cost
               </p>
               <p className={`text-2xl font-bold ${
                 parseFloat(calcularFoodCostPorcentaje()) < 25 
@@ -929,7 +912,7 @@ export default function NuevaReceta() {
                   ? 'text-yellow-600' 
                   : 'text-red-600'
               }`}>
-                 Margen Neto
+                💵 Margen Neto
               </p>
               <p className={`text-2xl font-bold ${
                 parseFloat(calcularMargenNeto()) >= 60 
