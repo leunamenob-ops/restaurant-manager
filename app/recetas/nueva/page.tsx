@@ -329,20 +329,19 @@ export default function NuevaReceta() {
     try {
       const recetaId = crypto.randomUUID();
 
-      const { error: recetaError } = await supabase
-        .from('recetas')
-        .insert({
-          id: recetaId,
-          nombre: nombre.trim(),
-          tipo,
-          porciones,
-          produccion_gramos: tipo === 'sub_receta' ? String(produccionGramos) : null,
-          precio_venta: precioVenta,
-          coste_total: calcularCosteTotal(),
-          hotel_id: hotelId || '00000000-0000-0000-0000-000000000001',
-          created_at: new Date().toISOString()
-        });
-
+     const { error: recetaError } = await supabase
+  .from('recetas')
+  .insert({
+    id: recetaId,
+    nombre: nombre.trim(),
+    tipo,
+    porciones,
+    produccion_gramos: tipo === 'sub_receta' ? String(produccionGramos) : null,
+    precio_venta: precioVenta,
+    coste_total: calcularCosteTotal(),
+    hotel_id: hotelId || '00000000-0000-0000-0000-000000000001',
+    created_at: new Date().toISOString()
+  });
       if (recetaError) throw recetaError;
 
       const detalles = itemsSeleccionados.map((item) => ({
