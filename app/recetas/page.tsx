@@ -12,6 +12,7 @@ interface Receta {
   coste_total: number;
   precio_venta: number;
   produccion_gramos: string | null;
+  foto_url: string | null;
   created_at: string;
 }
 
@@ -91,7 +92,7 @@ export default function RecetasPage() {
             <div className="flex-1 min-w-[300px]">
               <input
                 type="text"
-                placeholder=" Buscar receta por nombre..."
+                placeholder="Buscar receta por nombre..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
@@ -104,8 +105,8 @@ export default function RecetasPage() {
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
               >
                 <option value="todas">Todas las recetas</option>
-                <option value="plato">️ Platos</option>
-                <option value="sub_receta">🥘 Sub-recetas</option>
+                <option value="plato">🍽️ Platos</option>
+                <option value="sub_receta"> Sub-recetas</option>
               </select>
             </div>
           </div>
@@ -147,12 +148,23 @@ export default function RecetasPage() {
                   return (
                     <tr key={receta.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
-                        <div className="font-medium text-gray-900">{receta.nombre}</div>
-                        {esSubReceta && receta.produccion_gramos && (
-                          <div className="text-sm text-gray-500">
-                            Producción: {parseFloat(receta.produccion_gramos)}g
+                        <div className="flex items-center gap-3">
+                          {receta.foto_url && (
+                            <img
+                              src={receta.foto_url}
+                              alt={receta.nombre}
+                              className="w-12 h-12 object-cover rounded-lg border border-gray-200"
+                            />
+                          )}
+                          <div>
+                            <div className="font-medium text-gray-900">{receta.nombre}</div>
+                            {esSubReceta && receta.produccion_gramos && (
+                              <div className="text-sm text-gray-500">
+                                Producción: {parseFloat(receta.produccion_gramos)}g
+                              </div>
+                            )}
                           </div>
-                        )}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -184,16 +196,23 @@ export default function RecetasPage() {
                       <td className="px-6 py-4 text-right">
                         <div className="flex gap-2 justify-end">
                           <button
+                            onClick={() => router.push(`/recetas/${receta.id}`)}
+                            className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs font-medium transition"
+                            title="Ver ficha técnica"
+                          >
+                            ️ Ver
+                          </button>
+                          <button
                             onClick={() => router.push(`/recetas/${receta.id}/editar`)}
                             className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-xs font-medium transition"
                           >
-                            Editar
+                            ✏️ Editar
                           </button>
                           <button
                             onClick={() => eliminarReceta(receta.id, receta.nombre)}
                             className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-xs font-medium transition"
                           >
-                            Eliminar
+                            🗑️ Eliminar
                           </button>
                         </div>
                       </td>
