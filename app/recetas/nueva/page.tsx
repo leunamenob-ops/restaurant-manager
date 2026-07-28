@@ -217,23 +217,36 @@ export default function NuevaReceta() {
   function handleFotoChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (file) {
+      console.log('📁 Archivo seleccionado:', {
+        nombre: file.name,
+        tipo: file.type,
+        tamaño: file.size,
+        tamañoMB: (file.size / 1024 / 1024).toFixed(2)
+      });
+
       if (file.size > 5 * 1024 * 1024) {
         setMensaje('⚠️ La imagen no puede superar los 5MB');
+        console.error('❌ Archivo demasiado grande');
         return;
       }
       
       if (!file.type.startsWith('image/')) {
-        setMensaje('️ Solo se permiten imágenes');
+        setMensaje('⚠️ Solo se permiten imágenes');
+        console.error(' No es una imagen');
         return;
       }
 
+      console.log('✅ Archivo válido, procesando...');
       setFotoFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setFotoPreview(reader.result as string);
+        console.log('✅ Preview generado');
       };
       reader.readAsDataURL(file);
       setMensaje('');
+    } else {
+      console.log('️ No se seleccionó archivo');
     }
   }
 
@@ -343,14 +356,27 @@ export default function NuevaReceta() {
   }
 
   async function subirFoto(recetaId: string): Promise<string | null> {
-    if (!fotoFile) return null;
+    if (!fotoFile) {
+      console.log('️ No hay fotoFile para subir');
+      return null;
+    }
+
+    console.log(' Iniciando subida de foto:', {
+      nombre: fotoFile.name,
+      tamaño: fotoFile.size,
+      recetaId: recetaId
+    });
 
     try {
       setSubiendoFoto(true);
       const fileExt = fotoFile.name.split('.').pop();
       const fileName = `${recetaId}-${Date.now()}.${fileExt}`;
+      
+      console.log('📁 Nombre del archivo:', fileName);
+      console.log('📦 Bucket: RECETAS-FOTOS');
 
-      const { error: uploadError } = await supabase.storage
+      console.log('️ Subiendo a Supabase Storage...');
+      const { data, error: uploadError } = await supabase.storage
         .from('RECETAS-FOTOS')
         .upload(fileName, fotoFile, {
           cacheControl: '3600',
@@ -358,17 +384,22 @@ export default function NuevaReceta() {
         });
 
       if (uploadError) {
-        console.error('Error subiendo foto:', uploadError);
+        console.error('❌ Error subiendo foto:', uploadError);
+        console.error('Detalles:', JSON.stringify(uploadError, null, 2));
         throw uploadError;
       }
+
+      console.log('✅ Foto subida exitosamente:', data);
 
       const { data: urlData } = supabase.storage
         .from('RECETAS-FOTOS')
         .getPublicUrl(fileName);
 
+      console.log(' URL pública generada:', urlData.publicUrl);
+
       return urlData.publicUrl;
     } catch (error) {
-      console.error('Error en subirFoto:', error);
+      console.error('❌ Error en subirFoto:', error);
       return null;
     } finally {
       setSubiendoFoto(false);
@@ -396,31 +427,49 @@ export default function NuevaReceta() {
 
     try {
       const recetaId = crypto.randomUUID();
+      console.log('🆔 recetaId generado:', recetaId);
 
       let fotoUrl = null;
       if (fotoFile) {
+        console.log(' Hay fotoFile, iniciando subida...');
         fotoUrl = await subirFoto(recetaId);
+        console.log('✅ fotoUrl resultante:', fotoUrl);
+        
         if (!fotoUrl) {
-          setMensaje('️ Error al subir la foto, pero la receta se guardará sin imagen');
+          console.warn('⚠️ La foto no se subió, pero continuamos sin imagen');
+          setMensaje('⚠️ Error al subir la foto, pero la receta se guardará sin imagen');
         }
+      } else {
+        console.log('️ No hay fotoFile, receta sin imagen');
       }
 
-      const { error: recetaError } = await supabase
-        .from('recetas')
-        .insert({
-          id: recetaId,
-          nombre: nombre.trim(),
-          tipo,
-          porciones,
-          produccion_gramos: tipo === 'sub_receta' ? String(produccionGramos) : null,
-          precio_venta: precioVenta,
-          coste_total: calcularCosteTotal(),
-          foto_url: fotoUrl,
-          hotel_id: hotelId || '00000000-0000-0000-0000-000000000001',
-          created_at: new Date().toISOString()
-        });
+      const recetaData = {
+        id: recetaId,
+        nombre: nombre.trim(),
+        tipo,
+        porciones,
+        produccion_gramos: tipo === 'sub_receta' ? String(produccionGramos) : null,
+        precio_venta: precioVenta,
+        coste_total: calcularCosteTotal(),
+        foto_url: fotoUrl,
+        hotel_id: hotelId || '00000000-0000-0000-0000-000000000001',
+        created_at: new Date().toISOString()
+      };
 
-      if (recetaError) throw recetaError;
+      console.log('💾 Datos a guardar:', recetaData);
+
+      const { data, error: recetaError } = await supabase
+        .from('recetas')
+        .insert(recetaData)
+        .select()
+        .single();
+
+      if (recetaError) {
+        console.error('❌ Error guardando receta:', recetaError);
+        throw recetaError;
+      }
+
+      console.log('✅ Receta guardada en BD:', data);
 
       const detalles = itemsSeleccionados.map((item) => ({
         id: crypto.randomUUID(),
@@ -447,7 +496,7 @@ export default function NuevaReceta() {
       }, 1500);
 
     } catch (error: any) {
-      console.error('Error guardando receta:', error);
+      console.error('❌ Error guardando receta:', error);
       setMensaje(`❌ Error: ${error.message}`);
     } finally {
       setGuardando(false);
@@ -600,7 +649,7 @@ export default function NuevaReceta() {
                     className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm"
                     title="Eliminar foto"
                   >
-                    🗑️
+                    ️
                   </button>
                 )}
               </div>
@@ -850,7 +899,7 @@ export default function NuevaReceta() {
                   ? 'text-yellow-600' 
                   : 'text-red-600'
               }`}>
-                📊 Food Cost
+                 Food Cost
               </p>
               <p className={`text-2xl font-bold ${
                 parseFloat(calcularFoodCostPorcentaje()) < 25 
@@ -880,7 +929,7 @@ export default function NuevaReceta() {
                   ? 'text-yellow-600' 
                   : 'text-red-600'
               }`}>
-                💵 Margen Neto
+                 Margen Neto
               </p>
               <p className={`text-2xl font-bold ${
                 parseFloat(calcularMargenNeto()) >= 60 
