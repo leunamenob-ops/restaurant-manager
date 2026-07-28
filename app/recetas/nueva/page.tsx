@@ -329,7 +329,9 @@ export default function NuevaReceta() {
     try {
       const recetaId = crypto.randomUUID();
 
-     const { error: recetaError } = await supabase
+     console.log('Intentando guardar con hotel_id:', hotelId);
+
+const { error: recetaError } = await supabase
   .from('recetas')
   .insert({
     id: recetaId,
@@ -339,9 +341,14 @@ export default function NuevaReceta() {
     produccion_gramos: tipo === 'sub_receta' ? String(produccionGramos) : null,
     precio_venta: precioVenta,
     coste_total: calcularCosteTotal(),
-    hotel_id: hotelId || '00000000-0000-0000-0000-000000000001',
+    hotel_id: hotelId || null, // Intenta con null si no hay
     created_at: new Date().toISOString()
   });
+
+if (recetaError) {
+  console.error('Error detallado:', recetaError);
+  throw recetaError;
+}
       if (recetaError) throw recetaError;
 
       const detalles = itemsSeleccionados.map((item) => ({
