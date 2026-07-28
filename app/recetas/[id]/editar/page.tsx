@@ -146,7 +146,7 @@ export default function EditarReceta() {
 
     if (recetaError || !recetaData) {
       console.error('❌ Error cargando receta:', recetaError);
-      setMensaje(' Error cargando la receta');
+      setMensaje('❌ Error cargando la receta');
       setLoading(false);
       return;
     }
@@ -192,9 +192,9 @@ export default function EditarReceta() {
               costeUnitario: ing.precio_compra_actual || 0
             });
           } else {
-            console.warn('️ Ingrediente no encontrado:', detalle.ingrediente_id);
+            console.warn('⚠️ Ingrediente no encontrado:', detalle.ingrediente_id);
           }
-        } else if (detalle.subreceta_id) {
+        } else if (detalle.subreceta_id && subRecetasData) {
           const sub = subRecetasData.find(s => s.id === detalle.subreceta_id);
           if (sub) {
             const gramos = sub.produccion_gramos ? parseFloat(sub.produccion_gramos as unknown as string) : 0;
@@ -403,12 +403,12 @@ export default function EditarReceta() {
     }
 
     if (itemsEditados.length === 0) {
-      setMensaje('⚠️ Añade al menos un ingrediente o sub-receta');
+      setMensaje('️ Añade al menos un ingrediente o sub-receta');
       return;
     }
 
     if (tipo === 'sub_receta' && (!produccionGramos || produccionGramos <= 0)) {
-      setMensaje('️ Para sub-recetas, debes especificar la producción en gramos');
+      setMensaje('⚠️ Para sub-recetas, debes especificar la producción en gramos');
       return;
     }
 
@@ -445,7 +445,7 @@ export default function EditarReceta() {
         subreceta_id: item.tipo === 'subreceta' ? item.subreceta_id : null,
         cantidad_necesaria: item.cantidad,
         coste_linea: item.coste,
-        unidad: item.unidad, // ← GUARDAR UNIDAD NORMALIZADA
+        unidad: item.unidad,
         created_at: new Date().toISOString()
       }));
 
@@ -531,7 +531,7 @@ export default function EditarReceta() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="plato">🍽️ Plato Principal</option>
-                <option value="sub_receta"> Sub-receta</option>
+                <option value="sub_receta">🥘 Sub-receta</option>
               </select>
             </div>
 
@@ -776,7 +776,7 @@ export default function EditarReceta() {
                         className="text-red-600 hover:text-red-800 p-1"
                         title="Eliminar"
                       >
-                        🗑️
+                        ️
                       </button>
                     </div>
                   </li>
@@ -833,7 +833,7 @@ export default function EditarReceta() {
                   ? 'text-yellow-600' 
                   : 'text-red-600'
               }`}>
-                 Food Cost
+                📊 Food Cost
               </p>
               <p className={`text-2xl font-bold ${
                 parseFloat(calcularFoodCostPorcentaje()) < 25 
