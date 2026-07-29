@@ -218,6 +218,7 @@ export default function PedidosPage() {
             proveedor_email: provData?.email || null,
             usuario_nombre: 'Cocina',
             total_articulos: data.items.length,
+            total_estimado: data.total,
             estado: 'enviado',
             fecha: fechaISO,
             created_at: fechaISO
@@ -232,6 +233,7 @@ export default function PedidosPage() {
 
         console.log('✅ Pedido guardado:', pedidoData);
 
+        // CORRECCIÓN: Añadidos precio_unitario y subtotal
         const itemsToInsert = data.items.map((item: any) => ({
           id: crypto.randomUUID(),
           pedido_id: pedidoData.id,
@@ -242,6 +244,8 @@ export default function PedidosPage() {
           cantidad_recibida: 0,
           unidad: item.unidad_compra,
           estado: 'pendiente',
+          precio_unitario: item.precioUnitario || 0,
+          subtotal: item.subtotal || 0,
           created_at: fechaISO
         }));
 
@@ -331,7 +335,7 @@ export default function PedidosPage() {
               </button>
               
               <button
-                onClick={() => window.location.href = '/pedidos/historial'}
+                onClick={() => window.location.href = '/pedidos/historials'}
                 className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-medium transition-all text-sm flex items-center gap-2"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
