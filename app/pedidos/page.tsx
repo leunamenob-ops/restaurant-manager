@@ -17,7 +17,6 @@ export default function PedidosPage() {
   
   const filtroRef = useRef<HTMLDivElement>(null);
 
-  // Cargar todos los productos al inicio
   const cargarProductos = useCallback(async () => {
     setLoading(true);
     
@@ -81,7 +80,6 @@ export default function PedidosPage() {
     cargarProductos();
   }, [cargarProductos]);
 
-  // Filtrado client-side
   useEffect(() => {
     let filtrados = [...todosProductos];
 
@@ -183,7 +181,6 @@ export default function PedidosPage() {
 
   const totalUnidades = carrito.reduce((sum, item) => sum + item.cantidad, 0);
 
-  // FUNCIÓN DE ENVÍO DE PEDIDO (LIMPIA Y SIN DUPLICADOS)
   async function enviarPedido() {
     if (carrito.length === 0) {
       alert('El carrito está vacío');
@@ -199,9 +196,8 @@ export default function PedidosPage() {
       const fechaISO = new Date().toISOString();
 
       for (const [provNombre, data] of Object.entries(porProveedor) as [string, any][]) {
-        console.log(`\n📦 Procesando proveedor: ${provNombre}`);
+        console.log(`\n Procesando proveedor: ${provNombre}`);
         
-        // Buscar proveedor por nombre exacto
         const { data: provData, error: provError } = await supabase
           .from('proveedores')
           .select('id, email')
@@ -212,7 +208,6 @@ export default function PedidosPage() {
           console.error(`Error buscando proveedor ${provNombre}:`, provError);
         }
 
-        // Insertar pedido
         const { data: pedidoData, error: pedidoError } = await supabase
           .from('pedidos')
           .insert({
@@ -237,7 +232,6 @@ export default function PedidosPage() {
 
         console.log('✅ Pedido guardado:', pedidoData);
 
-        // Insertar items
         const itemsToInsert = data.items.map((item: any) => ({
           id: crypto.randomUUID(),
           pedido_id: pedidoData.id,
@@ -261,7 +255,6 @@ export default function PedidosPage() {
           console.log('✅ Items guardados:', itemsToInsert.length);
         }
 
-        // Enviar email
         if (provData?.email) {
           try {
             const response = await fetch('/api/enviar-pedido', {
@@ -308,7 +301,6 @@ export default function PedidosPage() {
     }
   }
 
-  // Esta línea debe estar FUERA de enviarPedido, pero DENTRO del componente
   const totalesPorProveedor = calcularTotalesPorProveedor();
 
   return (
@@ -327,18 +319,40 @@ export default function PedidosPage() {
                 <p className="text-sm text-slate-500">Sistema de aprovisionamiento de cocina</p>
               </div>
             </div>
-            <button
-              onClick={() => setMostrarCarrito(true)}
-              className="relative px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium transition-all text-sm flex items-center gap-2 shadow-sm"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-              Carrito
-              {carrito.length > 0 && (
-                <span className="absolute -top-2 -right-2 bg-emerald-500 text-white w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold shadow-md border-2 border-white">
-                  {carrito.length}
-                </span>
-              )}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => window.location.href = '/'}
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium transition-all text-sm flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                Dashboard
+              </button>
+              
+              <button
+                onClick={() => window.location.href = '/pedidos/historial'}
+                className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-medium transition-all text-sm flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Historial
+              </button>
+              
+              <button
+                onClick={() => setMostrarCarrito(true)}
+                className="relative px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium transition-all text-sm flex items-center gap-2 shadow-sm"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                Carrito
+                {carrito.length > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-emerald-500 text-white w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold shadow-md border-2 border-white">
+                    {carrito.length}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </header>
