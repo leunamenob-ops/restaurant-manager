@@ -8,7 +8,6 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { proveedor, email, numeroPedido, fecha, items, usuario, total } = body;
 
-    // Email HTML profesional (sin PDF)
     const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -35,48 +34,45 @@ export async function POST(request: Request) {
           <div class="info">
             <p style="margin:8px 0;"><strong>📅 Fecha:</strong> ${fecha}</p>
             <p style="margin:8px 0;"><strong>🏪 Restaurante:</strong> ${usuario}</p>
-            <p style="margin:8px 0;"><strong>📦 Total productos:</strong> ${items.length} items</p>
+            <p style="margin:8px 0;"><strong> Total productos:</strong> ${items.length} items</p>
           </div>
           
           <h2 style="color:#059669;font-size:18px;">Productos solicitados:</h2>
           <table class="table">
             <thead>
               <tr>
-                <th>Código</th>
                 <th>Descripción</th>
                 <th style="text-align:center;">Cantidad</th>
                 <th style="text-align:center;">Unidad</th>
-                <th style="text-align:right;">Precio</th>
+                <th style="text-align:right;">Precio Unit.</th>
                 <th style="text-align:right;">Subtotal</th>
               </tr>
             </thead>
             <tbody>
               ${items.map((item: any) => `
                 <tr>
-                  <td>${item.codigo || 'N/A'}</td>
-                  <td>${item.descripcion}</td>
+                  <td><strong>${item.descripcion}</strong></td>
                   <td style="text-align:center;">${item.cantidad}</td>
                   <td style="text-align:center;">${item.unidad}</td>
                   <td style="text-align:right;">${item.precio.toFixed(2)} €</td>
-                  <td style="text-align:right;font-weight:bold;">${item.subtotal.toFixed(2)} €</td>
+                  <td style="text-align:right;font-weight:bold;color:#059669;">${item.subtotal.toFixed(2)} €</td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
           
           <div class="total">
-            <p style="font-size:14px;color:#059669;margin:0;font-weight:600;">TOTAL ESTIMADO</p>
+            <p style="font-size:14px;color:#059669;margin:0;font-weight:600;">TOTAL ESTIMADO DEL PEDIDO</p>
             <p class="total-amount" style="margin:5px 0 0;">${total.toFixed(2)} €</p>
           </div>
         </div>
         <div class="footer">
-          <p>KOST Software - kostsoftware.com</p>
+          <p style="margin:0;">KOST Software - kostsoftware.com</p>
         </div>
       </body>
       </html>
     `;
 
-    // Enviar email SIN PDF
     const { data, error } = await resend.emails.send({
       from: process.env.EMAIL_FROM || 'KOST Software <pedidos@kostsoftware.com>',
       to: [email],
