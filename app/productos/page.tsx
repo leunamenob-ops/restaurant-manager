@@ -26,7 +26,8 @@ export default function ProductosPage() {
     categoria: 'Comida',
     unidad_compra: 'Kg.',
     precio_compra_actual: '',
-    proveedor_nombre: ''
+    proveedor_nombre: '',
+    hotel_id: ''
   });
   
   // Formulario proveedor
@@ -35,7 +36,8 @@ export default function ProductosPage() {
     codigo: '',
     contacto: '',
     telefono: '',
-    email: ''
+    email: '',
+    hotel_id: '' // Añadido hotel_id
   });
   
   const [paginaActual, setPaginaActual] = useState(1);
@@ -85,7 +87,7 @@ export default function ProductosPage() {
       // 2. Cargar proveedores EXPLÍCITAMENTE (para que aparezcan aunque no tengan ingredientes)
       const { data: proveedoresData, error: provError } = await supabase
         .from('proveedores')
-        .select('nombre')
+        .select('nombre, hotel_id')
         .order('nombre');
 
       let listaProveedores: string[] = [];
@@ -184,13 +186,14 @@ export default function ProductosPage() {
           categoria: nuevoIngrediente.categoria,
           unidad_compra: nuevoIngrediente.unidad_compra,
           precio_compra_actual: nuevoIngrediente.precio_compra_actual ? parseFloat(nuevoIngrediente.precio_compra_actual) : null,
-          proveedor_nombre: nuevoIngrediente.proveedor_nombre
+          proveedor_nombre: nuevoIngrediente.proveedor_nombre,
+          hotel_id: nuevoIngrediente.hotel_id || null
         }]);
 
       if (error) throw error;
 
       setMostrarModalIngrediente(false);
-      setNuevoIngrediente({ nombre: '', categoria: 'Comida', unidad_compra: 'Kg.', precio_compra_actual: '', proveedor_nombre: '' });
+      setNuevoIngrediente({ nombre: '', categoria: 'Comida', unidad_compra: 'Kg.', precio_compra_actual: '', proveedor_nombre: '', hotel_id: '' });
       cargarProductos();
     } catch (err: any) {
       alert('Error: ' + err.message);
@@ -198,23 +201,29 @@ export default function ProductosPage() {
   }
 
   async function guardarProveedor() {
+    if (!nuevoProveedor.email) {
+      alert('⚠️ El email es obligatorio para poder enviar pedidos automáticamente');
+      return;
+    }
+    
     try {
       const { error } = await supabase
         .from('proveedores')
         .insert([{
-          id: crypto.randomUUID(), // Genera el ID explícitamente para evitar nulos
+          id: crypto.randomUUID(),
           nombre: nuevoProveedor.nombre,
           codigo: nuevoProveedor.codigo,
           contacto: nuevoProveedor.contacto,
           telefono: nuevoProveedor.telefono,
-          email: nuevoProveedor.email
+          email: nuevoProveedor.email,
+          hotel_id: nuevoProveedor.hotel_id || null // Añadido hotel_id
         }]);
 
       if (error) throw error;
 
       setMostrarModalProveedor(false);
-      setNuevoProveedor({ nombre: '', codigo: '', contacto: '', telefono: '', email: '' });
-      cargarProductos(); // Recarga para mostrar el nuevo proveedor inmediatamente
+      setNuevoProveedor({ nombre: '', codigo: '', contacto: '', telefono: '', email: '', hotel_id: '' });
+      cargarProductos();
     } catch (err: any) {
       alert('Error al guardar proveedor: ' + err.message);
     }
@@ -234,7 +243,8 @@ export default function ProductosPage() {
           categoria: productoEditando.categoria,
           unidad_compra: productoEditando.unidad_compra,
           precio_compra_actual: productoEditando.precio_compra_actual ? parseFloat(productoEditando.precio_compra_actual) : null,
-          proveedor_nombre: productoEditando.proveedor_nombre
+          proveedor_nombre: productoEditando.proveedor_nombre,
+          hotel_id: productoEditando.hotel_id || null
         })
         .eq('id', productoEditando.id);
 
@@ -656,6 +666,17 @@ export default function ProductosPage() {
                   ))}
                 </select>
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Hotel/Restaurante ID</label>
+                <input
+                  type="text"
+                  value={nuevoIngrediente.hotel_id}
+                  onChange={(e) => setNuevoIngrediente({...nuevoIngrediente, hotel_id: e.target.value})}
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition text-sm"
+                  placeholder="Ej: hotel_001"
+                />
+              </div>
             </div>
 
             <div className="flex gap-3 mt-8">
@@ -735,7 +756,7 @@ export default function ProductosPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Email *</label>
                 <input
                   type="email"
                   value={nuevoProveedor.email}
@@ -744,12 +765,23 @@ export default function ProductosPage() {
                   placeholder="email@ejemplo.com"
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Hotel/Restaurante ID</label>
+                <input
+                  type="text"
+                  value={nuevoProveedor.hotel_id}
+                  onChange={(e) => setNuevoProveedor({...nuevoProveedor, hotel_id: e.target.value})}
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition text-sm"
+                  placeholder="Ej: hotel_001"
+                />
+              </div>
             </div>
 
             <div className="flex gap-3 mt-8">
               <button
                 onClick={guardarProveedor}
-                disabled={!nuevoProveedor.nombre}
+                disabled={!nuevoProveedor.nombre || !nuevoProveedor.email}
                 className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-semibold text-sm"
               >
                 Guardar Proveedor
@@ -839,6 +871,16 @@ export default function ProductosPage() {
                     <option key={prov} value={prov}>{prov}</option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Hotel/Restaurante ID</label>
+                <input
+                  type="text"
+                  value={productoEditando.hotel_id || ''}
+                  onChange={(e) => setProductoEditando({...productoEditando, hotel_id: e.target.value})}
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition text-sm"
+                />
               </div>
             </div>
 
