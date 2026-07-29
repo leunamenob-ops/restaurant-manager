@@ -1,551 +1,462 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabaseClient';
 
-export default function LandingPage() {
-  const router = useRouter();
-  const [showLogin, setShowLogin] = useState(false);
-  const [codigo, setCodigo] = useState('');
-  const [pin, setPin] = useState('');
-  const [error, setError] = useState('');
+export default function PedidosPage() {
+  const [productos, setProductos] = useState<any[]>([]);
+  const [carrito, setCarrito] = useState<any[]>([]);
+  const [busqueda, setBusqueda] = useState('');
+  const [filtroProveedor, setFiltroProveedor] = useState('');
+  const [proveedores, setProveedores] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  
-  // Estados para la sección interactiva "Así funciona"
-  const [activeTab, setActiveTab] = useState<'escandallos' | 'inventario' | 'menu'>('escandallos');
-  
-  // Estado para el acordeón de FAQ
-  const [openFaq, setOpenFaq] = useState<string | null>(null);
+  const [mostrarCarrito, setMostrarCarrito] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [buscando, setBuscando] = useState(false);
 
+  // Cargar proveedores al iniciar
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    async function cargarProveedores() {
+      const { data } = await supabase
+        .from('proveedores')
+        .select('id, nombre')
+        .order('nombre');
+      if (data) setProveedores(data);
+    }
+    cargarProveedores();
   }, []);
 
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-  
-    const usuarioTemp = {
-      id: codigo || 'B0001',
-      nombre: 'Admin Temporal',
-      cargo: 'Administrador',
-      rol: 'ADMIN',
-      hotel_id: '00000000-0000-0000-0000-000000000001'
-    };
-  
-    const permisosTemp = {
-      'proveedores': { puede_ver: true, puede_crear: true, puede_editar: true, puede_eliminar: true, puede_exportar: true },
-      'recetas': { puede_ver: true, puede_crear: true, puede_editar: true, puede_eliminar: true, puede_exportar: true },
-      'pedidos': { puede_ver: true, puede_crear: true, puede_editar: true, puede_eliminar: true, puede_exportar: true },
-      'haccp': { puede_ver: true, puede_crear: true, puede_editar: true, puede_eliminar: true, puede_exportar: true },
-      'menu-engineering': { puede_ver: true, puede_crear: true, puede_editar: true, puede_eliminar: true, puede_exportar: true },
-      'inventarios': { puede_ver: true, puede_crear: true, puede_editar: true, puede_eliminar: true, puede_exportar: true },
-      'producciones': { puede_ver: true, puede_crear: true, puede_editar: true, puede_eliminar: true, puede_exportar: true },
-      'analisis-costes': { puede_ver: true, puede_crear: true, puede_editar: true, puede_eliminar: true, puede_exportar: true },
-      'informes': { puede_ver: true, puede_crear: true, puede_editar: true, puede_eliminar: true, puede_exportar: true },
-    };
-  
-    sessionStorage.setItem('usuario', JSON.stringify(usuarioTemp));
-    sessionStorage.setItem('permisos', JSON.stringify(permisosTemp));
-    sessionStorage.setItem('hotel_id', usuarioTemp.hotel_id);
-  
-    router.push('/dashboard');
-    setLoading(false);
+  // Búsqueda combinada - CORREGIDA
+  useEffect(() => {
+    async function buscarProductos() {
+      setBuscando(true);
+      
+      let query = supabase
+        .from('ingredientes')
+        .select(`
+          id,
+          nombre,
+          categoria,
+          unidad_compra,
+          precio_compra_actual,
+          proveedor_id,
+          proveedor_nombre
+        `)
+        .order('nombre')
+        .limit(100);
+
+      // Filtro por proveedor - CORREGIDO: usar proveedor_nombre
+      if (filtroProveedor) {
+        const provNombre = proveedores.find(p => p.id === filtroProveedor)?.nombre;
+        if (provNombre) {
+          query = query.eq('proveedor_nombre', provNombre);
+        }
+      }
+
+      // Filtro por texto
+      if (busqueda && busqueda.length >= 2) {
+        query = query.or(`nombre.ilike.%${busqueda}%,categoria.ilike.%${busqueda}%`);
+      }
+
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('Error en búsqueda:', error);
+      }
+      
+      if (data) {
+        // Transformar datos para mantener compatibilidad con el resto del código
+        const transformados = data.map(item => ({
+          ...item,
+          proveedores: {
+            nombre: item.proveedor_nombre || 'Sin proveedor'
+          }
+        }));
+        
+        const filtrados = transformados.filter((p, index, self) => 
+          p.nombre && p.nombre.trim() !== '' &&
+          self.findIndex(item => item.id === p.id) === index
+        );
+        setProductos(filtrados);
+      }
+      setBuscando(false);
+    }
+
+    const timer = setTimeout(buscarProductos, 300);
+    return () => clearTimeout(timer);
+  }, [busqueda, filtroProveedor, proveedores]);
+
+  function añadirAlCarrito(producto: any, cantidad: number) {
+    const existente = carrito.find(item => item.id === producto.id);
+    if (existente) {
+      setCarrito(carrito.map(item =>
+        item.id === producto.id ? { ...item, cantidad: item.cantidad + cantidad } : item
+      ));
+    } else {
+      setCarrito([...carrito, { ...producto, cantidad }]);
+    }
   }
 
-  const faqs = [
-    {
-      id: 'tpv',
-      q: '¿Se integra con mi TPV o sistema de ventas actual?',
-      a: 'Sí. KOST Software cuenta con conectores API nativos para los principales TPVs del mercado (Lightspeed, CoverManager, Glovo, etc.), sincronizando tus ventas reales con el stock teórico en tiempo real.'
-    },
-    {
-      id: 'tiempo',
-      q: '¿Cuánto tiempo se tarda en cargar mis recetas e ingredientes?',
-      a: 'Menos de lo que crees. Ofrecemos importación masiva vía Excel/CSV y nuestro equipo de onboarding te asiste para tener tu carta digitalizada y con escandallos calculados en menos de 48 horas.'
-    },
-    {
-      id: 'nube',
-      q: '¿Necesito instalar algún programa o funciona en la nube?',
-      a: 'Es 100% SaaS en la nube. Funciona directamente desde el navegador de tu ordenador, tablet o móvil, sin instalaciones, sin servidores propios y con actualizaciones automáticas.'
-    },
-    {
-      id: 'cocina',
-      q: '¿Es complicado de usar para el equipo de cocina?',
-      a: 'No. La interfaz está diseñada para ser intuitiva. Los cocineros solo necesitan acceder a las fichas técnicas con fotos y procedimientos desde una tablet en la cocina, sin tocar la parte financiera.'
+  function eliminarDelCarrito(id: string) {
+    setCarrito(carrito.filter(item => item.id !== id));
+  }
+
+  function actualizarCantidad(id: string, cantidad: number) {
+    if (cantidad <= 0) {
+      eliminarDelCarrito(id);
+      return;
     }
-  ];
+    setCarrito(carrito.map(item =>
+      item.id === id ? { ...item, cantidad: Math.max(1, cantidad) } : item
+    ));
+  }
+
+  function calcularTotalesPorProveedor() {
+    const porProveedor: any = {};
+    carrito.forEach(item => {
+      const provNombre = item.proveedores?.nombre || 'Sin proveedor';
+      if (!porProveedor[provNombre]) {
+        porProveedor[provNombre] = { items: [], total: 0, totalUnidades: 0 };
+      }
+      const precioUnitario = parseFloat(item.precio_compra_actual) || 0;
+      const subtotal = precioUnitario * item.cantidad;
+      
+      porProveedor[provNombre].items.push({ ...item, precioUnitario, subtotal });
+      porProveedor[provNombre].total += subtotal;
+      porProveedor[provNombre].totalUnidades += item.cantidad;
+    });
+    return porProveedor;
+  }
+
+  const totalGeneral = carrito.reduce((sum, item) => {
+    const precio = parseFloat(item.precio_compra_actual) || 0;
+    return sum + (precio * item.cantidad);
+  }, 0);
+
+  const totalUnidades = carrito.reduce((sum, item) => sum + item.cantidad, 0);
+
+  async function enviarPedido() {
+    if (carrito.length === 0) return;
+    setEnviando(true);
+
+    try {
+      const porProveedor = calcularTotalesPorProveedor();
+      const numeroPedido = `PED-${Date.now()}`;
+      const fechaISO = new Date().toISOString();
+
+      for (const [provNombre, data] of Object.entries(porProveedor) as any[]) {
+        const { data: provData } = await supabase
+          .from('proveedores')
+          .select('id, email')
+          .eq('nombre', provNombre)
+          .single();
+
+        const { data: pedidoData, error: pedidoError } = await supabase
+          .from('pedidos')
+          .insert({
+            id: crypto.randomUUID(),
+            numero_pedido: numeroPedido,
+            proveedor_id: provData?.id || null,
+            proveedor_nombre: provNombre,
+            proveedor_email: provData?.email || null,
+            usuario_nombre: 'Cocina',
+            total_articulos: data.items.length,
+            total_estimado: data.total,
+            estado: 'enviado',
+            fecha: fechaISO,
+            created_at: fechaISO
+          })
+          .select()
+          .single();
+
+        if (pedidoError) {
+          console.error(`Error guardando pedido para ${provNombre}:`, pedidoError);
+          continue;
+        }
+
+        if (pedidoData) {
+          const itemsToInsert = data.items.map((item: any) => ({
+            id: crypto.randomUUID(),
+            pedido_id: pedidoData.id,
+            ingrediente_id: item.id,
+            codigo: item.codigo || '',
+            descripcion: item.nombre,
+            cantidad_pedida: item.cantidad,
+            cantidad_recibida: 0,
+            unidad: item.unidad_compra,
+            estado: 'pendiente',
+            created_at: fechaISO
+          }));
+
+          const { error: itemsError } = await supabase.from('pedido_items').insert(itemsToInsert);
+          if (itemsError) console.error('Error guardando items:', itemsError);
+        }
+      }
+
+      alert(`✅ Pedido ${numeroPedido} generado correctamente.`);
+      setCarrito([]);
+      setMostrarCarrito(false);
+    } catch (error) {
+      console.error('Error crítico:', error);
+      alert('❌ Error al procesar el pedido.');
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  const totalesPorProveedor = calcularTotalesPorProveedor();
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      
-      {/* ================= NAVBAR ================= */}
-      <nav className={`fixed top-0 w-full z-40 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm' : 'bg-transparent'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 bg-gradient-to-br from-emerald-600 to-cyan-600 rounded-lg flex items-center justify-center shadow-md">
+      {/* HEADER */}
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-emerald-600 to-cyan-600 rounded-xl flex items-center justify-center shadow-md">
                 <span className="text-white font-bold text-lg">K</span>
               </div>
-              <span className="text-lg font-bold text-slate-800 tracking-tight hidden sm:block">
-                KOST Software™
-              </span>
+              <div>
+                <h1 className="text-xl font-bold text-slate-900 tracking-tight">Gestión de Pedidos</h1>
+                <p className="text-sm text-slate-500">Sistema de aprovisionamiento de cocina</p>
+              </div>
             </div>
             <button
-              onClick={() => setShowLogin(true)}
-              className="px-5 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium transition-all text-sm shadow-lg hover:shadow-xl"
+              onClick={() => setMostrarCarrito(true)}
+              className="relative px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium transition-all text-sm flex items-center gap-2 shadow-sm"
             >
-              Acceder al Panel
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+              Carrito
+              {carrito.length > 0 && (
+                <span className="absolute -top-2 -right-2 bg-emerald-500 text-white w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold shadow-md border-2 border-white">
+                  {carrito.length}
+                </span>
+              )}
             </button>
           </div>
         </div>
-      </nav>
+      </header>
 
-      {/* ================= HERO SECTION ================= */}
-      <section className="relative pt-32 pb-20 lg:pt-40 lg:pb-28 overflow-hidden">
-        <div className="absolute inset-0 -z-10">
-          <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-cyan-100/40 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob"></div>
-          <div className="absolute top-0 left-0 w-[800px] h-[800px] bg-emerald-100/40 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-2000"></div>
-        </div>
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-center">
-            {/* Texto Hero */}
-            <div className="max-w-2xl">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold mb-6 border border-emerald-200">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        {/* BUSCADORES */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="md:col-span-2 relative">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              <input
+                type="text"
+                placeholder="Buscar producto o categoría..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition text-sm"
+              />
+            </div>
+            <div className="relative">
+              <select
+                value={filtroProveedor}
+                onChange={(e) => setFiltroProveedor(e.target.value)}
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white outline-none transition text-sm"
+              >
+                <option value="">Todos los proveedores</option>
+                {proveedores.map(prov => (
+                  <option key={prov.id} value={prov.id}>{prov.nombre}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-100">
+            <p className="text-sm text-slate-600">
+              {buscando ? (
+                <span className="flex items-center gap-2 text-emerald-600">
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                  Buscando...
                 </span>
-                Nuevo: Módulo de Alertas de Precios en Tiempo Real
-              </div>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 leading-[1.1] tracking-tight mb-6">
-                Toma el control absoluto del <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-cyan-600">Food Cost</span> sin perderte en Excel.
-              </h1>
-              <p className="text-lg sm:text-xl text-slate-600 mb-8 leading-relaxed">
-                KOST automatiza el cálculo de escandallos, el control de inventarios y la relación con proveedores para proteger tus márgenes de beneficio en tiempo real.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <button
-                  onClick={() => setShowLogin(true)}
-                  className="px-8 py-4 bg-emerald-600 text-white rounded-xl font-semibold text-lg shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200"
-                >
-                  Probar 14 días gratis
-                </button>
-                <button className="px-8 py-4 bg-white text-slate-700 border border-slate-200 rounded-xl font-semibold text-lg hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 flex items-center justify-center gap-2">
-                  <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  Ver demo interactiva
-                </button>
-              </div>
-              <p className="mt-6 text-sm text-slate-500 flex items-center gap-4">
-                <span className="flex items-center gap-1.5"><svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg> Sin tarjeta de crédito</span>
-                <span className="flex items-center gap-1.5"><svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg> Setup en 48h</span>
-              </p>
-            </div>
-
-            {/* UI Mockup (CSS Puro) */}
-            <div className="relative lg:ml-auto w-full max-w-lg lg:max-w-none">
-              <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-                {/* Fake Browser Header */}
-                <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center gap-2">
-                  <div className="flex gap-1.5">
-                    <div className="w-3 h-3 rounded-full bg-red-400"></div>
-                    <div className="w-3 h-3 rounded-full bg-amber-400"></div>
-                    <div className="w-3 h-3 rounded-full bg-emerald-400"></div>
-                  </div>
-                  <div className="flex-1 bg-white rounded-md h-6 mx-4 border border-slate-200 flex items-center px-2 text-xs text-slate-400">
-                    app.kostsoftware.com/dashboard
-                  </div>
-                </div>
-                
-                {/* Fake Dashboard Content */}
-                <div className="p-6 space-y-6">
-                  <div className="flex justify-between items-end">
-                    <div>
-                      <p className="text-sm text-slate-500 font-medium">Food Cost Global (Octubre)</p>
-                      <p className="text-3xl font-bold text-slate-900">24.8%</p>
-                    </div>
-                    <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-md flex items-center gap-1">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-                      -1.2% vs mes anterior
-                    </span>
-                  </div>
-                  
-                  {/* Fake Chart */}
-                  <div className="h-32 flex items-end justify-between gap-2">
-                    {[40, 65, 45, 80, 55, 90, 70].map((h, i) => (
-                      <div key={i} className="w-full bg-slate-100 rounded-t-sm relative group">
-                        <div 
-                          className={`absolute bottom-0 w-full rounded-t-sm transition-all duration-500 ${i === 5 ? 'bg-emerald-500' : 'bg-cyan-400'}`} 
-                          style={{ height: `${h}%` }}
-                        ></div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Fake Alert Card */}
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-3">
-                    <div className="bg-amber-100 p-1.5 rounded-md text-amber-600 mt-0.5">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-amber-900">Alerta de Proveedor</p>
-                      <p className="text-xs text-amber-800 mt-1">El precio del <span className="font-bold">Aceite de Oliva (5L)</span> ha subido un 12%. El coste de la "Ensalada César" ha variado +0.15€.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Decorative elements behind mockup */}
-              <div className="absolute -z-10 top-10 -right-10 w-full h-full bg-gradient-to-br from-cyan-500 to-emerald-500 rounded-2xl opacity-20 blur-2xl"></div>
-            </div>
+              ) : (
+                <span className="font-medium">{productos.length} productos encontrados</span>
+              )}
+            </p>
+            {(busqueda || filtroProveedor) && (
+              <button onClick={() => { setBusqueda(''); setFiltroProveedor(''); }} className="text-sm text-red-600 hover:text-red-700 font-medium hover:underline transition">
+                Limpiar filtros
+              </button>
+            )}
           </div>
         </div>
-      </section>
 
-      {/* ================= ASÍ FUNCIONA POR DENTRO (INTERACTIVO) ================= */}
-      <section className="py-20 bg-white border-y border-slate-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-4 tracking-tight">Así funciona por dentro</h2>
-            <p className="text-lg text-slate-600">Tres pilares operativos diseñados para eliminar las pérdidas invisibles de tu cocina.</p>
+        {/* RESULTADOS */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="p-4 bg-slate-50 border-b border-slate-200">
+            <h2 className="font-semibold text-slate-800 flex items-center gap-2">
+              <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+              Catálogo de Productos
+            </h2>
           </div>
 
-          <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
-            {/* Tabs */}
-            <div className="lg:w-1/3 space-y-2">
-              {[
-                { id: 'escandallos', title: 'Escandallos Vivos', desc: 'El coste de tus platos se recalcula automáticamente cuando un proveedor cambia el precio de un ingrediente.' },
-                { id: 'inventario', title: 'Inventario y Mermas', desc: 'Compara en un clic el stock teórico (según ventas) con el stock real del almacén.' },
-                { id: 'menu', title: 'Menu Engineering', desc: 'Matriz de rentabilidad que clasifica tus platos en Estrellas, Caballos de Batalla, Puzles y Perros.' }
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`w-full text-left p-5 rounded-xl border transition-all duration-200 ${
-                    activeTab === tab.id 
-                      ? 'bg-slate-900 border-slate-900 text-white shadow-lg' 
-                      : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  <h3 className="font-bold text-lg mb-1">{tab.title}</h3>
-                  <p className={`text-sm ${activeTab === tab.id ? 'text-slate-300' : 'text-slate-500'}`}>{tab.desc}</p>
-                </button>
-              ))}
-            </div>
+          <div className="divide-y divide-slate-100">
+            {buscando ? (
+              <div className="p-12 text-center text-slate-500">
+                <svg className="animate-spin h-8 w-8 mx-auto mb-3 text-emerald-500" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                <p>Cargando productos...</p>
+              </div>
+            ) : productos.length === 0 ? (
+              <div className="p-12 text-center text-slate-500">
+                <p className="text-lg font-medium">No se encontraron productos</p>
+                <p className="text-sm mt-1">Prueba con otra búsqueda o limpia los filtros</p>
+              </div>
+            ) : (
+              productos.map((producto) => (
+                <div key={producto.id} className="p-4 hover:bg-emerald-50/30 transition group">
+                  <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-slate-900 text-lg group-hover:text-emerald-700 transition">
+                        {producto.nombre}
+                      </h3>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+                          {producto.categoria}
+                        </span>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+                          {producto.unidad_compra}
+                        </span>
+                      </div>
+                      {producto.proveedores?.nombre && (
+                        <p className="text-sm text-cyan-700 font-medium mt-2 flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                          {producto.proveedores.nombre}
+                        </p>
+                      )}
+                      {producto.precio_compra_actual && (
+                        <p className="text-base text-emerald-600 font-bold mt-1">
+                          {parseFloat(producto.precio_compra_actual).toFixed(2)} € / {producto.unidad_compra}
+                        </p>
+                      )}
+                    </div>
 
-            {/* Visual Display */}
-            <div className="lg:w-2/3 bg-slate-50 rounded-2xl border border-slate-200 p-6 sm:p-8 flex items-center justify-center min-h-[400px]">
-              {activeTab === 'escandallos' && (
-                <div className="w-full max-w-md bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-4">
-                    <span className="font-semibold text-slate-800">Solomillo al Whisky</span>
-                    <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-medium">Food Cost: 22%</span>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-600">Solomillo (200g)</span>
-                      <span className="font-medium text-slate-900">4.50 €</span>
+                    <div className="flex items-center gap-3 w-full sm:w-auto bg-slate-50 p-3 rounded-xl border border-slate-200 sm:bg-transparent sm:border-0 sm:p-0">
+                      <input
+                        type="number"
+                        min="1"
+                        defaultValue="1"
+                        id={`qty-${producto.id}`}
+                        className="w-20 px-3 py-2 border border-slate-300 rounded-lg text-center focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm font-semibold"
+                      />
+                      <button
+                        onClick={() => {
+                          const qty = parseInt((document.getElementById(`qty-${producto.id}`) as HTMLInputElement)?.value || '1');
+                          añadirAlCarrito(producto, qty);
+                        }}
+                        className="flex-1 sm:flex-none px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition shadow-sm flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                        Añadir
+                      </button>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-600">Nata (50ml)</span>
-                      <span className="font-medium text-slate-900">0.30 €</span>
-                    </div>
-                    <div className="flex justify-between text-sm bg-amber-50 p-2 rounded border border-amber-100">
-                      <span className="text-amber-800 flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-                        Whisky (30ml)
-                      </span>
-                      <span className="font-bold text-amber-700">1.20 € <span className="text-xs font-normal text-amber-600 line-through ml-1">1.05 €</span></span>
-                    </div>
-                  </div>
-                  <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
-                    <span className="text-sm text-slate-500">Coste Total Actualizado</span>
-                    <span className="text-xl font-bold text-slate-900">6.00 €</span>
                   </div>
                 </div>
-              )}
+              ))
+            )}
+          </div>
+        </div>
+      </main>
 
-              {activeTab === 'inventario' && (
-                <div className="w-full max-w-md space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-                    <h4 className="font-semibold text-slate-800 mb-4">Desviación de Inventario (Semanal)</h4>
-                    <div className="space-y-4">
-                      {[
-                        { item: 'Harina de Trigo', teorico: '50 kg', real: '48 kg', diff: '-4%', status: 'bg-emerald-500' },
-                        { item: 'Gamba Blanca', teorico: '10 kg', real: '7.5 kg', diff: '-25%', status: 'bg-red-500' },
-                        { item: 'Aceite de Girasol', teorico: '20 L', real: '19.5 L', diff: '-2.5%', status: 'bg-emerald-500' }
-                      ].map((row, i) => (
-                        <div key={i} className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-slate-800">{row.item}</p>
-                            <p className="text-xs text-slate-500">Teórico: {row.teorico} | Real: {row.real}</p>
+      {/* MODAL CARRITO */}
+      {mostrarCarrito && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full max-w-3xl rounded-t-2xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom-4 duration-300">
+            <div className="bg-slate-900 text-white p-4 rounded-t-2xl flex justify-between items-center">
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                Resumen del Pedido
+              </h2>
+              <button onClick={() => setMostrarCarrito(false)} className="text-slate-400 hover:text-white w-8 h-8 rounded-full flex items-center justify-center transition">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+              {carrito.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">
+                  <svg className="w-16 h-16 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                  <p className="text-lg font-medium">El carrito está vacío</p>
+                  <p className="text-sm mt-1">Añade productos del catálogo para comenzar</p>
+                </div>
+              ) : (
+                Object.entries(totalesPorProveedor).map(([provNombre, data]: [string, any]) => (
+                  <div key={provNombre} className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                    <div className="bg-slate-50 p-3 border-b border-slate-200 flex justify-between items-center">
+                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <svg className="w-4 h-4 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                        {provNombre}
+                      </h3>
+                      <span className="text-xs text-slate-600 font-medium bg-white px-2 py-1 rounded border border-slate-200">
+                        {data.items.length} productos
+                      </span>
+                    </div>
+
+                    <div className="divide-y divide-slate-100">
+                      {data.items.map((item: any) => (
+                        <div key={item.id} className="p-3 hover:bg-slate-50 transition">
+                          <div className="flex justify-between items-start gap-4">
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-sm text-slate-900">{item.nombre}</h4>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                {item.unidad_compra} • {item.precioUnitario.toFixed(2)} €/ud
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => actualizarCantidad(item.id, item.cantidad - 1)} className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-md font-bold flex items-center justify-center transition text-slate-700">−</button>
+                              <span className="w-10 text-center font-semibold text-sm py-1">{item.cantidad}</span>
+                              <button onClick={() => actualizarCantidad(item.id, item.cantidad + 1)} className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-md font-bold flex items-center justify-center transition text-slate-700">+</button>
+                              <button onClick={() => eliminarDelCarrito(item.id)} className="ml-2 text-slate-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-md transition" title="Eliminar">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <span className={`text-xs font-bold px-2 py-1 rounded text-white ${row.status}`}>{row.diff}</span>
+                          <div className="text-right mt-2">
+                            <p className="text-sm font-bold text-emerald-600">{item.subtotal.toFixed(2)} €</p>
                           </div>
                         </div>
                       ))}
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'menu' && (
-                <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-lg text-center">
-                        <p className="text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1">Estrellas</p>
-                        <p className="text-sm text-emerald-900 font-medium">Alta Popularidad<br/>Alto Margen</p>
-                        <p className="text-xs text-emerald-600 mt-2">Ej: Solomillo, Ensalada</p>
-                      </div>
-                      <div className="bg-cyan-50 border border-cyan-200 p-4 rounded-lg text-center">
-                        <p className="text-xs font-bold text-cyan-800 uppercase tracking-wider mb-1">Caballos de Batalla</p>
-                        <p className="text-sm text-cyan-900 font-medium">Alta Popularidad<br/>Bajo Margen</p>
-                        <p className="text-xs text-cyan-600 mt-2">Ej: Menú del día</p>
-                      </div>
-                      <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg text-center">
-                        <p className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-1">Puzles</p>
-                        <p className="text-sm text-amber-900 font-medium">Baja Popularidad<br/>Alto Margen</p>
-                        <p className="text-xs text-amber-600 mt-2">Ej: Vino de la casa</p>
-                      </div>
-                      <div className="bg-red-50 border border-red-200 p-4 rounded-lg text-center">
-                        <p className="text-xs font-bold text-red-800 uppercase tracking-wider mb-1">Perros</p>
-                        <p className="text-sm text-red-900 font-medium">Baja Popularidad<br/>Bajo Margen</p>
-                        <p className="text-xs text-red-600 mt-2">Ej: Postre X (Eliminar)</p>
-                      </div>
+                    <div className="bg-emerald-50 p-3 border-t border-emerald-100 flex justify-between items-center">
+                      <span className="font-semibold text-emerald-800 text-sm">Total {provNombre}:</span>
+                      <span className="font-bold text-emerald-700 text-lg">{data.total.toFixed(2)} €</span>
                     </div>
                   </div>
-                </div>
+                ))
               )}
             </div>
-          </div>
-        </div>
-      </section>
 
-      {/* ================= PAIN VS SOLUTION (FEATURES) ================= */}
-      <section className="py-20 bg-slate-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-24">
-          
-          {/* Feature 1 */}
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div>
-              <div className="inline-block px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold mb-4">EL PROBLEMA</div>
-              <h3 className="text-3xl font-bold text-slate-900 mb-4">¿Pierdes margen sin saber qué ingrediente subió de precio?</h3>
-              <p className="text-lg text-slate-600 mb-6">Las facturas de los proveedores cambian cada semana. Si actualizas tus recetas a mano, siempre vas con retraso y tus precios de venta no reflejan la realidad.</p>
-              <div className="flex items-start gap-3 p-4 bg-white rounded-xl border border-emerald-200 shadow-sm">
-                <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600 mt-1">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                </div>
-                <div>
-                  <h4 className="font-bold text-slate-900">La Solución KOST: Alertas Inteligentes</h4>
-                  <p className="text-sm text-slate-600 mt-1">El sistema cruza tus últimas facturas con tus escandallos. Si un ingrediente sube más de un 5%, recibes una alerta y el Food Cost del plato se recalcula al instante.</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white p-6 rounded-2xl shadow-xl border border-slate-200">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-cyan-100 rounded-lg flex items-center justify-center text-cyan-600">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-                </div>
-                <span className="font-bold text-slate-800">Módulo de Proveedores</span>
-              </div>
-              <div className="space-y-3">
-                {['Centralización de todas las fichas de producto', 'Histórico de evolución de precios de compra', 'Comparativa automática entre proveedores'].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3 text-sm text-slate-700">
-                    <svg className="w-5 h-5 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                    {item}
+            {carrito.length > 0 && (
+              <div className="p-4 sm:p-6 border-t border-slate-200 bg-slate-50 rounded-b-2xl">
+                <div className="flex justify-between items-center mb-4 p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+                  <div>
+                    <span className="font-semibold text-slate-700 text-lg">Total General:</span>
+                    <p className="text-sm text-slate-500 mt-0.5">{totalUnidades} unidades • {carrito.length} productos</p>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Feature 2 */}
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="order-2 lg:order-1 bg-white p-6 rounded-2xl shadow-xl border border-slate-200">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center text-indigo-600">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
-                </div>
-                <span className="font-bold text-slate-800">Módulo de Inventarios y HACCP</span>
-              </div>
-              <div className="space-y-3">
-                {['Conteos cíclicos rápidos desde el móvil', 'Cálculo automático de mermas y desperdicio', 'Checklists de limpieza y control de temperaturas (APPCC)'].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3 text-sm text-slate-700">
-                    <svg className="w-5 h-5 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                    {item}
+                  <div className="text-right">
+                    <p className="font-bold text-emerald-700 text-2xl">{totalGeneral.toFixed(2)} €</p>
                   </div>
-                ))}
-              </div>
-            </div>
-            <div className="order-1 lg:order-2">
-              <div className="inline-block px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold mb-4">EL PROBLEMA</div>
-              <h3 className="text-3xl font-bold text-slate-900 mb-4">¿Haces inventario a ojo y las cuentas nunca cuadran?</h3>
-              <p className="text-lg text-slate-600 mb-6">El stock teórico que te dice el TPV rara vez coincide con la realidad. Las mermas, los errores de comanda y el desperdicio se comen tu beneficio en silencio.</p>
-              <div className="flex items-start gap-3 p-4 bg-white rounded-xl border border-emerald-200 shadow-sm">
-                <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600 mt-1">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 </div>
-                <div>
-                  <h4 className="font-bold text-slate-900">La Solución KOST: Trazabilidad Total</h4>
-                  <p className="text-sm text-slate-600 mt-1">Digitaliza tus conteos. El sistema te muestra exactamente dónde está la desviación y te obliga a justificar las mermas, integrando además los controles sanitarios obligatorios.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-      {/* ================= FAQ SECTION ================= */}
-      <section className="py-20 bg-white">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-slate-900 mb-4">Preguntas Frecuentes</h2>
-            <p className="text-slate-600">Resolvemos las dudas técnicas más comunes de los profesionales del sector.</p>
-          </div>
-          
-          <div className="space-y-4">
-            {faqs.map((faq) => (
-              <div key={faq.id} className="border border-slate-200 rounded-xl overflow-hidden">
                 <button
-                  onClick={() => setOpenFaq(openFaq === faq.id ? null : faq.id)}
-                  className="w-full flex justify-between items-center p-5 text-left bg-white hover:bg-slate-50 transition-colors"
+                  onClick={enviarPedido}
+                  disabled={enviando}
+                  className="w-full py-3.5 bg-emerald-600 text-white rounded-xl font-bold text-lg hover:bg-emerald-700 transition disabled:bg-slate-300 disabled:cursor-not-allowed shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2"
                 >
-                  <span className="font-semibold text-slate-900 pr-4">{faq.q}</span>
-                  <svg 
-                    className={`w-5 h-5 text-slate-500 flex-shrink-0 transition-transform duration-200 ${openFaq === faq.id ? 'rotate-180' : ''}`} 
-                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  {enviando ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                      Procesando y enviando...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                      Confirmar y Enviar Pedido
+                    </>
+                  )}
                 </button>
-                <div 
-                  className={`overflow-hidden transition-all duration-300 ease-in-out ${openFaq === faq.id ? 'max-h-48 opacity-100' : 'max-h-0 opacity-0'}`}
-                >
-                  <div className="p-5 pt-0 text-slate-600 leading-relaxed border-t border-slate-100 mt-2">
-                    {faq.a}
-                  </div>
-                </div>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ================= FINAL CTA ================= */}
-      <section className="py-20 bg-slate-900 text-white">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl sm:text-4xl font-bold mb-6 tracking-tight">Deja de adivinar. Empieza a controlar.</h2>
-          <p className="text-lg text-slate-400 mb-8 max-w-2xl mx-auto">
-            Únete a los restaurantes que han recuperado hasta un 5% de su facturación anual simplemente digitalizando sus escandallos e inventarios.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button
-              onClick={() => setShowLogin(true)}
-              className="px-8 py-4 bg-emerald-600 text-white rounded-xl font-semibold text-lg hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/50"
-            >
-              Comenzar prueba gratuita de 14 días
-            </button>
-            <button className="px-8 py-4 bg-transparent text-white border border-slate-700 rounded-xl font-semibold text-lg hover:bg-slate-800 transition-all">
-              Hablar con un experto
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* ================= FOOTER ================= */}
-      <footer className="bg-slate-950 text-slate-400 py-12 border-t border-slate-900">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-emerald-600 to-cyan-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold">K</span>
-              </div>
-              <span className="text-white font-bold text-lg">KOST Software™</span>
-            </div>
-            <div className="flex gap-8 text-sm">
-              <a href="#" className="hover:text-white transition-colors">Privacidad</a>
-              <a href="#" className="hover:text-white transition-colors">Términos</a>
-              <a href="#" className="hover:text-white transition-colors">Contacto</a>
-            </div>
-            <p className="text-sm text-slate-600">© {new Date().getFullYear()} KOST Software. Todos los derechos reservados.</p>
-          </div>
-        </div>
-      </footer>
-
-      {/* ================= MODAL LOGIN (INTACTO) ================= */}
-      {showLogin && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md relative animate-in fade-in zoom-in duration-200">
-            <button
-              onClick={() => { setShowLogin(false); setError(''); }}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold"
-            >
-              ×
-            </button>
-            
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-emerald-600 to-cyan-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-                <span className="text-white text-3xl font-bold">K</span>
-              </div>
-              <h3 className="text-2xl font-bold text-gray-800">Iniciar Sesión</h3>
-              <p className="text-gray-500 text-sm mt-1">Accede a tu panel de control</p>
-            </div>
-
-            <form onSubmit={handleLogin} className="space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Código de usuario</label>
-                <input
-                  type="text"
-                  value={codigo}
-                  onChange={(e) => setCodigo(e.target.value)}
-                  placeholder="Ej: B0001"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">PIN</label>
-                <input
-                  type="password"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  placeholder="****"
-                  maxLength={4}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
-                  required
-                />
-              </div>
-
-              {error && (
-                <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm border border-red-200">
-                  {error}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 bg-gradient-to-r from-emerald-600 to-cyan-600 text-white rounded-lg font-semibold hover:from-emerald-700 hover:to-cyan-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all shadow-md"
-              >
-                {loading ? 'Entrando...' : 'Acceder al Sistema'}
-              </button>
-            </form>
-
-            <div className="mt-6 pt-6 border-t border-gray-100">
-              <p className="text-xs text-gray-500 text-center bg-gray-50 p-3 rounded-lg">
-                💡 <strong>Usuarios de prueba:</strong> B0001 a B0005 <br/>
-                🔑 <strong>PIN:</strong> 4321 (ADMIN) o 1234 (USER)
-              </p>
-            </div>
+            )}
           </div>
         </div>
       )}
