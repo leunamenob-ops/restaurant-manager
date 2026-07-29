@@ -179,118 +179,108 @@ export default function PedidosPage() {
 
   const totalUnidades = carrito.reduce((sum, item) => sum + item.cantidad, 0);
 
- async function enviarPedido() {
-  if (carrito.length === 0) return;
-  setEnviando(true);
+  // FUNCIÓN CORREGIDA Y LIMPIA
+  async function enviarPedido() {
+    if (carrito.length === 0) return;
+    setEnviando(true);
 
-  try {
-    const porProveedor = calcularTotalesPorProveedor();
-    const numeroPedido = `PED-${Date.now()}`;
-    const fechaISO = new Date().toISOString();
+    try {
+      const porProveedor = calcularTotalesPorProveedor();
+      const numeroPedido = `PED-${Date.now()}`;
+      const fechaISO = new Date().toISOString();
 
-    for (const [provNombre, data] of Object.entries(porProveedor) as any[]) {
-      // CORRECCIÓN 1: Buscar proveedor con ilike en lugar de eq
-      const { data: provData } = await supabase
-        .from('proveedores')
-        .select('id, email')
-        .ilike('nombre', provNombre.trim())  // ← CAMBIO: ilike en lugar de eq
-        .single();
+      for (const [provNombre, data] of Object.entries(porProveedor) as any[]) {
+        // CORRECCIÓN 1: Usar ilike para evitar error 406 con espacios en el nombre
+        const { data: provData } = await supabase
+          .from('proveedores')
+          .select('id, email')
+          .ilike('nombre', provNombre.trim())
+          .single();
 
-      const { data: pedidoData, error: pedidoError } = await supabase
-        .from('pedidos')
-        .insert({
-          id: crypto.randomUUID(),
-          numero_pedido: numeroPedido,
-          proveedor_id: provData?.id || null,
-          proveedor_nombre: provNombre,
-          proveedor_email: provData?.email || null,
-          usuario_nombre: 'Cocina',
-          total_articulos: data.items.length,
-          total_estimado: data.total,
-          estado: 'enviado',
-          fecha: fechaISO,
-          created_at: fechaISO
-        })
-        .select()
-        .single();
+        // CORRECCIÓN 2: Eliminado 'total_estimado' porque no existe en tu tabla de BD
+        const { data: pedidoData, error: pedidoError } = await supabase
+          .from('pedidos')
+          .insert({
+            id: crypto.randomUUID(),
+            numero_pedido: numeroPedido,
+            proveedor_id: provData?.id || null,
+            proveedor_nombre: provNombre,
+            proveedor_email: provData?.email || null,
+            usuario_nombre: 'Cocina',
+            total_articulos: data.items.length,
+            estado: 'enviado',
+            fecha: fechaISO,
+            created_at: fechaISO
+          })
+          .select()
+          .single();
 
-      if (pedidoError) {
-        console.error(`Error guardando pedido para ${provNombre}:`, pedidoError);
-        continue;
-      }
+        if (pedidoError) {
+          console.error(`Error guardando pedido para ${provNombre}:`, pedidoError);
+          continue;
+        }
 
-      if (pedidoData) {
-        const itemsToInsert = data.items.map((item: any) => ({
-          id: crypto.randomUUID(),
-          pedido_id: pedidoData.id,
-          ingrediente_id: item.id,
-          codigo: item.codigo || '',
-          descripcion: item.nombre,
-          cantidad_pedida: item.cantidad,
-          cantidad_recibida: 0,
-          unidad: item.unidad_compra,
-          estado: 'pendiente',
-          created_at: fechaISO
-        }));
+        if (pedidoData) {
+          const itemsToInsert = data.items.map((item: any) => ({
+            id: crypto.randomUUID(),
+            pedido_id: pedidoData.id,
+            ingrediente_id: item.id,
+            codigo: item.codigo || '',
+            descripcion: item.nombre,
+            cantidad_pedida: item.cantidad,
+            cantidad_recibida: 0,
+            unidad: item.unidad_compra,
+            estado: 'pendiente',
+            created_at: fechaISO
+          }));
 
-        const { error: itemsError } = await supabase.from('pedido_items').insert(itemsToInsert);
-        if (itemsError) console.error('Error guardando items:', itemsError);
+          const { error: itemsError } = await supabase.from('pedido_items').insert(itemsToInsert);
+          if (itemsError) console.error('Error guardando items:', itemsError);
 
-        // CORRECCIÓN 2: Enviar email si hay email del proveedor
-        if (provData?.email) {
-          try {
-            const response = await fetch('/api/enviar-pedido', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                proveedor: provNombre,
-                email: provData.email,
-                numeroPedido,
-                fecha: new Date(fechaISO).toLocaleString('es-ES'),
-                items: data.items.map((i: any) => ({
-                  codigo: i.codigo || '',
-                  descripcion: i.nombre,
-                  cantidad: i.cantidad,
-                  unidad: i.unidad_compra,
-                  precio: i.precioUnitario,
-                  subtotal: i.subtotal
-                })),
-                usuario: 'Cocina',
-                total: data.total
-              })
-            });
+          // CORRECCIÓN 3: Enviar email si el proveedor tiene email configurado
+          if (provData?.email) {
+            try {
+              const response = await fetch('/api/enviar-pedido', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  proveedor: provNombre,
+                  email: provData.email,
+                  numeroPedido,
+                  fecha: new Date(fechaISO).toLocaleString('es-ES'),
+                  items: data.items.map((i: any) => ({
+                    codigo: i.codigo || '',
+                    descripcion: i.nombre,
+                    cantidad: i.cantidad,
+                    unidad: i.unidad_compra,
+                    precio: i.precioUnitario,
+                    subtotal: i.subtotal
+                  })),
+                  usuario: 'Cocina',
+                  total: data.total
+                })
+              });
 
-            if (!response.ok) {
-              console.warn(`Email no enviado a ${provNombre}:`, await response.text());
-            } else {
-              console.log(`✅ Email enviado a ${provNombre} (${provData.email})`);
+              if (!response.ok) {
+                console.warn(`Email no enviado a ${provNombre}:`, await response.text());
+              } else {
+                console.log(`✅ Email enviado a ${provNombre} (${provData.email})`);
+              }
+            } catch (err) {
+              console.error(`Error enviando email a ${provNombre}:`, err);
             }
-          } catch (err) {
-            console.error(`Error enviando email a ${provNombre}:`, err);
+          } else {
+            console.warn(`⚠️ Proveedor ${provNombre} no tiene email configurado en la BD`);
           }
-        } else {
-          console.warn(`⚠️ Proveedor ${provNombre} no tiene email configurado`);
         }
       }
-    }
 
-    alert(`✅ Pedido ${numeroPedido} generado correctamente.\n\nSe han enviado emails a los proveedores (si tienen email configurado).`);
-    setCarrito([]);
-    setMostrarCarrito(false);
-  } catch (error) {
-    console.error('Error crítico:', error);
-    alert('❌ Error al procesar el pedido.');
-  } finally {
-    setEnviando(false);
-  }
-}
-
-      alert(`✅ Pedido ${numeroPedido} generado correctamente.`);
+      alert(`✅ Pedido ${numeroPedido} generado correctamente.\n\nSe han enviado emails a los proveedores (si tienen email configurado).`);
       setCarrito([]);
       setMostrarCarrito(false);
     } catch (error) {
       console.error('Error crítico:', error);
-      alert(' Error al procesar el pedido.');
+      alert('❌ Error al procesar el pedido.');
     } finally {
       setEnviando(false);
     }
