@@ -118,6 +118,50 @@ export default function ProductosPage() {
     }
   }, []);
 
+  useEffect(() => {
+    cargarProductos();
+  }, [cargarProductos]);
+
+  useEffect(() => {
+    let filtrados = [...todosProductos];
+
+    if (busquedaNombre.trim()) {
+      const busqueda = busquedaNombre.toLowerCase();
+      filtrados = filtrados.filter((p: any) => {
+        const nombre = p.nombre?.toLowerCase() || '';
+        const categoria = p.categoria?.toLowerCase() || '';
+        return nombre.includes(busqueda) || categoria.includes(busqueda);
+      });
+    }
+
+    if (proveedoresSeleccionados.length > 0) {
+      filtrados = filtrados.filter((p: any) => 
+        proveedoresSeleccionados.includes(p.proveedor_nombre)
+      );
+    }
+
+    setProductosFiltrados(filtrados);
+    setPaginaActual(1);
+  }, [busquedaNombre, proveedoresSeleccionados, todosProductos]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (filtroRef.current && !filtroRef.current.contains(event.target as Node)) {
+        setMostrarFiltroProveedores(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  function toggleProveedor(proveedor: string) {
+    setProveedoresSeleccionados(prev => 
+      prev.includes(proveedor)
+        ? prev.filter(p => p !== proveedor)
+        : [...prev, proveedor]
+    );
+  }
+
   function toggleTodosProveedores() {
     if (proveedoresSeleccionados.length === proveedoresUnicos.length) {
       setProveedoresSeleccionados([]);
@@ -153,12 +197,12 @@ export default function ProductosPage() {
     }
   }
 
-   async function guardarProveedor() {
+  async function guardarProveedor() {
     try {
       const { error } = await supabase
         .from('proveedores')
         .insert([{
-          id: crypto.randomUUID(), // ← AÑADIDO: Genera el ID explícitamente
+          id: crypto.randomUUID(), // Genera el ID explícitamente para evitar nulos
           nombre: nuevoProveedor.nombre,
           codigo: nuevoProveedor.codigo,
           contacto: nuevoProveedor.contacto,
@@ -175,6 +219,7 @@ export default function ProductosPage() {
       alert('Error al guardar proveedor: ' + err.message);
     }
   }
+
   function abrirEditar(producto: any) {
     setProductoEditando({ ...producto, precio_compra_actual: producto.precio_compra_actual || '' });
     setMostrarModalEditar(true);
