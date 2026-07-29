@@ -26,7 +26,7 @@ export default function PedidosPage() {
     cargarProveedores();
   }, []);
 
-  // Búsqueda combinada
+  // Búsqueda combinada - CORREGIDA
   useEffect(() => {
     async function buscarProductos() {
       setBuscando(true);
@@ -40,23 +40,40 @@ export default function PedidosPage() {
           unidad_compra,
           precio_compra_actual,
           proveedor_id,
-          proveedores (nombre)
+          proveedor_nombre
         `)
         .order('nombre')
         .limit(100);
 
+      // Filtro por proveedor - CORREGIDO: usar proveedor_nombre
       if (filtroProveedor) {
-        query = query.eq('proveedor_id', filtroProveedor);
+        const provNombre = proveedores.find(p => p.id === filtroProveedor)?.nombre;
+        if (provNombre) {
+          query = query.eq('proveedor_nombre', provNombre);
+        }
       }
 
+      // Filtro por texto
       if (busqueda && busqueda.length >= 2) {
         query = query.or(`nombre.ilike.%${busqueda}%,categoria.ilike.%${busqueda}%`);
       }
 
       const { data, error } = await query;
       
+      if (error) {
+        console.error('Error en búsqueda:', error);
+      }
+      
       if (data) {
-        const filtrados = data.filter((p, index, self) => 
+        // Transformar datos para mantener compatibilidad con el resto del código
+        const transformados = data.map(item => ({
+          ...item,
+          proveedores: {
+            nombre: item.proveedor_nombre || 'Sin proveedor'
+          }
+        }));
+        
+        const filtrados = transformados.filter((p, index, self) => 
           p.nombre && p.nombre.trim() !== '' &&
           self.findIndex(item => item.id === p.id) === index
         );
@@ -67,7 +84,7 @@ export default function PedidosPage() {
 
     const timer = setTimeout(buscarProductos, 300);
     return () => clearTimeout(timer);
-  }, [busqueda, filtroProveedor]);
+  }, [busqueda, filtroProveedor, proveedores]);
 
   function añadirAlCarrito(producto: any, cantidad: number) {
     const existente = carrito.find(item => item.id === producto.id);
@@ -125,7 +142,7 @@ export default function PedidosPage() {
     try {
       const porProveedor = calcularTotalesPorProveedor();
       const numeroPedido = `PED-${Date.now()}`;
-      const fechaISO = new Date().toISOString(); // CORRECCIÓN: Formato ISO para Supabase
+      const fechaISO = new Date().toISOString();
 
       for (const [provNombre, data] of Object.entries(porProveedor) as any[]) {
         const { data: provData } = await supabase
@@ -134,19 +151,20 @@ export default function PedidosPage() {
           .eq('nombre', provNombre)
           .single();
 
-        // 1. Guardar el pedido en la base de datos
         const { data: pedidoData, error: pedidoError } = await supabase
           .from('pedidos')
           .insert({
+            id: crypto.randomUUID(),
             numero_pedido: numeroPedido,
             proveedor_id: provData?.id || null,
             proveedor_nombre: provNombre,
             proveedor_email: provData?.email || null,
-            usuario_nombre: 'Cocina', // Usuario por defecto al no haber login
+            usuario_nombre: 'Cocina',
             total_articulos: data.items.length,
             total_estimado: data.total,
             estado: 'enviado',
-            fecha: fechaISO
+            fecha: fechaISO,
+            created_at: fechaISO
           })
           .select()
           .single();
@@ -156,9 +174,9 @@ export default function PedidosPage() {
           continue;
         }
 
-        // 2. Guardar los items del pedido
         if (pedidoData) {
           const itemsToInsert = data.items.map((item: any) => ({
+            id: crypto.randomUUID(),
             pedido_id: pedidoData.id,
             ingrediente_id: item.id,
             codigo: item.codigo || '',
@@ -166,44 +184,21 @@ export default function PedidosPage() {
             cantidad_pedida: item.cantidad,
             cantidad_recibida: 0,
             unidad: item.unidad_compra,
-            estado: 'pendiente'
+            estado: 'pendiente',
+            created_at: fechaISO
           }));
 
           const { error: itemsError } = await supabase.from('pedido_items').insert(itemsToInsert);
           if (itemsError) console.error('Error guardando items:', itemsError);
-
-          // 3. Intentar enviar email (opcional, no bloquea el flujo)
-          if (provData?.email) {
-            fetch('/api/enviar-pedido', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                proveedor: provNombre,
-                email: provData.email,
-                numeroPedido,
-                fecha: new Date(fechaISO).toLocaleString('es-ES'),
-                items: data.items.map((i: any) => ({
-                  codigo: i.codigo || '',
-                  descripcion: i.nombre,
-                  cantidad: i.cantidad,
-                  unidad: i.unidad_compra,
-                  precio: i.precioUnitario,
-                  subtotal: i.subtotal
-                })),
-                usuario: 'Cocina',
-                total: data.total
-              })
-            }).catch(err => console.warn('API de email no disponible o falló:', err));
-          }
         }
       }
 
-      alert(`✅ Pedido ${numeroPedido} generado y guardado correctamente.`);
+      alert(`✅ Pedido ${numeroPedido} generado correctamente.`);
       setCarrito([]);
       setMostrarCarrito(false);
     } catch (error) {
       console.error('Error crítico:', error);
-      alert('❌ Error al procesar el pedido. Revisa la consola.');
+      alert('❌ Error al procesar el pedido.');
     } finally {
       setEnviando(false);
     }
