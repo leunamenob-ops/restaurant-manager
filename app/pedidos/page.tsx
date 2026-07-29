@@ -81,7 +81,7 @@ export default function PedidosPage() {
     cargarProductos();
   }, [cargarProductos]);
 
-  // Filtrado client-side (igual que en Productos)
+  // Filtrado client-side
   useEffect(() => {
     let filtrados = [...todosProductos];
 
@@ -183,149 +183,132 @@ export default function PedidosPage() {
 
   const totalUnidades = carrito.reduce((sum, item) => sum + item.cantidad, 0);
 
-  // FUNCIÓN CORREGIDA - SIN ILIKE, USANDO DATOS CARGADOS
- async function enviarPedido() {
-  if (carrito.length === 0) {
-    alert('El carrito está vacío');
-    return;
-  }
-  
-  setEnviando(true);
-  console.log('🚀 Iniciando envío...');
-  console.log('Carrito:', carrito);
+  // FUNCIÓN DE ENVÍO DE PEDIDO (LIMPIA Y SIN DUPLICADOS)
+  async function enviarPedido() {
+    if (carrito.length === 0) {
+      alert('El carrito está vacío');
+      return;
+    }
+    
+    setEnviando(true);
+    console.log('🚀 Iniciando envío...');
 
-  try {
-    const porProveedor = calcularTotalesPorProveedor();
-    const numeroPedido = `PED-${Date.now()}`;
-    const fechaISO = new Date().toISOString();
+    try {
+      const porProveedor = calcularTotalesPorProveedor();
+      const numeroPedido = `PED-${Date.now()}`;
+      const fechaISO = new Date().toISOString();
 
-    console.log('Número de pedido:', numeroPedido);
-    console.log('Proveedores:', Object.keys(porProveedor));
+      for (const [provNombre, data] of Object.entries(porProveedor)) {
+        console.log(`\n📦 Procesando proveedor: ${provNombre}`);
+        
+        // Buscar proveedor por nombre exacto
+        const { data: provData, error: provError } = await supabase
+          .from('proveedores')
+          .select('id, email')
+          .eq('nombre', provNombre.trim())
+          .maybeSingle();
 
-    for (const [provNombre, data] of Object.entries(porProveedor)) {
-      console.log(`\n📦 Procesando proveedor: ${provNombre}`);
-      
-      // Buscar proveedor por nombre exacto (sin ilike)
-      const { data: provData, error: provError } = await supabase
-        .from('proveedores')
-        .select('id, email')
-        .eq('nombre', provNombre.trim())
-        .maybeSingle(); // Usar maybeSingle en lugar de single
+        if (provError) {
+          console.error(`Error buscando proveedor ${provNombre}:`, provError);
+        }
 
-      if (provError) {
-        console.error(`Error buscando proveedor ${provNombre}:`, provError);
-      }
+        // Insertar pedido
+        const { data: pedidoData, error: pedidoError } = await supabase
+          .from('pedidos')
+          .insert({
+            id: crypto.randomUUID(),
+            numero_pedido: numeroPedido,
+            proveedor_id: provData?.id || null,
+            proveedor_nombre: provNombre,
+            proveedor_email: provData?.email || null,
+            usuario_nombre: 'Cocina',
+            total_articulos: data.items.length,
+            estado: 'enviado',
+            fecha: fechaISO,
+            created_at: fechaISO
+          })
+          .select()
+          .single();
 
-      console.log('Proveedor encontrado:', provData);
+        if (pedidoError) {
+          console.error(`❌ Error guardando pedido:`, pedidoError);
+          continue;
+        }
 
-      // Insertar pedido
-      const { data: pedidoData, error: pedidoError } = await supabase
-        .from('pedidos')
-        .insert({
+        console.log('✅ Pedido guardado:', pedidoData);
+
+        // Insertar items
+        const itemsToInsert = data.items.map((item: any) => ({
           id: crypto.randomUUID(),
-          numero_pedido: numeroPedido,
-          proveedor_id: provData?.id || null,
-          proveedor_nombre: provNombre,
-          proveedor_email: provData?.email || null,
-          usuario_nombre: 'Cocina',
-          total_articulos: data.items.length,
-          estado: 'enviado',
-          fecha: fechaISO,
+          pedido_id: pedidoData.id,
+          ingrediente_id: item.id,
+          codigo: item.codigo || '',
+          descripcion: item.nombre,
+          cantidad_pedida: item.cantidad,
+          cantidad_recibida: 0,
+          unidad: item.unidad_compra,
+          estado: 'pendiente',
           created_at: fechaISO
-        })
-        .select()
-        .single();
+        }));
 
-      if (pedidoError) {
-        console.error(`❌ Error guardando pedido:`, pedidoError);
-        console.error('Detalles del error:', JSON.stringify(pedidoError, null, 2));
-        continue;
-      }
+        const { error: itemsError } = await supabase
+          .from('pedido_items')
+          .insert(itemsToInsert);
 
-      console.log('✅ Pedido guardado:', pedidoData);
+        if (itemsError) {
+          console.error('❌ Error guardando items:', itemsError);
+        } else {
+          console.log('✅ Items guardados:', itemsToInsert.length);
+        }
 
-      // Insertar items
-      const itemsToInsert = data.items.map((item: any) => ({
-        id: crypto.randomUUID(),
-        pedido_id: pedidoData.id,
-        ingrediente_id: item.id,
-        codigo: item.codigo || '',
-        descripcion: item.nombre,
-        cantidad_pedida: item.cantidad,
-        cantidad_recibida: 0,
-        unidad: item.unidad_compra,
-        estado: 'pendiente',
-        created_at: fechaISO
-      }));
+        // Enviar email
+        if (provData?.email) {
+          try {
+            const response = await fetch('/api/enviar-pedido', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                proveedor: provNombre,
+                email: provData.email,
+                numeroPedido,
+                fecha: new Date(fechaISO).toLocaleString('es-ES'),
+                items: data.items.map((i: any) => ({
+                  codigo: i.codigo || '',
+                  descripcion: i.nombre,
+                  cantidad: i.cantidad,
+                  unidad: i.unidad_compra,
+                  precio: i.precioUnitario,
+                  subtotal: i.subtotal
+                })),
+                usuario: 'Cocina',
+                total: data.total
+              })
+            });
 
-      const { error: itemsError } = await supabase
-        .from('pedido_items')
-        .insert(itemsToInsert);
-
-      if (itemsError) {
-        console.error('❌ Error guardando items:', itemsError);
-      } else {
-        console.log('✅ Items guardados:', itemsToInsert.length);
-      }
-
-      // Enviar email (si hay API)
-      if (provData?.email) {
-        try {
-          const response = await fetch('/api/enviar-pedido', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              proveedor: provNombre,
-              email: provData.email,
-              numeroPedido,
-              fecha: new Date(fechaISO).toLocaleString('es-ES'),
-              items: data.items.map((i: any) => ({
-                codigo: i.codigo || '',
-                descripcion: i.nombre,
-                cantidad: i.cantidad,
-                unidad: i.unidad_compra,
-                precio: i.precioUnitario,
-                subtotal: i.subtotal
-              })),
-              usuario: 'Cocina',
-              total: data.total
-            })
-          });
-
-          if (response.ok) {
-            console.log('✅ Email enviado a', provData.email);
-          } else {
-            console.warn('️ Email no enviado (status:', response.status, ')');
+            if (response.ok) {
+              console.log('✅ Email enviado a', provData.email);
+            } else {
+              console.warn('⚠️ Email no enviado (status:', response.status, ')');
+            }
+          } catch (err) {
+            console.error('Error enviando email:', err);
           }
-        } catch (err) {
-          console.error('Error enviando email:', err);
         }
       }
-    }
-
-    alert(`✅ Pedido ${numeroPedido} generado correctamente.`);
-    setCarrito([]);
-    setMostrarCarrito(false);
-    
-  } catch (error) {
-    console.error('❌ Error crítico:', error);
-    alert('❌ Error: ' + (error as Error).message);
-  } finally {
-    setEnviando(false);
-  }
-}
 
       alert(`✅ Pedido ${numeroPedido} generado correctamente.`);
       setCarrito([]);
       setMostrarCarrito(false);
+      
     } catch (error) {
-      console.error('Error crítico:', error);
-      alert('❌ Error al procesar el pedido.');
+      console.error('❌ Error crítico:', error);
+      alert('❌ Error: ' + (error as Error).message);
     } finally {
       setEnviando(false);
     }
   }
 
+  // Esta línea debe estar FUERA de enviarPedido, pero DENTRO del componente
   const totalesPorProveedor = calcularTotalesPorProveedor();
 
   return (
@@ -362,7 +345,7 @@ export default function PedidosPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         
-        {/* FILTROS - IGUAL QUE PRODUCTOS */}
+        {/* FILTROS */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
           <div className="flex flex-col md:flex-row gap-4 items-start">
             <div className="flex-1 w-full">
