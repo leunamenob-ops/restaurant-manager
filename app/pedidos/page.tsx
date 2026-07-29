@@ -208,7 +208,7 @@ export default function PedidosPage() {
           console.error(`Error buscando proveedor ${provNombre}:`, provError);
         }
 
-        const { data: pedidoData, error: pedidoError } = await supabase
+    const { data: pedidoData, error: pedidoError } = await supabase
   .from('pedidos')
   .insert({
     id: crypto.randomUUID(),
@@ -218,7 +218,7 @@ export default function PedidosPage() {
     proveedor_email: provData?.email || null,
     usuario_nombre: 'Cocina',
     total_articulos: data.items.length,
-    // total_estimado: data.total,  // ← ESTÁ COMENTADA
+    total_estimado: data.total,
     estado: 'enviado',
     fecha: fechaISO,
     created_at: fechaISO
