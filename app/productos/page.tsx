@@ -180,11 +180,12 @@ export default function ProductosPage() {
     }
   }
 
-  async function guardarProveedor() {
+   async function guardarProveedor() {
     try {
       const { error } = await supabase
         .from('proveedores')
         .insert([{
+          id: crypto.randomUUID(), // ← AÑADIDO: Genera el ID explícitamente
           nombre: nuevoProveedor.nombre,
           codigo: nuevoProveedor.codigo,
           contacto: nuevoProveedor.contacto,
@@ -196,12 +197,11 @@ export default function ProductosPage() {
 
       setMostrarModalProveedor(false);
       setNuevoProveedor({ nombre: '', codigo: '', contacto: '', telefono: '', email: '' });
-      cargarProductos();
+      cargarProductos(); // Recarga para mostrar el nuevo proveedor inmediatamente
     } catch (err: any) {
-      alert('Error: ' + err.message);
+      alert('Error al guardar proveedor: ' + err.message);
     }
   }
-
   function abrirEditar(producto: any) {
     setProductoEditando({ ...producto, precio_compra_actual: producto.precio_compra_actual || '' });
     setMostrarModalEditar(true);
