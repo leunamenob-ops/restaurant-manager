@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
-import { render } from '@react-pdf/renderer';
-import { PedidoPDF } from '../../../components/PedidoPDF';
 
 const resend = new Resend(process.env.RESEND_API_KEY || '');
 
@@ -10,18 +8,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { proveedor, email, numeroPedido, fecha, items, usuario, total } = body;
 
-    // 1. Generar el PDF
-    const pdfBuffer = await render(
-      <PedidoPDF 
-        numeroPedido={numeroPedido}
-        fecha={fecha}
-        restaurante={usuario}
-        total={total}
-        items={items}
-      />
-    );
-
-    // 2. HTML del email
+    // Email HTML profesional (sin PDF)
     const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -40,47 +27,61 @@ export async function POST(request: Request) {
         </style>
       </head>
       <body>
-        <div class="header"><h1>Pedido ${numeroPedido}</h1><p>KOST Software</p></div>
+        <div class="header">
+          <h1 style="margin:0;">Pedido ${numeroPedido}</h1>
+          <p style="margin:5px 0 0;opacity:0.9;">KOST Software - Restaurant Manager</p>
+        </div>
         <div class="content">
           <div class="info">
-            <p><strong>Fecha:</strong> ${fecha}</p>
-            <p><strong>Restaurante:</strong> ${usuario}</p>
-            <p><strong>Productos:</strong> ${items.length} items</p>
+            <p style="margin:8px 0;"><strong>📅 Fecha:</strong> ${fecha}</p>
+            <p style="margin:8px 0;"><strong>🏪 Restaurante:</strong> ${usuario}</p>
+            <p style="margin:8px 0;"><strong>📦 Total productos:</strong> ${items.length} items</p>
           </div>
+          
+          <h2 style="color:#059669;font-size:18px;">Productos solicitados:</h2>
           <table class="table">
-            <thead><tr><th>Código</th><th>Descripción</th><th>Cant.</th><th>Unidad</th><th>Precio</th><th>Subtotal</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Descripción</th>
+                <th style="text-align:center;">Cantidad</th>
+                <th style="text-align:center;">Unidad</th>
+                <th style="text-align:right;">Precio</th>
+                <th style="text-align:right;">Subtotal</th>
+              </tr>
+            </thead>
             <tbody>
               ${items.map((item: any) => `
                 <tr>
                   <td>${item.codigo || 'N/A'}</td>
                   <td>${item.descripcion}</td>
-                  <td>${item.cantidad}</td>
-                  <td>${item.unidad}</td>
-                  <td>${item.precio.toFixed(2)}€</td>
-                  <td><strong>${item.subtotal.toFixed(2)}€</strong></td>
+                  <td style="text-align:center;">${item.cantidad}</td>
+                  <td style="text-align:center;">${item.unidad}</td>
+                  <td style="text-align:right;">${item.precio.toFixed(2)} €</td>
+                  <td style="text-align:right;font-weight:bold;">${item.subtotal.toFixed(2)} €</td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
-          <div class="total"><p style="margin:0;font-size:14px;color:#059669;">TOTAL</p><p class="total-amount" style="margin:5px 0 0;">${total.toFixed(2)} €</p></div>
+          
+          <div class="total">
+            <p style="font-size:14px;color:#059669;margin:0;font-weight:600;">TOTAL ESTIMADO</p>
+            <p class="total-amount" style="margin:5px 0 0;">${total.toFixed(2)} €</p>
+          </div>
         </div>
-        <div class="footer"><p>KOST Software - kostsoftware.com</p></div>
+        <div class="footer">
+          <p>KOST Software - kostsoftware.com</p>
+        </div>
       </body>
       </html>
     `;
 
-    // 3. Enviar email con PDF
+    // Enviar email SIN PDF
     const { data, error } = await resend.emails.send({
       from: process.env.EMAIL_FROM || 'KOST Software <pedidos@kostsoftware.com>',
       to: [email],
-      subject: `Pedido ${numeroPedido} - KOST Software`,
+      subject: `📦 Pedido ${numeroPedido} - KOST Software`,
       html: htmlContent,
-      attachments: [
-        {
-          filename: `Pedido_${numeroPedido}.pdf`,
-          content: Buffer.from(pdfBuffer).toString('base64'),
-        },
-      ],
     });
 
     if (error) {
@@ -88,7 +89,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    console.log('✅ Email enviado a:', email);
     return NextResponse.json({ success: true });
+    
   } catch (error) {
     console.error('Error en API:', error);
     return NextResponse.json({ error: 'Error interno' }, { status: 500 });
