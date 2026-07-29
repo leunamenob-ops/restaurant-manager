@@ -1,90 +1,134 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 export default function PedidosPage() {
-  const [productos, setProductos] = useState<any[]>([]);
+  const [todosProductos, setTodosProductos] = useState<any[]>([]);
+  const [productosFiltrados, setProductosFiltrados] = useState<any[]>([]);
   const [carrito, setCarrito] = useState<any[]>([]);
-  const [busqueda, setBusqueda] = useState('');
-  const [filtroProveedor, setFiltroProveedor] = useState('');
-  const [proveedores, setProveedores] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [busquedaNombre, setBusquedaNombre] = useState('');
+  const [proveedoresUnicos, setProveedoresUnicos] = useState<string[]>([]);
+  const [proveedoresSeleccionados, setProveedoresSeleccionados] = useState<string[]>([]);
+  const [mostrarFiltroProveedores, setMostrarFiltroProveedores] = useState(false);
   const [mostrarCarrito, setMostrarCarrito] = useState(false);
   const [enviando, setEnviando] = useState(false);
-  const [buscando, setBuscando] = useState(false);
+  const [loading, setLoading] = useState(true);
+  
+  const filtroRef = useRef<HTMLDivElement>(null);
 
-  // Cargar proveedores al iniciar
-  useEffect(() => {
-    async function cargarProveedores() {
-      const { data } = await supabase
-        .from('proveedores')
-        .select('id, nombre')
-        .order('nombre');
-      if (data) setProveedores(data);
-    }
-    cargarProveedores();
-  }, []);
+  // Cargar todos los productos al inicio
+  const cargarProductos = useCallback(async () => {
+    setLoading(true);
+    
+    try {
+      let todosLosProductos: any[] = [];
+      let desde = 0;
+      const lote = 1000;
+      let hayMas = true;
 
-  // Búsqueda combinada - CORREGIDA
-  useEffect(() => {
-    async function buscarProductos() {
-      setBuscando(true);
-      
-      let query = supabase
-        .from('ingredientes')
-        .select(`
-          id,
-          nombre,
-          categoria,
-          unidad_compra,
-          precio_compra_actual,
-          proveedor_id,
-          proveedor_nombre
-        `)
-        .order('nombre')
-        .limit(100);
+      while (hayMas) {
+        const { data, error } = await supabase
+          .from('ingredientes')
+          .select('*')
+          .order('nombre')
+          .range(desde, desde + lote - 1);
 
-      // Filtro por proveedor - CORREGIDO: usar proveedor_nombre
-      if (filtroProveedor) {
-        const provNombre = proveedores.find(p => p.id === filtroProveedor)?.nombre;
-        if (provNombre) {
-          query = query.eq('proveedor_nombre', provNombre);
+        if (error) throw error;
+
+        if (!data || data.length === 0) {
+          hayMas = false;
+        } else {
+          todosLosProductos = todosLosProductos.concat(data);
+          if (data.length < lote) {
+            hayMas = false;
+          } else {
+            desde += lote;
+          }
         }
       }
 
-      // Filtro por texto
-      if (busqueda && busqueda.length >= 2) {
-        query = query.or(`nombre.ilike.%${busqueda}%,categoria.ilike.%${busqueda}%`);
-      }
+      const productosTransformados = todosLosProductos.map((item: any) => ({
+        ...item,
+        proveedor_nombre: item.proveedor_nombre || 'Sin proveedor'
+      }));
 
-      const { data, error } = await query;
+      setTodosProductos(productosTransformados);
       
-      if (error) {
-        console.error('Error en búsqueda:', error);
-      }
+      const proveedores = Array.from(
+        new Set(
+          productosTransformados
+            .map((p: any) => p.proveedor_nombre)
+            .filter(Boolean)
+        )
+      ) as string[];
       
-      if (data) {
-        // Transformar datos para mantener compatibilidad con el resto del código
-        const transformados = data.map(item => ({
-          ...item,
-          proveedores: {
-            nombre: item.proveedor_nombre || 'Sin proveedor'
-          }
-        }));
-        
-        const filtrados = transformados.filter((p, index, self) => 
-          p.nombre && p.nombre.trim() !== '' &&
-          self.findIndex(item => item.id === p.id) === index
-        );
-        setProductos(filtrados);
-      }
-      setBuscando(false);
+      setProveedoresUnicos(proveedores.sort());
+      setProductosFiltrados(productosTransformados);
+      
+    } catch (err: any) {
+      console.error('Error cargando productos:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    cargarProductos();
+  }, [cargarProductos]);
+
+  // Filtrado client-side (igual que en Productos)
+  useEffect(() => {
+    let filtrados = [...todosProductos];
+
+    if (busquedaNombre.trim()) {
+      const busqueda = busquedaNombre.toLowerCase();
+      filtrados = filtrados.filter((p: any) => {
+        const nombre = p.nombre?.toLowerCase() || '';
+        const categoria = p.categoria?.toLowerCase() || '';
+        return nombre.includes(busqueda) || categoria.includes(busqueda);
+      });
     }
 
-    const timer = setTimeout(buscarProductos, 300);
-    return () => clearTimeout(timer);
-  }, [busqueda, filtroProveedor, proveedores]);
+    if (proveedoresSeleccionados.length > 0) {
+      filtrados = filtrados.filter((p: any) => 
+        proveedoresSeleccionados.includes(p.proveedor_nombre)
+      );
+    }
+
+    setProductosFiltrados(filtrados);
+  }, [busquedaNombre, proveedoresSeleccionados, todosProductos]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (filtroRef.current && !filtroRef.current.contains(event.target as Node)) {
+        setMostrarFiltroProveedores(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  function toggleProveedor(proveedor: string) {
+    setProveedoresSeleccionados(prev => 
+      prev.includes(proveedor)
+        ? prev.filter(p => p !== proveedor)
+        : [...prev, proveedor]
+    );
+  }
+
+  function toggleTodosProveedores() {
+    if (proveedoresSeleccionados.length === proveedoresUnicos.length) {
+      setProveedoresSeleccionados([]);
+    } else {
+      setProveedoresSeleccionados([...proveedoresUnicos]);
+    }
+  }
+
+  function limpiarFiltros() {
+    setBusquedaNombre('');
+    setProveedoresSeleccionados([]);
+  }
 
   function añadirAlCarrito(producto: any, cantidad: number) {
     const existente = carrito.find(item => item.id === producto.id);
@@ -114,7 +158,7 @@ export default function PedidosPage() {
   function calcularTotalesPorProveedor() {
     const porProveedor: any = {};
     carrito.forEach(item => {
-      const provNombre = item.proveedores?.nombre || 'Sin proveedor';
+      const provNombre = item.proveedor_nombre || 'Sin proveedor';
       if (!porProveedor[provNombre]) {
         porProveedor[provNombre] = { items: [], total: 0, totalUnidades: 0 };
       }
@@ -198,7 +242,7 @@ export default function PedidosPage() {
       setMostrarCarrito(false);
     } catch (error) {
       console.error('Error crítico:', error);
-      alert('❌ Error al procesar el pedido.');
+      alert(' Error al procesar el pedido.');
     } finally {
       setEnviando(false);
     }
@@ -208,6 +252,7 @@ export default function PedidosPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+      
       {/* HEADER */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -238,47 +283,88 @@ export default function PedidosPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        {/* BUSCADORES */}
+        
+        {/* FILTROS - IGUAL QUE PRODUCTOS */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2 relative">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-              <input
-                type="text"
-                placeholder="Buscar producto o categoría..."
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition text-sm"
-              />
+          <div className="flex flex-col md:flex-row gap-4 items-start">
+            <div className="flex-1 w-full">
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                Buscar por nombre o categoría
+              </label>
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                <input
+                  type="text"
+                  placeholder="Ej: Queso, Tomate, Verduras..."
+                  value={busquedaNombre}
+                  onChange={(e) => setBusquedaNombre(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition text-sm"
+                />
+              </div>
             </div>
-            <div className="relative">
-              <select
-                value={filtroProveedor}
-                onChange={(e) => setFiltroProveedor(e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white outline-none transition text-sm"
+
+            <div className="relative w-full md:w-auto" ref={filtroRef}>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                Proveedores
+              </label>
+              <button
+                onClick={() => setMostrarFiltroProveedores(!mostrarFiltroProveedores)}
+                className="w-full md:w-auto px-4 py-2.5 border border-slate-300 rounded-lg font-medium transition-all hover:border-emerald-400 hover:bg-slate-50 flex items-center justify-between gap-2 text-sm text-slate-700"
               >
-                <option value="">Todos los proveedores</option>
-                {proveedores.map(prov => (
-                  <option key={prov.id} value={prov.id}>{prov.nombre}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-100">
-            <p className="text-sm text-slate-600">
-              {buscando ? (
-                <span className="flex items-center gap-2 text-emerald-600">
-                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
-                  Buscando...
+                <span className="truncate">
+                  {proveedoresSeleccionados.length > 0 
+                    ? `${proveedoresSeleccionados.length} seleccionado(s)`
+                    : 'Todos los proveedores'
+                  }
                 </span>
-              ) : (
-                <span className="font-medium">{productos.length} productos encontrados</span>
-              )}
-            </p>
-            {(busqueda || filtroProveedor) && (
-              <button onClick={() => { setBusqueda(''); setFiltroProveedor(''); }} className="text-sm text-red-600 hover:text-red-700 font-medium hover:underline transition">
-                Limpiar filtros
+                <svg className={`w-4 h-4 text-slate-400 transition-transform ${mostrarFiltroProveedores ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
               </button>
+
+              {mostrarFiltroProveedores && (
+                <div className="absolute top-full left-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="p-3 border-b border-slate-100 bg-slate-50">
+                    <button
+                      onClick={toggleTodosProveedores}
+                      className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 w-full text-left"
+                    >
+                      {proveedoresSeleccionados.length === proveedoresUnicos.length 
+                        ? 'Deseleccionar todos' 
+                        : 'Seleccionar todos'}
+                    </button>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto p-2">
+                    {proveedoresUnicos.map((proveedor) => (
+                      <label
+                        key={proveedor}
+                        className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={proveedoresSeleccionados.includes(proveedor)}
+                          onChange={() => toggleProveedor(proveedor)}
+                          className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
+                        />
+                        <span className="text-sm text-slate-700 flex-1 truncate">{proveedor}</span>
+                        <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                          {todosProductos.filter((p: any) => p.proveedor_nombre === proveedor).length}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {(busquedaNombre || proveedoresSeleccionados.length > 0) && (
+              <div className="pt-6 w-full md:w-auto">
+                <button
+                  onClick={limpiarFiltros}
+                  className="w-full md:w-auto px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-lg font-medium transition text-sm flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  Limpiar filtros
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -293,18 +379,18 @@ export default function PedidosPage() {
           </div>
 
           <div className="divide-y divide-slate-100">
-            {buscando ? (
+            {loading ? (
               <div className="p-12 text-center text-slate-500">
                 <svg className="animate-spin h-8 w-8 mx-auto mb-3 text-emerald-500" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
                 <p>Cargando productos...</p>
               </div>
-            ) : productos.length === 0 ? (
+            ) : productosFiltrados.length === 0 ? (
               <div className="p-12 text-center text-slate-500">
                 <p className="text-lg font-medium">No se encontraron productos</p>
                 <p className="text-sm mt-1">Prueba con otra búsqueda o limpia los filtros</p>
               </div>
             ) : (
-              productos.map((producto) => (
+              productosFiltrados.map((producto) => (
                 <div key={producto.id} className="p-4 hover:bg-emerald-50/30 transition group">
                   <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                     <div className="flex-1">
@@ -319,10 +405,10 @@ export default function PedidosPage() {
                           {producto.unidad_compra}
                         </span>
                       </div>
-                      {producto.proveedores?.nombre && (
+                      {producto.proveedor_nombre && (
                         <p className="text-sm text-cyan-700 font-medium mt-2 flex items-center gap-1">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                          {producto.proveedores.nombre}
+                          {producto.proveedor_nombre}
                         </p>
                       )}
                       {producto.precio_compra_actual && (
