@@ -30,7 +30,11 @@ export default function PedidosPage() {
       while (hayMas) {
         const { data, error } = await supabase
           .from('ingredientes')
-          .select('*')
+          .select(`
+            *,
+            proveedor_id,
+            proveedor_nombre
+          `)
           .order('nombre')
           .range(desde, desde + lote - 1);
 
@@ -179,7 +183,7 @@ export default function PedidosPage() {
 
   const totalUnidades = carrito.reduce((sum, item) => sum + item.cantidad, 0);
 
-  // FUNCIÓN CORREGIDA Y LIMPIA
+  // FUNCIÓN CORREGIDA - SIN ILIKE, USANDO DATOS CARGADOS
   async function enviarPedido() {
     if (carrito.length === 0) return;
     setEnviando(true);
@@ -190,22 +194,29 @@ export default function PedidosPage() {
       const fechaISO = new Date().toISOString();
 
       for (const [provNombre, data] of Object.entries(porProveedor) as any[]) {
-        // CORRECCIÓN 1: Usar ilike para evitar error 406 con espacios en el nombre
-        const { data: provData } = await supabase
-          .from('proveedores')
-          .select('id, email')
-          .ilike('nombre', provNombre.trim())
-          .single();
+        // CORRECCIÓN: Buscar el ID del proveedor desde los productos cargados
+        const productoEjemplo = todosProductos.find(p => p.proveedor_nombre === provNombre);
+        const proveedorId = productoEjemplo?.proveedor_id || null;
 
-        // CORRECCIÓN 2: Eliminado 'total_estimado' porque no existe en tu tabla de BD
+        // Buscar email del proveedor si tenemos ID
+        let proveedorEmail = null;
+        if (proveedorId) {
+          const { data: provData } = await supabase
+            .from('proveedores')
+            .select('email')
+            .eq('id', proveedorId)
+            .single();
+          proveedorEmail = provData?.email || null;
+        }
+
         const { data: pedidoData, error: pedidoError } = await supabase
           .from('pedidos')
           .insert({
             id: crypto.randomUUID(),
             numero_pedido: numeroPedido,
-            proveedor_id: provData?.id || null,
+            proveedor_id: proveedorId,
             proveedor_nombre: provNombre,
-            proveedor_email: provData?.email || null,
+            proveedor_email: proveedorEmail,
             usuario_nombre: 'Cocina',
             total_articulos: data.items.length,
             estado: 'enviado',
@@ -237,15 +248,15 @@ export default function PedidosPage() {
           const { error: itemsError } = await supabase.from('pedido_items').insert(itemsToInsert);
           if (itemsError) console.error('Error guardando items:', itemsError);
 
-          // CORRECCIÓN 3: Enviar email si el proveedor tiene email configurado
-          if (provData?.email) {
+          // Enviar email
+          if (proveedorEmail) {
             try {
               const response = await fetch('/api/enviar-pedido', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   proveedor: provNombre,
-                  email: provData.email,
+                  email: proveedorEmail,
                   numeroPedido,
                   fecha: new Date(fechaISO).toLocaleString('es-ES'),
                   items: data.items.map((i: any) => ({
@@ -262,20 +273,18 @@ export default function PedidosPage() {
               });
 
               if (!response.ok) {
-                console.warn(`Email no enviado a ${provNombre}:`, await response.text());
+                console.warn(`Email no enviado a ${provNombre}`);
               } else {
-                console.log(`✅ Email enviado a ${provNombre} (${provData.email})`);
+                console.log(`✅ Email enviado a ${provNombre}`);
               }
             } catch (err) {
-              console.error(`Error enviando email a ${provNombre}:`, err);
+              console.error(`Error enviando email:`, err);
             }
-          } else {
-            console.warn(`⚠️ Proveedor ${provNombre} no tiene email configurado en la BD`);
           }
         }
       }
 
-      alert(`✅ Pedido ${numeroPedido} generado correctamente.\n\nSe han enviado emails a los proveedores (si tienen email configurado).`);
+      alert(`✅ Pedido ${numeroPedido} generado correctamente.`);
       setCarrito([]);
       setMostrarCarrito(false);
     } catch (error) {
