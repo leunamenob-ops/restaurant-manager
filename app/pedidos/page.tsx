@@ -198,7 +198,7 @@ export default function PedidosPage() {
       const numeroPedido = `PED-${Date.now()}`;
       const fechaISO = new Date().toISOString();
 
-      for (const [provNombre, data] of Object.entries(porProveedor)) {
+      for (const [provNombre, data] of Object.entries(porProveedor) as [string, any][]) {
         console.log(`\n📦 Procesando proveedor: ${provNombre}`);
         
         // Buscar proveedor por nombre exacto
