@@ -218,7 +218,7 @@ export default function PedidosPage() {
     proveedor_email: provData?.email || null,
     usuario_nombre: 'Cocina',
     total_articulos: data.items.length,
-    // total_estimado: data.total,  // ← COMENTADA
+    // total_estimado: data.total,  // ← ESTÁ COMENTADA
     estado: 'enviado',
     fecha: fechaISO,
     created_at: fechaISO
