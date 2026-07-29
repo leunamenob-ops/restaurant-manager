@@ -209,20 +209,20 @@ export default function PedidosPage() {
         }
 
         const { data: pedidoData, error: pedidoError } = await supabase
-          .from('pedidos')
-          .insert({
-            id: crypto.randomUUID(),
-            numero_pedido: numeroPedido,
-            proveedor_id: provData?.id || null,
-            proveedor_nombre: provNombre,
-            proveedor_email: provData?.email || null,
-            usuario_nombre: 'Cocina',
-            total_articulos: data.items.length,
-            total_estimado: data.total,
-            estado: 'enviado',
-            fecha: fechaISO,
-            created_at: fechaISO
-          })
+  .from('pedidos')
+  .insert({
+    id: crypto.randomUUID(),
+    numero_pedido: numeroPedido,
+    proveedor_id: provData?.id || null,
+    proveedor_nombre: provNombre,
+    proveedor_email: provData?.email || null,
+    usuario_nombre: 'Cocina',
+    total_articulos: data.items.length,
+    // total_estimado: data.total,  // ← COMENTADA
+    estado: 'enviado',
+    fecha: fechaISO,
+    created_at: fechaISO
+  })
           .select()
           .single();
 
