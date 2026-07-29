@@ -542,8 +542,8 @@ export default function LandingPage() {
 
             <div className="mt-6 pt-6 border-t border-gray-100">
               <p className="text-xs text-gray-500 text-center bg-gray-50 p-3 rounded-lg">
-                💡 <strong>Usuarios de prueba:</strong> B0001 a B0005 <br/>
-                🔑 <strong>PIN:</strong> 4321 (ADMIN) o 1234 (USER)
+                💡 <strong>Usuarios de prueba:</strong> B**** a B**** <br/>
+                🔑 <strong>PIN:</strong> **** (ADMIN) o **** (USER)
               </p>
             </div>
           </div>
