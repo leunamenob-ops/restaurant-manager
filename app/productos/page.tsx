@@ -48,6 +48,7 @@ export default function ProductosPage() {
     setError(null);
     
     try {
+      // 1. Cargar ingredientes
       let todosLosProductos: any[] = [];
       let desde = 0;
       const lote = 1000;
@@ -81,15 +82,31 @@ export default function ProductosPage() {
 
       setTodosProductos(productosTransformados);
       
-      const proveedores = Array.from(
+      // 2. Cargar proveedores EXPLÍCITAMENTE (para que aparezcan aunque no tengan ingredientes)
+      const { data: proveedoresData, error: provError } = await supabase
+        .from('proveedores')
+        .select('nombre')
+        .order('nombre');
+
+      let listaProveedores: string[] = [];
+      if (!provError && proveedoresData) {
+        listaProveedores = proveedoresData.map((p: any) => p.nombre).filter(Boolean);
+      }
+
+      // 3. Combinar proveedores de la tabla y los que ya están en ingredientes
+      const proveedoresDeIngredientes = Array.from(
         new Set(
           productosTransformados
             .map((p: any) => p.proveedor_nombre)
             .filter(Boolean)
         )
       ) as string[];
+
+      const todosLosProveedores = Array.from(
+        new Set([...listaProveedores, ...proveedoresDeIngredientes])
+      ) as string[];
       
-      setProveedoresUnicos(proveedores.sort());
+      setProveedoresUnicos(todosLosProveedores.sort());
       setProductosFiltrados(productosTransformados);
       setPaginaActual(1);
       
@@ -100,50 +117,6 @@ export default function ProductosPage() {
       setLoading(false);
     }
   }, []);
-
-  useEffect(() => {
-    cargarProductos();
-  }, [cargarProductos]);
-
-  useEffect(() => {
-    let filtrados = [...todosProductos];
-
-    if (busquedaNombre.trim()) {
-      const busqueda = busquedaNombre.toLowerCase();
-      filtrados = filtrados.filter((p: any) => {
-        const nombre = p.nombre?.toLowerCase() || '';
-        const categoria = p.categoria?.toLowerCase() || '';
-        return nombre.includes(busqueda) || categoria.includes(busqueda);
-      });
-    }
-
-    if (proveedoresSeleccionados.length > 0) {
-      filtrados = filtrados.filter((p: any) => 
-        proveedoresSeleccionados.includes(p.proveedor_nombre)
-      );
-    }
-
-    setProductosFiltrados(filtrados);
-    setPaginaActual(1);
-  }, [busquedaNombre, proveedoresSeleccionados, todosProductos]);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (filtroRef.current && !filtroRef.current.contains(event.target as Node)) {
-        setMostrarFiltroProveedores(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  function toggleProveedor(proveedor: string) {
-    setProveedoresSeleccionados(prev => 
-      prev.includes(proveedor)
-        ? prev.filter(p => p !== proveedor)
-        : [...prev, proveedor]
-    );
-  }
 
   function toggleTodosProveedores() {
     if (proveedoresSeleccionados.length === proveedoresUnicos.length) {
