@@ -1,79 +1,68 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Inicializar Resend (o el servicio que uses)
+const resend = new Resend(process.env.RESEND_API_KEY || '');
 
 export async function POST(request: Request) {
   try {
-    console.log('📩 [RESEND] Iniciando envío de email...');
-    
-    const { proveedor, email, numeroPedido, fecha, items, usuario } = await request.json();
+    const body = await request.json();
+    const { proveedor, email, numeroPedido, fecha, items, usuario, total } = body;
 
-    console.log('📋 Datos:', { proveedor, email, numeroPedido });
-
-    // Construir HTML del email
-    let html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 2px solid #c00000;">
-        <h2 style="color: #c00000; border-bottom: 3px solid #c00000; padding-bottom: 10px;">📋 ORDEN DE COMPRA - HOTEL BONANZA</h2>
-        <p><strong>Nº Pedido:</strong> <span style="color: #c00000; font-size: 18px;">${numeroPedido}</span></p>
-        <p><strong>Fecha:</strong> ${fecha}</p>
-        <p><strong>Proveedor:</strong> ${proveedor}</p>
-        <p><strong>Usuario:</strong> ${usuario}</p>
-        <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
-        <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
-          <thead>
-            <tr style="background-color: #c00000; color: white;">
-              <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Código</th>
-              <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Descripción</th>
-              <th style="padding: 10px; border: 1px solid #ddd; text-align: center;">Cantidad</th>
-              <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Unidad</th>
+    // Construir el email
+    const htmlContent = `
+      <h1>Pedido ${numeroPedido}</h1>
+      <p><strong>Fecha:</strong> ${fecha}</p>
+      <p><strong>Restaurante:</strong> ${usuario}</p>
+      <p><strong>Total estimado:</strong> ${total.toFixed(2)}€</p>
+      
+      <h2>Productos solicitados:</h2>
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="background: #f3f4f6;">
+            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Código</th>
+            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Descripción</th>
+            <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Cantidad</th>
+            <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Unidad</th>
+            <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Precio</th>
+            <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map((item: any) => `
+            <tr>
+              <td style="border: 1px solid #ddd; padding: 8px;">${item.codigo}</td>
+              <td style="border: 1px solid #ddd; padding: 8px;">${item.descripcion}</td>
+              <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${item.cantidad}</td>
+              <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${item.unidad}</td>
+              <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${item.precio.toFixed(2)}€</td>
+              <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${item.subtotal.toFixed(2)}€</td>
             </tr>
-          </thead>
-          <tbody>
+          `).join('')}
+        </tbody>
+      </table>
+      
+      <p style="margin-top: 20px; color: #6b7280;">
+        Este es un email automático generado por KOST Software - Restaurant Manager
+      </p>
     `;
 
-    items.forEach((item: any) => {
-      html += `
-        <tr>
-          <td style="padding: 8px; border: 1px solid #ddd;">${item.codigo}</td>
-          <td style="padding: 8px; border: 1px solid #ddd;">${item.descripcion}</td>
-          <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${item.cantidad}</td>
-          <td style="padding: 8px; border: 1px solid #ddd;">${item.unidad}</td>
-        </tr>
-      `;
-    });
-
-    html += `
-          </tbody>
-        </table>
-        <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
-        <p style="color: #666; font-size: 12px; margin-top: 20px;">
-          <strong>Hotel Bonanza **Playa**</strong><br>
-          Este pedido ha sido generado automáticamente.
-        </p>
-      </div>
-    `;
-
-    // Enviar email con Resend (CORREGIDO PARA TYPESCRIPT)
+    // Enviar email con Resend
     const { data, error } = await resend.emails.send({
-      from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
+      from: process.env.EMAIL_FROM || 'KOST Software <onboarding@resend.dev>',
       to: [email],
-      cc: [process.env.EMAIL_FROM || 'onboarding@resend.dev'],
-      subject: `📦 Orden de Compra ${numeroPedido} - Hotel Bonanza`,
-      html: html,
+      subject: `Pedido ${numeroPedido} - KOST Software`,
+      html: htmlContent,
     });
 
     if (error) {
-      console.error('❌ [RESEND] Error al enviar email:', error);
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      console.error('Error enviando email:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    console.log('✅ [RESEND] Email enviado exitosamente. ID:', data?.id);
-
-    return NextResponse.json({ success: true, id: data?.id });
-    
-  } catch (error: any) {
-    console.error('❌ [RESEND] Error al enviar email:', error.message);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true, data });
+  } catch (error) {
+    console.error('Error en API:', error);
+    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
   }
 }
