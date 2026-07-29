@@ -184,105 +184,136 @@ export default function PedidosPage() {
   const totalUnidades = carrito.reduce((sum, item) => sum + item.cantidad, 0);
 
   // FUNCIÓN CORREGIDA - SIN ILIKE, USANDO DATOS CARGADOS
-  async function enviarPedido() {
-    if (carrito.length === 0) return;
-    setEnviando(true);
+ async function enviarPedido() {
+  if (carrito.length === 0) {
+    alert('El carrito está vacío');
+    return;
+  }
+  
+  setEnviando(true);
+  console.log('🚀 Iniciando envío...');
+  console.log('Carrito:', carrito);
 
-    try {
-      const porProveedor = calcularTotalesPorProveedor();
-      const numeroPedido = `PED-${Date.now()}`;
-      const fechaISO = new Date().toISOString();
+  try {
+    const porProveedor = calcularTotalesPorProveedor();
+    const numeroPedido = `PED-${Date.now()}`;
+    const fechaISO = new Date().toISOString();
 
-      for (const [provNombre, data] of Object.entries(porProveedor) as any[]) {
-        // CORRECCIÓN: Buscar el ID del proveedor desde los productos cargados
-        const productoEjemplo = todosProductos.find(p => p.proveedor_nombre === provNombre);
-        const proveedorId = productoEjemplo?.proveedor_id || null;
+    console.log('Número de pedido:', numeroPedido);
+    console.log('Proveedores:', Object.keys(porProveedor));
 
-        // Buscar email del proveedor si tenemos ID
-        let proveedorEmail = null;
-        if (proveedorId) {
-          const { data: provData } = await supabase
-            .from('proveedores')
-            .select('email')
-            .eq('id', proveedorId)
-            .single();
-          proveedorEmail = provData?.email || null;
-        }
+    for (const [provNombre, data] of Object.entries(porProveedor)) {
+      console.log(`\n📦 Procesando proveedor: ${provNombre}`);
+      
+      // Buscar proveedor por nombre exacto (sin ilike)
+      const { data: provData, error: provError } = await supabase
+        .from('proveedores')
+        .select('id, email')
+        .eq('nombre', provNombre.trim())
+        .maybeSingle(); // Usar maybeSingle en lugar de single
 
-        const { data: pedidoData, error: pedidoError } = await supabase
-          .from('pedidos')
-          .insert({
-            id: crypto.randomUUID(),
-            numero_pedido: numeroPedido,
-            proveedor_id: proveedorId,
-            proveedor_nombre: provNombre,
-            proveedor_email: proveedorEmail,
-            usuario_nombre: 'Cocina',
-            total_articulos: data.items.length,
-            estado: 'enviado',
-            fecha: fechaISO,
-            created_at: fechaISO
-          })
-          .select()
-          .single();
+      if (provError) {
+        console.error(`Error buscando proveedor ${provNombre}:`, provError);
+      }
 
-        if (pedidoError) {
-          console.error(`Error guardando pedido para ${provNombre}:`, pedidoError);
-          continue;
-        }
+      console.log('Proveedor encontrado:', provData);
 
-        if (pedidoData) {
-          const itemsToInsert = data.items.map((item: any) => ({
-            id: crypto.randomUUID(),
-            pedido_id: pedidoData.id,
-            ingrediente_id: item.id,
-            codigo: item.codigo || '',
-            descripcion: item.nombre,
-            cantidad_pedida: item.cantidad,
-            cantidad_recibida: 0,
-            unidad: item.unidad_compra,
-            estado: 'pendiente',
-            created_at: fechaISO
-          }));
+      // Insertar pedido
+      const { data: pedidoData, error: pedidoError } = await supabase
+        .from('pedidos')
+        .insert({
+          id: crypto.randomUUID(),
+          numero_pedido: numeroPedido,
+          proveedor_id: provData?.id || null,
+          proveedor_nombre: provNombre,
+          proveedor_email: provData?.email || null,
+          usuario_nombre: 'Cocina',
+          total_articulos: data.items.length,
+          estado: 'enviado',
+          fecha: fechaISO,
+          created_at: fechaISO
+        })
+        .select()
+        .single();
 
-          const { error: itemsError } = await supabase.from('pedido_items').insert(itemsToInsert);
-          if (itemsError) console.error('Error guardando items:', itemsError);
+      if (pedidoError) {
+        console.error(`❌ Error guardando pedido:`, pedidoError);
+        console.error('Detalles del error:', JSON.stringify(pedidoError, null, 2));
+        continue;
+      }
 
-          // Enviar email
-          if (proveedorEmail) {
-            try {
-              const response = await fetch('/api/enviar-pedido', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  proveedor: provNombre,
-                  email: proveedorEmail,
-                  numeroPedido,
-                  fecha: new Date(fechaISO).toLocaleString('es-ES'),
-                  items: data.items.map((i: any) => ({
-                    codigo: i.codigo || '',
-                    descripcion: i.nombre,
-                    cantidad: i.cantidad,
-                    unidad: i.unidad_compra,
-                    precio: i.precioUnitario,
-                    subtotal: i.subtotal
-                  })),
-                  usuario: 'Cocina',
-                  total: data.total
-                })
-              });
+      console.log('✅ Pedido guardado:', pedidoData);
 
-              if (!response.ok) {
-                console.warn(`Email no enviado a ${provNombre}`);
-              } else {
-                console.log(`✅ Email enviado a ${provNombre}`);
-              }
-            } catch (err) {
-              console.error(`Error enviando email:`, err);
-            }
+      // Insertar items
+      const itemsToInsert = data.items.map((item: any) => ({
+        id: crypto.randomUUID(),
+        pedido_id: pedidoData.id,
+        ingrediente_id: item.id,
+        codigo: item.codigo || '',
+        descripcion: item.nombre,
+        cantidad_pedida: item.cantidad,
+        cantidad_recibida: 0,
+        unidad: item.unidad_compra,
+        estado: 'pendiente',
+        created_at: fechaISO
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('pedido_items')
+        .insert(itemsToInsert);
+
+      if (itemsError) {
+        console.error('❌ Error guardando items:', itemsError);
+      } else {
+        console.log('✅ Items guardados:', itemsToInsert.length);
+      }
+
+      // Enviar email (si hay API)
+      if (provData?.email) {
+        try {
+          const response = await fetch('/api/enviar-pedido', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              proveedor: provNombre,
+              email: provData.email,
+              numeroPedido,
+              fecha: new Date(fechaISO).toLocaleString('es-ES'),
+              items: data.items.map((i: any) => ({
+                codigo: i.codigo || '',
+                descripcion: i.nombre,
+                cantidad: i.cantidad,
+                unidad: i.unidad_compra,
+                precio: i.precioUnitario,
+                subtotal: i.subtotal
+              })),
+              usuario: 'Cocina',
+              total: data.total
+            })
+          });
+
+          if (response.ok) {
+            console.log('✅ Email enviado a', provData.email);
+          } else {
+            console.warn('️ Email no enviado (status:', response.status, ')');
           }
+        } catch (err) {
+          console.error('Error enviando email:', err);
         }
       }
+    }
+
+    alert(`✅ Pedido ${numeroPedido} generado correctamente.`);
+    setCarrito([]);
+    setMostrarCarrito(false);
+    
+  } catch (error) {
+    console.error('❌ Error crítico:', error);
+    alert('❌ Error: ' + (error as Error).message);
+  } finally {
+    setEnviando(false);
+  }
+}
 
       alert(`✅ Pedido ${numeroPedido} generado correctamente.`);
       setCarrito([]);
