@@ -49,160 +49,159 @@ export default function HistorialPedidosPage() {
   }
 
   function imprimirOrdenCompra(pedido: any) {
-    const ventana = window.open('', '_blank');
-    if (!ventana) return;
+  const ventana = window.open('', '_blank');
+  if (!ventana) return;
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Orden de Compra ${pedido.numero_pedido}</title>
-        <style>
-          @media print {
-            .no-print { display: none; }
-          }
-          body { 
-            font-family: Arial, sans-serif; 
-            margin: 40px;
-            color: #1f2937;
-          }
-          .header { 
-            background: linear-gradient(135deg, #059669 0%, #0891b2 100%); 
-            color: white; 
-            padding: 30px; 
-            text-align: center;
-            border-radius: 10px;
-            margin-bottom: 30px;
-          }
-          .info { 
-            background: #f9fafb; 
-            padding: 20px; 
-            border-radius: 8px; 
-            margin-bottom: 20px;
-          }
-          .info-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-          }
-          table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-top: 20px;
-          }
-          th { 
-            background: #059669; 
-            color: white; 
-            padding: 12px; 
-            text-align: left;
-          }
-          td { 
-            padding: 12px; 
-            border-bottom: 1px solid #e5e7eb;
-          }
-          .total { 
-            background: #f0fdf4; 
-            padding: 20px; 
-            border-radius: 8px; 
-            text-align: right; 
-            margin-top: 20px;
-          }
-          .total-amount { 
-            font-size: 28px; 
-            color: #059669; 
-            font-weight: bold;
-          }
-          .footer {
-            margin-top: 50px;
-            padding-top: 20px;
-            border-top: 2px solid #e5e7eb;
-            text-align: center;
-            color: #9ca3af;
-          }
-          .firma {
-            margin-top: 60px;
-            display: flex;
-            justify-content: space-between;
-          }
-          .firma-linea {
-            border-top: 1px solid #9ca3af;
-            width: 250px;
-            padding-top: 10px;
-            text-align: center;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1 style="margin:0;">ORDEN DE COMPRA</h1>
-          <p style="margin:5px 0 0;opacity:0.9;">${pedido.numero_pedido}</p>
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Orden de Compra ${pedido.numero_pedido}</title>
+      <style>
+        @media print {
+          .no-print { display: none; }
+        }
+        body { 
+          font-family: Arial, sans-serif; 
+          margin: 40px;
+          color: #1f2937;
+        }
+        .header { 
+          background: linear-gradient(135deg, #059669 0%, #0891b2 100%); 
+          color: white; 
+          padding: 30px; 
+          text-align: center;
+          border-radius: 10px;
+          margin-bottom: 30px;
+        }
+        .info { 
+          background: #f9fafb; 
+          padding: 20px; 
+          border-radius: 8px; 
+          margin-bottom: 20px;
+        }
+        .info-row {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 10px;
+        }
+        table { 
+          width: 100%; 
+          border-collapse: collapse; 
+          margin-top: 20px;
+        }
+        th { 
+          background: #059669; 
+          color: white; 
+          padding: 12px; 
+          text-align: left;
+        }
+        td { 
+          padding: 12px; 
+          border-bottom: 1px solid #e5e7eb;
+        }
+        .total { 
+          background: #f0fdf4; 
+          padding: 20px; 
+          border-radius: 8px; 
+          text-align: right; 
+          margin-top: 20px;
+        }
+        .total-amount { 
+          font-size: 28px; 
+          color: #059669; 
+          font-weight: bold;
+        }
+        .footer {
+          margin-top: 50px;
+          padding-top: 20px;
+          border-top: 2px solid #e5e7eb;
+          text-align: center;
+          color: #9ca3af;
+        }
+        .firma {
+          margin-top: 60px;
+          display: flex;
+          justify-content: space-between;
+        }
+        .firma-linea {
+          border-top: 1px solid #9ca3af;
+          width: 250px;
+          padding-top: 10px;
+          text-align: center;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1 style="margin:0;">ORDEN DE COMPRA</h1>
+        <p style="margin:5px 0 0;opacity:0.9;">${pedido.numero_pedido}</p>
+      </div>
+      
+      <div class="info">
+        <div class="info-row">
+          <span><strong>Fecha:</strong> ${new Date(pedido.fecha).toLocaleString('es-ES')}</span>
+          <span><strong>Proveedor:</strong> ${pedido.proveedor_nombre}</span>
         </div>
-        
-        <div class="info">
-          <div class="info-row">
-            <span><strong>Fecha:</strong> ${new Date(pedido.fecha).toLocaleString('es-ES')}</span>
-            <span><strong>Proveedor:</strong> ${pedido.proveedor_nombre}</span>
-          </div>
-          <div class="info-row">
-            <span><strong>Restaurante:</strong> ${pedido.usuario_nombre}</span>
-            <span><strong>Estado:</strong> ${pedido.estado.toUpperCase()}</span>
-          </div>
+        <div class="info-row">
+          <span><strong>Restaurante:</strong> ${pedido.usuario_nombre}</span>
+          <span><strong>Estado:</strong> ${pedido.estado.toUpperCase()}</span>
         </div>
+      </div>
 
-        <h2>Productos Solicitados:</h2>
-        <table>
-          <thead>
+      <h2>Productos Solicitados:</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Descripción</th>
+            <th style="text-align:center;">Cantidad</th>
+            <th style="text-align:center;">Unidad</th>
+            <th style="text-align:right;">Precio Unit.</th>
+            <th style="text-align:right;">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${pedido.items.map((item: any) => `
             <tr>
-              <th>Descripción</th>
-              <th style="text-align:center;">Cantidad</th>
-              <th style="text-align:center;">Unidad</th>
-              <th style="text-align:right;">Precio Unit.</th>
-              <th style="text-align:right;">Subtotal</th>
+              <td><strong>${item.descripcion}</strong></td>
+              <td style="text-align:center;">${item.cantidad_pedida}</td>
+              <td style="text-align:center;">${item.unidad}</td>
+              <td style="text-align:right;">${(item.precio_unitario || 0).toFixed(2)} €</td>
+              <td style="text-align:right;font-weight:bold;color:#059669;">${(item.subtotal || item.precio_unitario * item.cantidad_pedida || 0).toFixed(2)} €</td>
             </tr>
-          </thead>
-          <tbody>
-            ${pedido.items.map((item: any) => `
-              <tr>
-                <td><strong>${item.descripcion}</strong></td>
-                <td style="text-align:center;">${item.cantidad_pedida}</td>
-                <td style="text-align:center;">${item.unidad}</td>
-                <td style="text-align:right;">${item.cantidad_pedida > 0 ? (item.cantidad_pedida > 0 ? (parseFloat(item.cantidad_pedida) > 0 ? ((pedido.total_estimado || 0) / pedido.total_articulos / item.cantidad_pedida).toFixed(2) : '0.00') : '0.00') : '0.00'} €</td>
-                <td style="text-align:right;font-weight:bold;color:#059669;">${((pedido.total_estimado || 0) / pedido.total_articulos).toFixed(2)} €</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
+          `).join('')}
+        </tbody>
+      </table>
 
-        <div class="total">
-          <p style="font-size:14px;color:#059669;margin:0;">TOTAL ESTIMADO</p>
-          <p class="total-amount" style="margin:5px 0 0;">${(pedido.total_estimado || 0).toFixed(2)} €</p>
+      <div class="total">
+        <p style="font-size:14px;color:#059669;margin:0;">TOTAL ESTIMADO</p>
+        <p class="total-amount" style="margin:5px 0 0;">${(pedido.total_estimado || pedido.items.reduce((sum: number, item: any) => sum + (item.subtotal || item.precio_unitario * item.cantidad_pedida), 0) || 0).toFixed(2)} €</p>
+      </div>
+
+      <div class="firma">
+        <div class="firma-linea">
+          <p>Firma Proveedor</p>
         </div>
-
-        <div class="firma">
-          <div class="firma-linea">
-            <p>Firma Proveedor</p>
-          </div>
-          <div class="firma-linea">
-            <p>Recibido por KOST Software</p>
-          </div>
+        <div class="firma-linea">
+          <p>Recibido por KOST Software</p>
         </div>
+      </div>
 
-        <div class="footer">
-          <p>KOST Software - Restaurant Manager</p>
-          <p>kostsoftware.com</p>
-        </div>
+      <div class="footer">
+        <p>KOST Software - Restaurant Manager</p>
+        <p>kostsoftware.com</p>
+      </div>
 
-        <div class="no-print" style="margin-top:30px;text-align:center;">
-          <button onclick="window.print()" style="padding:15px 30px;background:#059669;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer;">🖨️ Imprimir Orden de Compra</button>
-        </div>
-      </body>
-      </html>
-    `;
+      <div class="no-print" style="margin-top:30px;text-align:center;">
+        <button onclick="window.print()" style="padding:15px 30px;background:#059669;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer;">🖨️ Imprimir Orden de Compra</button>
+      </div>
+    </body>
+    </html>
+  `;
 
-    ventana.document.write(html);
-    ventana.document.close();
-  }
-
+  ventana.document.write(html);
+  ventana.document.close();
+}
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
       {/* HEADER */}
