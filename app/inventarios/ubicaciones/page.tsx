@@ -179,7 +179,7 @@ export default function UbicacionesPage() {
                 <p className="text-sm text-slate-500">{ubicaciones.length} ubicaciones registradas</p>
               </div>
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => router.push('/inventarios')}
                 className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium transition text-sm flex items-center gap-2"
@@ -189,6 +189,18 @@ export default function UbicacionesPage() {
                 </svg>
                 Volver a Inventarios
               </button>
+              
+              {/* NUEVO BOTÓN: Asignar Productos */}
+              <button
+                onClick={() => router.push('/inventarios/asignar-productos')}
+                className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium transition text-sm flex items-center gap-2 shadow-sm"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                </svg>
+                Asignar Productos
+              </button>
+
               <button
                 onClick={abrirCrear}
                 className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 font-medium transition text-sm flex items-center gap-2 shadow-sm"
@@ -223,7 +235,7 @@ export default function UbicacionesPage() {
             <p className="text-2xl font-bold text-indigo-900 mt-1">{conteoPorTipo.congelador}</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-4">
-            <p className="text-xs font-semibold text-amber-600 uppercase"> Estanterías</p>
+            <p className="text-xs font-semibold text-amber-600 uppercase">📦 Estanterías</p>
             <p className="text-2xl font-bold text-amber-900 mt-1">{conteoPorTipo.estanteria}</p>
           </div>
         </div>
@@ -259,11 +271,11 @@ export default function UbicacionesPage() {
                 className="w-full md:w-auto px-4 py-2.5 border border-slate-300 rounded-lg font-medium transition-all hover:border-amber-400 hover:bg-slate-50 text-sm text-slate-700 bg-white"
               >
                 <option value="todos">Todos los tipos ({ubicaciones.length})</option>
-                <option value="camara"> Cámaras ({conteoPorTipo.camara})</option>
+                <option value="camara">🏪 Cámaras ({conteoPorTipo.camara})</option>
                 <option value="nevera">❄️ Neveras ({conteoPorTipo.nevera})</option>
-                <option value="congelador">🥶 Congeladores ({conteoPorTipo.congelador})</option>
+                <option value="congelador"> Congeladores ({conteoPorTipo.congelador})</option>
                 <option value="estanteria">📦 Estanterías ({conteoPorTipo.estanteria})</option>
-                <option value="otro"> Otros ({conteoPorTipo.otro})</option>
+                <option value="otro">📍 Otros ({conteoPorTipo.otro})</option>
               </select>
             </div>
           </div>
@@ -390,7 +402,7 @@ export default function UbicacionesPage() {
                     className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition bg-white"
                   >
                     <option value="camara">🏪 Cámara Fría</option>
-                    <option value="nevera">️ Nevera</option>
+                    <option value="nevera">❄️ Nevera</option>
                     <option value="congelador">🥶 Congelador</option>
                     <option value="estanteria">📦 Estantería</option>
                     <option value="otro">📍 Otro</option>
