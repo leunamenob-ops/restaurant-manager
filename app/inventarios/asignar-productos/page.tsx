@@ -13,6 +13,10 @@ export default function AsignarProductosPage() {
   const [todosProductos, setTodosProductos] = useState<any[]>([]);
   const [busqueda, setBusqueda] = useState('');
   const [guardando, setGuardando] = useState(false);
+  
+  // PAGINACIÓN
+  const [paginaActual, setPaginaActual] = useState(1);
+  const productosPorPagina = 50;
 
   const HOTEL_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -133,6 +137,37 @@ export default function AsignarProductosPage() {
       p.categoria?.toLowerCase().includes(busqueda.toLowerCase())
     );
 
+  // PAGINACIÓN
+  const indiceUltimo = paginaActual * productosPorPagina;
+  const indicePrimero = indiceUltimo - productosPorPagina;
+  const productosPagina = productosDisponibles.slice(indicePrimero, indiceUltimo);
+  const totalPaginas = Math.ceil(productosDisponibles.length / productosPorPagina);
+
+  const irAPagina = (pagina: number) => {
+    if (pagina < 1 || pagina > totalPaginas) return;
+    setPaginaActual(pagina);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const obtenerNumerosPagina = () => {
+    const numeros: number[] = [];
+    const total = totalPaginas;
+    const actual = paginaActual;
+    
+    if (total <= 7) {
+      for (let i = 1; i <= total; i++) numeros.push(i);
+    } else {
+      numeros.push(1);
+      if (actual > 3) numeros.push(-1);
+      const inicio = Math.max(2, actual - 1);
+      const fin = Math.min(total - 1, actual + 1);
+      for (let i = inicio; i <= fin; i++) numeros.push(i);
+      if (actual < total - 2) numeros.push(-1);
+      numeros.push(total);
+    }
+    return numeros;
+  };
+
   const tipoIcono = (tipo: string) => {
     const iconos: {[key: string]: string} = {
       camara: '🏪', nevera: '❄️', congelador: '🥶', estanteria: '📦', otro: '📍'
@@ -190,7 +225,7 @@ export default function AsignarProductosPage() {
             <div className="lg:col-span-1">
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="p-4 bg-slate-50 border-b border-slate-200">
-                  <h2 className="font-semibold text-slate-800"> Ubicaciones ({ubicaciones.length})</h2>
+                  <h2 className="font-semibold text-slate-800">📍 Ubicaciones ({ubicaciones.length})</h2>
                   <p className="text-xs text-slate-500 mt-1">Selecciona una para gestionar sus productos</p>
                 </div>
                 <div className="divide-y divide-slate-100 max-h-[70vh] overflow-y-auto">
@@ -221,7 +256,7 @@ export default function AsignarProductosPage() {
             <div className="lg:col-span-2">
               {!ubicacionActiva ? (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
-                  <div className="text-6xl mb-4"></div>
+                  <div className="text-6xl mb-4">📍</div>
                   <h2 className="text-xl font-bold text-slate-900 mb-2">Selecciona una ubicación</h2>
                   <p className="text-slate-600">Elige una ubicación de la lista para ver y gestionar sus productos</p>
                 </div>
@@ -257,7 +292,7 @@ export default function AsignarProductosPage() {
                               onClick={() => toggleProducto(p)}
                               className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition font-medium"
                             >
-                               Quitar
+                              ✕ Quitar
                             </button>
                           </div>
                         ))
@@ -277,13 +312,16 @@ export default function AsignarProductosPage() {
                           type="text"
                           placeholder="Buscar producto por nombre o categoría..."
                           value={busqueda}
-                          onChange={(e) => setBusqueda(e.target.value)}
+                          onChange={(e) => {
+                            setBusqueda(e.target.value);
+                            setPaginaActual(1); // Resetear a página 1 al buscar
+                          }}
                           className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm"
                         />
                       </div>
                     </div>
                     <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
-                      {productosDisponibles.length === 0 ? (
+                      {productosPagina.length === 0 ? (
                         <div className="p-8 text-center text-slate-500">
                           <p>No hay productos disponibles</p>
                           <p className="text-sm mt-1">
@@ -291,7 +329,7 @@ export default function AsignarProductosPage() {
                           </p>
                         </div>
                       ) : (
-                        productosDisponibles.slice(0, 50).map((p) => (
+                        productosPagina.map((p) => (
                           <div key={p.id} className="p-3 flex items-center justify-between hover:bg-slate-50">
                             <div>
                               <p className="font-medium text-slate-900">{p.nombre}</p>
@@ -309,12 +347,76 @@ export default function AsignarProductosPage() {
                           </div>
                         ))
                       )}
-                      {productosDisponibles.length > 50 && (
-                        <div className="p-3 text-center text-xs text-slate-500 bg-slate-50">
-                          Mostrando 50 de {productosDisponibles.length}. Usa el buscador para filtrar.
-                        </div>
-                      )}
                     </div>
+
+                    {/* PAGINACIÓN */}
+                    {totalPaginas > 1 && (
+                      <div className="p-4 bg-slate-50 border-t border-slate-200">
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                          <div className="text-sm text-slate-500">
+                            Mostrando <span className="font-semibold text-slate-900">{indicePrimero + 1}</span> a{' '}
+                            <span className="font-semibold text-slate-900">{Math.min(indiceUltimo, productosDisponibles.length)}</span> de{' '}
+                            <span className="font-semibold text-slate-900">{productosDisponibles.length}</span> productos
+                          </div>
+                          
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => irAPagina(1)}
+                              disabled={paginaActual === 1}
+                              className="px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                            >
+                              Primera
+                            </button>
+                            
+                            <button
+                              onClick={() => irAPagina(paginaActual - 1)}
+                              disabled={paginaActual === 1}
+                              className="px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                              </svg>
+                            </button>
+
+                            {obtenerNumerosPagina().map((num, idx) => (
+                              num === -1 ? (
+                                <span key={'dots-' + idx} className="px-2 text-slate-400">...</span>
+                              ) : (
+                                <button
+                                  key={num}
+                                  onClick={() => irAPagina(num)}
+                                  className={`w-10 h-10 rounded-lg text-sm font-medium transition ${
+                                    paginaActual === num
+                                      ? 'bg-teal-600 text-white shadow-sm'
+                                      : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                                  }`}
+                                >
+                                  {num}
+                                </button>
+                              )
+                            ))}
+
+                            <button
+                              onClick={() => irAPagina(paginaActual + 1)}
+                              disabled={paginaActual === totalPaginas}
+                              className="px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </button>
+                            
+                            <button
+                              onClick={() => irAPagina(totalPaginas)}
+                              disabled={paginaActual === totalPaginas}
+                              className="px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                            >
+                              Última
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
