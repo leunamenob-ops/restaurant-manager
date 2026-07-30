@@ -17,6 +17,10 @@ export default function InventariosPage() {
   const [categoriasSeleccionadas, setCategoriasSeleccionadas] = useState<string[]>([]);
   const [mostrarFiltroCategorias, setMostrarFiltroCategorias] = useState(false);
   
+  // Ubicaciones
+  const [ubicaciones, setUbicaciones] = useState<any[]>([]);
+  const [ubicacionSeleccionada, setUbicacionSeleccionada] = useState<string>('todas');
+  
   // Movimientos
   const [movimientos, setMovimientos] = useState<any[]>([]);
   const [filtroTipo, setFiltroTipo] = useState('todos');
@@ -32,11 +36,14 @@ export default function InventariosPage() {
   const [cantidadAjuste, setCantidadAjuste] = useState('');
   const [motivoAjuste, setMotivoAjuste] = useState('');
   
+  // Modal ubicación
+  const [modalUbicacion, setModalUbicacion] = useState<any>(null);
+  
   const filtroRef = useRef<HTMLDivElement>(null);
 
   const cargarDatos = useCallback(async () => {
     setLoading(true);
-    await Promise.all([cargarStock(), cargarMovimientos()]);
+    await Promise.all([cargarStock(), cargarMovimientos(), cargarUbicaciones()]);
     setLoading(false);
   }, []);
 
@@ -47,14 +54,20 @@ export default function InventariosPage() {
   async function cargarStock() {
     const { data } = await supabase
       .from('stock')
-      .select('*')
+      .select(`
+        *,
+        ubicaciones:ubicacion_id (
+          id,
+          nombre,
+          tipo
+        )
+      `)
       .order('ingrediente_nombre');
     
     if (data) {
       setTodosProductos(data);
       setProductosFiltrados(data);
       
-      // Extraer categorías únicas
       const categorias = Array.from(
         new Set(
           data.map((p: any) => p.categoria || 'Sin categoría')
@@ -62,6 +75,14 @@ export default function InventariosPage() {
       ) as string[];
       setCategoriasUnicas(categorias.sort());
     }
+  }
+
+  async function cargarUbicaciones() {
+    const { data } = await supabase
+      .from('ubicaciones')
+      .select('*')
+      .order('orden');
+    if (data) setUbicaciones(data);
   }
 
   async function cargarMovimientos() {
@@ -92,8 +113,14 @@ export default function InventariosPage() {
       );
     }
 
+    if (ubicacionSeleccionada !== 'todas') {
+      filtrados = filtrados.filter((p: any) => 
+        p.ubicaciones?.id === ubicacionSeleccionada
+      );
+    }
+
     setProductosFiltrados(filtrados);
-  }, [busquedaNombre, categoriasSeleccionadas, todosProductos]);
+  }, [busquedaNombre, categoriasSeleccionadas, ubicacionSeleccionada, todosProductos]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -124,6 +151,28 @@ export default function InventariosPage() {
   function limpiarFiltros() {
     setBusquedaNombre('');
     setCategoriasSeleccionadas([]);
+    setUbicacionSeleccionada('todas');
+  }
+
+  async function abrirModalUbicacion(item: any) {
+    setModalUbicacion(item);
+  }
+
+  async function confirmarUbicacion(ubicacionId: string) {
+    if (!modalUbicacion) return;
+    
+    const { error } = await supabase
+      .from('stock')
+      .update({ ubicacion_id: ubicacionId })
+      .eq('id', modalUbicacion.id);
+    
+    if (error) {
+      alert('Error: ' + error.message);
+      return;
+    }
+    
+    setModalUbicacion(null);
+    await cargarStock();
   }
 
   // ========== STOCK ==========
@@ -309,7 +358,7 @@ export default function InventariosPage() {
   };
 
   const tabs = [
-    { id: 'stock', label: ' Stock Actual', count: productosFiltrados.length },
+    { id: 'stock', label: '📦 Stock Actual', count: productosFiltrados.length },
     { id: 'movimientos', label: '📋 Movimientos', count: movimientos.length },
     { id: 'conteo', label: '📝 Conteo Cíclico', count: null },
     { id: 'alertas', label: '⚠️ Alertas', count: stockBajo.length + stockAgotado.length },
@@ -399,7 +448,7 @@ export default function InventariosPage() {
         {/* ========== TAB: STOCK ========== */}
         {tabActiva === 'stock' && (
           <div>
-            {/* FILTROS IGUAL QUE PEDIDOS */}
+            {/* FILTROS */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6">
               <div className="flex flex-col md:flex-row gap-4 items-start">
                 <div className="flex-1 w-full">
@@ -474,7 +523,23 @@ export default function InventariosPage() {
                   )}
                 </div>
 
-                {(busquedaNombre || categoriasSeleccionadas.length > 0) && (
+                <div className="w-full md:w-auto">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Ubicación
+                  </label>
+                  <select
+                    value={ubicacionSeleccionada}
+                    onChange={(e) => setUbicacionSeleccionada(e.target.value)}
+                    className="w-full md:w-auto px-4 py-2.5 border border-slate-300 rounded-lg font-medium transition-all hover:border-indigo-400 hover:bg-slate-50 text-sm text-slate-700 bg-white"
+                  >
+                    <option value="todas">Todas las ubicaciones</option>
+                    {ubicaciones.map((ub) => (
+                      <option key={ub.id} value={ub.id}>{ub.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {(busquedaNombre || categoriasSeleccionadas.length > 0 || ubicacionSeleccionada !== 'todas') && (
                   <div className="pt-6 w-full md:w-auto">
                     <button
                       onClick={limpiarFiltros}
@@ -499,7 +564,7 @@ export default function InventariosPage() {
                       <th className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase">Producto</th>
                       <th className="px-6 py-3.5 text-center text-xs font-semibold text-slate-500 uppercase">Stock Actual</th>
                       <th className="px-6 py-3.5 text-center text-xs font-semibold text-slate-500 uppercase">Mínimo</th>
-                      <th className="px-6 py-3.5 text-center text-xs font-semibold text-slate-500 uppercase">Máximo</th>
+                      <th className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase">Ubicación</th>
                       <th className="px-6 py-3.5 text-center text-xs font-semibold text-slate-500 uppercase">Estado</th>
                       <th className="px-6 py-3.5 text-right text-xs font-semibold text-slate-500 uppercase">Acciones</th>
                     </tr>
@@ -538,7 +603,20 @@ export default function InventariosPage() {
                               </span>
                             </td>
                             <td className="px-6 py-4 text-center text-sm text-slate-600">{item.stock_minimo || '-'}</td>
-                            <td className="px-6 py-4 text-center text-sm text-slate-600">{item.stock_maximo || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-slate-600">
+                              {item.ubicaciones?.nombre ? (
+                                <span className="inline-flex items-center px-2 py-1 rounded-md bg-indigo-50 text-indigo-700 text-xs font-medium">
+                                  {item.ubicaciones.nombre}
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => abrirModalUbicacion(item)}
+                                  className="text-indigo-600 hover:text-indigo-700 underline text-xs font-medium"
+                                >
+                                  + Asignar ubicación
+                                </button>
+                              )}
+                            </td>
                             <td className="px-6 py-4 text-center">
                               <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${
                                 estado === 'agotado' ? 'bg-red-100 text-red-800 border-red-200' :
@@ -785,7 +863,7 @@ export default function InventariosPage() {
                   <div className="bg-white rounded-xl shadow-sm border border-red-200 overflow-hidden">
                     <div className="p-4 bg-red-50 border-b border-red-200">
                       <h2 className="font-bold text-red-800 flex items-center gap-2">
-                        <span className="text-xl"></span> Productos Agotados ({stockAgotado.length})
+                        <span className="text-xl">🚨</span> Productos Agotados ({stockAgotado.length})
                       </h2>
                     </div>
                     <div className="divide-y divide-slate-100">
@@ -904,6 +982,47 @@ export default function InventariosPage() {
                 Cancelar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ASIGNAR UBICACIÓN */}
+      {modalUbicacion && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-slate-900">Asignar Ubicación</h2>
+              <button onClick={() => setModalUbicacion(null)} className="text-slate-400 hover:text-slate-600 transition">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="bg-slate-50 rounded-lg p-4 mb-4">
+              <p className="text-sm text-slate-600">Producto:</p>
+              <p className="font-bold text-slate-900">{modalUbicacion.ingrediente_nombre}</p>
+            </div>
+
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {ubicaciones.map((ub) => (
+                <button
+                  key={ub.id}
+                  onClick={() => confirmarUbicacion(ub.id)}
+                  className="w-full px-4 py-3 text-left rounded-lg border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 transition"
+                >
+                  <p className="font-semibold text-slate-900">{ub.nombre}</p>
+                  {ub.descripcion && <p className="text-xs text-slate-500 mt-0.5">{ub.descripcion}</p>}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setModalUbicacion(null)}
+              className="mt-4 w-full px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition font-medium text-sm"
+            >
+              Cancelar
+            </button>
           </div>
         </div>
       )}
