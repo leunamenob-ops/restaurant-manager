@@ -52,17 +52,10 @@ export default function InventariosPage() {
   }, [cargarDatos]);
 
   async function cargarStock() {
-    const { data, error } = await supabase
-      .from('stock')
-      .select(`
-        *,
-        ubicaciones:ubicacion_id (
-          id,
-          nombre,
-          tipo
-        )
-      `)
-      .order('ingrediente_nombre');
+  const { data, error } = await supabase
+    .from('stock')
+    .select('*')
+    .order('ingrediente_nombre');
     
     if (error) {
       console.error('❌ Error cargando stock:', error);
