@@ -366,13 +366,108 @@ export default function UbicacionesPage() {
     printWindow.document.close();
   }
 
+  function imprimirQRProductoIndividual(producto: any) {
+    const qrCode = qrsProductos[producto.id];
+    if (!qrCode) {
+      alert('QR no disponible para este producto');
+      return;
+    }
+    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Permite las ventanas emergentes para imprimir');
+      return;
+    }
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>QR - ${producto.nombre}</title>
+        <style>
+          @media print {
+            @page { size: A6; margin: 10mm; }
+            body { margin: 0; }
+          }
+          body { 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+          }
+          .qr-container {
+            text-align: center;
+            border: 2px solid #333;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 300px;
+          }
+          h1 { 
+            margin: 0 0 8px 0; 
+            font-size: 18px;
+            color: #1e293b;
+          }
+          .info {
+            font-size: 12px;
+            color: #64748b;
+            margin-bottom: 15px;
+          }
+          img {
+            width: 200px;
+            height: 200px;
+            margin: 15px 0;
+          }
+          .badges {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+            margin-top: 10px;
+          }
+          .badge {
+            padding: 3px 8px;
+            background: #e0f2fe;
+            color: #0369a1;
+            border-radius: 4px;
+            font-size: 11px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="qr-container">
+          <h1>${producto.nombre}</h1>
+          <div class="info">${ubicacionSeleccionada?.nombre || ''}</div>
+          <img src="${qrCode}" alt="QR ${producto.nombre}" />
+          <div class="badges">
+            <span class="badge">${producto.categoria || 'Sin categoría'}</span>
+            <span class="badge">${producto.unidad_compra || '-'}</span>
+          </div>
+        </div>
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+              window.onafterprint = function() {
+                window.close();
+              };
+            }, 300);
+          };
+        </script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  }
+
   const tipoIcono = (tipo: string) => {
     switch (tipo) {
       case 'camara': return '🏪';
       case 'nevera': return '❄️';
       case 'congelador': return '🥶';
       case 'estanteria': return '📦';
-      case 'otro': return '📍';
+      case 'otro': return '';
       default: return '📍';
     }
   };
@@ -462,7 +557,7 @@ export default function UbicacionesPage() {
             <p className="text-2xl font-bold text-slate-900 mt-1">{ubicaciones.length}</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-blue-200 p-4">
-            <p className="text-xs font-semibold text-blue-600 uppercase"> Cámaras</p>
+            <p className="text-xs font-semibold text-blue-600 uppercase">🏪 Cámaras</p>
             <p className="text-2xl font-bold text-blue-900 mt-1">{conteoPorTipo.camara}</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-cyan-200 p-4">
@@ -510,11 +605,11 @@ export default function UbicacionesPage() {
                 className="w-full md:w-auto px-4 py-2.5 border border-slate-300 rounded-lg font-medium transition-all hover:border-amber-400 hover:bg-slate-50 text-sm text-slate-700 bg-white"
               >
                 <option value="todos">Todos los tipos ({ubicaciones.length})</option>
-                <option value="camara"> Cámaras ({conteoPorTipo.camara})</option>
+                <option value="camara">🏪 Cámaras ({conteoPorTipo.camara})</option>
                 <option value="nevera">❄️ Neveras ({conteoPorTipo.nevera})</option>
-                <option value="congelador">🥶 Congeladores ({conteoPorTipo.congelador})</option>
+                <option value="congelador"> Congeladores ({conteoPorTipo.congelador})</option>
                 <option value="estanteria">📦 Estanterías ({conteoPorTipo.estanteria})</option>
-                <option value="otro"> Otros ({conteoPorTipo.otro})</option>
+                <option value="otro">📍 Otros ({conteoPorTipo.otro})</option>
               </select>
             </div>
           </div>
@@ -571,7 +666,7 @@ export default function UbicacionesPage() {
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                         </svg>
-                        📦 Ver Productos e Imprimir QRs
+                         Ver Productos e Imprimir QRs
                       </button>
                       
                       <button
@@ -651,7 +746,7 @@ export default function UbicacionesPage() {
                     className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition bg-white"
                   >
                     <option value="camara">🏪 Cámara Fría</option>
-                    <option value="nevera">❄️ Nevera</option>
+                    <option value="nevera">️ Nevera</option>
                     <option value="congelador">🥶 Congelador</option>
                     <option value="estanteria">📦 Estantería</option>
                     <option value="otro">📍 Otro</option>
@@ -800,6 +895,19 @@ export default function UbicacionesPage() {
                                 />
                               </div>
                             )}
+                          </div>
+                          
+                          {/* Botón Imprimir QR individual */}
+                          <div className="mt-3 pt-3 border-t border-slate-100">
+                            <button
+                              onClick={() => imprimirQRProductoIndividual(prod)}
+                              className="w-full px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-xs font-medium flex items-center justify-center gap-2"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                              </svg>
+                              🖨️ Imprimir QR
+                            </button>
                           </div>
                         </div>
                       ))}
