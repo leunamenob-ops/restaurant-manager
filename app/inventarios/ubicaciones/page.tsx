@@ -108,7 +108,7 @@ export default function UbicacionesPage() {
     // 3. Generar QRs de cada producto (AHORA CON URL)
     const qrs: {[key: string]: string} = {};
     for (const prod of productos) {
-      const urlProducto = `${window.location.origin}/inventarios/conteo?ubicacion=${ubicacion.id}&producto=${prod.id}`;
+      const urlProducto = `${window.location.origin}/inventarios/conteo-rapido?producto=${prod.id}`;
       qrs[prod.id] = await QRCode.toDataURL(urlProducto, { 
         width: 200,
         margin: 2
@@ -382,7 +382,7 @@ export default function UbicacionesPage() {
       return;
     }
     
-    const urlProducto = `${window.location.origin}/inventarios/conteo?ubicacion=${ubicacionSeleccionada?.id}&producto=${producto.id}`;
+    const urlProducto = `${window.location.origin}/inventarios/conteo-rapido?producto=${prod.id}`;
     
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
