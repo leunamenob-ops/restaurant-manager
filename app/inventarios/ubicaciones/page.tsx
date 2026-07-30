@@ -20,20 +20,26 @@ export default function UbicacionesPage() {
     orden: 0
   });
 
+  const HOTEL_ID = '00000000-0000-0000-0000-000000000001';
+
   useEffect(() => {
     cargarUbicaciones();
   }, []);
 
   async function cargarUbicaciones() {
     setLoading(true);
+    
     const { data, error } = await supabase
       .from('ubicaciones')
       .select('*')
+      .eq('hotel_id', HOTEL_ID)
       .order('orden');
     
     if (error) {
-      alert('Error: ' + error.message);
+      console.error('Error cargando ubicaciones:', error);
+      alert('Error al cargar: ' + error.message);
     } else {
+      console.log('Ubicaciones cargadas:', data?.length);
       setUbicaciones(data || []);
     }
     setLoading(false);
@@ -41,7 +47,12 @@ export default function UbicacionesPage() {
 
   async function abrirCrear() {
     setUbicacionEditando(null);
-    setFormulario({ nombre: '', descripcion: '', tipo: 'almacenamiento', orden: ubicaciones.length + 1 });
+    setFormulario({ 
+      nombre: '', 
+      descripcion: '', 
+      tipo: 'estanteria', 
+      orden: ubicaciones.length + 1 
+    });
     setMostrarModal(true);
   }
 
@@ -50,7 +61,7 @@ export default function UbicacionesPage() {
     setFormulario({
       nombre: ubicacion.nombre,
       descripcion: ubicacion.descripcion || '',
-      tipo: ubicacion.tipo || 'almacenamiento',
+      tipo: ubicacion.tipo || 'estanteria',
       orden: ubicacion.orden || 0
     });
     setMostrarModal(true);
@@ -62,8 +73,10 @@ export default function UbicacionesPage() {
       return;
     }
 
+    let error;
+    
     if (ubicacionEditando) {
-      const { error } = await supabase
+      const result = await supabase
         .from('ubicaciones')
         .update({
           nombre: formulario.nombre,
@@ -72,26 +85,23 @@ export default function UbicacionesPage() {
           orden: formulario.orden
         })
         .eq('id', ubicacionEditando.id);
-
-      if (error) {
-        alert('Error: ' + error.message);
-        return;
-      }
+      error = result.error;
     } else {
-      const { error } = await supabase
+      const result = await supabase
         .from('ubicaciones')
         .insert([{
           nombre: formulario.nombre,
           descripcion: formulario.descripcion,
           tipo: formulario.tipo,
           orden: formulario.orden,
-          hotel_id: '00000000-0000-0000-0000-000000000001'
+          hotel_id: HOTEL_ID
         }]);
+      error = result.error;
+    }
 
-      if (error) {
-        alert('Error: ' + error.message);
-        return;
-      }
+    if (error) {
+      alert('Error: ' + error.message);
+      return;
     }
 
     setMostrarModal(false);
@@ -213,7 +223,7 @@ export default function UbicacionesPage() {
             <p className="text-2xl font-bold text-indigo-900 mt-1">{conteoPorTipo.congelador}</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-4">
-            <p className="text-xs font-semibold text-amber-600 uppercase">📦 Estanterías</p>
+            <p className="text-xs font-semibold text-amber-600 uppercase"> Estanterías</p>
             <p className="text-2xl font-bold text-amber-900 mt-1">{conteoPorTipo.estanteria}</p>
           </div>
         </div>
@@ -249,11 +259,11 @@ export default function UbicacionesPage() {
                 className="w-full md:w-auto px-4 py-2.5 border border-slate-300 rounded-lg font-medium transition-all hover:border-amber-400 hover:bg-slate-50 text-sm text-slate-700 bg-white"
               >
                 <option value="todos">Todos los tipos ({ubicaciones.length})</option>
-                <option value="camara">🏪 Cámaras ({conteoPorTipo.camara})</option>
+                <option value="camara"> Cámaras ({conteoPorTipo.camara})</option>
                 <option value="nevera">❄️ Neveras ({conteoPorTipo.nevera})</option>
-                <option value="congelador"> Congeladores ({conteoPorTipo.congelador})</option>
+                <option value="congelador">🥶 Congeladores ({conteoPorTipo.congelador})</option>
                 <option value="estanteria">📦 Estanterías ({conteoPorTipo.estanteria})</option>
-                <option value="otro">📍 Otros ({conteoPorTipo.otro})</option>
+                <option value="otro"> Otros ({conteoPorTipo.otro})</option>
               </select>
             </div>
           </div>
@@ -379,8 +389,8 @@ export default function UbicacionesPage() {
                     onChange={(e) => setFormulario({...formulario, tipo: e.target.value})}
                     className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition bg-white"
                   >
-                    <option value="camara"> Cámara Fría</option>
-                    <option value="nevera">❄️ Nevera</option>
+                    <option value="camara">🏪 Cámara Fría</option>
+                    <option value="nevera">️ Nevera</option>
                     <option value="congelador">🥶 Congelador</option>
                     <option value="estanteria">📦 Estantería</option>
                     <option value="otro">📍 Otro</option>
