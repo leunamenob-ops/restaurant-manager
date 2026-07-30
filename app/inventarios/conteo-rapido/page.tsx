@@ -44,7 +44,7 @@ function ConteoRapidoContent() {
         .single();
 
       if (!prodData) {
-        setMensaje(' Producto no encontrado');
+        setMensaje('❌ Producto no encontrado');
         return;
       }
 
@@ -75,18 +75,40 @@ function ConteoRapidoContent() {
     const cantidad = parseFloat(cantidadReal);
 
     try {
-      const { error: errorStock } = await supabase
+      // 1. Verificar si existe stock para este producto
+      const { data: stockExistente } = await supabase
         .from('stock')
-        .upsert({
-          ingrediente_id: producto.id,
-          ingrediente_nombre: producto.nombre,
-          cantidad_actual: cantidad,
-          hotel_id: producto.hotel_id || '00000000-0000-0000-0000-000000000001',
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'ingrediente_id' });
+        .select('id')
+        .eq('ingrediente_id', producto.id)
+        .single();
 
-      if (errorStock) throw errorStock;
+      if (stockExistente) {
+        // 2a. Actualizar stock existente
+        const { error: errorStock } = await supabase
+          .from('stock')
+          .update({
+            cantidad_actual: cantidad,
+            updated_at: new Date().toISOString()
+          })
+          .eq('ingrediente_id', producto.id);
 
+        if (errorStock) throw errorStock;
+      } else {
+        // 2b. Crear nuevo registro de stock
+        const { error: errorStock } = await supabase
+          .from('stock')
+          .insert({
+            ingrediente_id: producto.id,
+            ingrediente_nombre: producto.nombre,
+            cantidad_actual: cantidad,
+            hotel_id: producto.hotel_id || '00000000-0000-0000-0000-000000000001',
+            updated_at: new Date().toISOString()
+          });
+
+        if (errorStock) throw errorStock;
+      }
+
+      // 3. Registrar movimiento si hay diferencia
       const diferencia = cantidad - stockActual;
       if (diferencia !== 0) {
         const { error: errorMov } = await supabase
@@ -106,6 +128,9 @@ function ConteoRapidoContent() {
 
       setMensaje(`✅ Guardado: ${producto.nombre} = ${cantidad} ${producto.unidad_compra}`);
       setUltimoActualizado(new Date().toLocaleTimeString());
+      
+      // Actualizar stock actual en pantalla para la próxima vez
+      setStockActual(cantidad);
       
       setTimeout(() => {
         setCantidadReal('');
