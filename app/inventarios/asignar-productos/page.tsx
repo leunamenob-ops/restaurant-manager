@@ -82,21 +82,21 @@ export default function AsignarProductosPage() {
     setLoading(false);
   }
 
-  async function cargarProductosAsignados(ubicacionId: string) {
-    const { data } = await supabase
-      .from('productos_ubicacion')
-      .select('ingrediente_id')
-      .eq('ubicacion_id', ubicacionId);
-    
-    const idsAsignados = data?.map((p: any) => p.ingrediente_id) || [];
-    
-    const productosConInfo = todosProductos
-      .filter(p => idsAsignados.includes(p.id))
-      .map(p => ({ ...p, asignado: true }));
-    
-    setProductosAsignados(productosConInfo);
-  }
-
+ async function cargarProductosAsignados(ubicacionId: string) {
+  const { data } = await supabase
+    .from('productos_ubicacion')
+    .select('ingrediente_id, orden')
+    .eq('ubicacion_id', ubicacionId)
+    .order('orden', { ascending: true });
+  
+  const idsAsignados = data?.map((p: any) => p.ingrediente_id) || [];
+  
+  const productosConInfo = todosProductos
+    .filter(p => idsAsignados.includes(p.id))
+    .map(p => ({ ...p, asignado: true }));
+  
+  setProductosAsignados(productosConInfo);
+}
   async function toggleProducto(producto: any) {
     if (!ubicacionActiva) return;
 
