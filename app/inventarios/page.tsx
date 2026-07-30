@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 
@@ -9,9 +9,13 @@ export default function InventariosPage() {
   const [tabActiva, setTabActiva] = useState<'stock' | 'movimientos' | 'conteo' | 'alertas'>('stock');
   const [loading, setLoading] = useState(true);
   
-  // Stock
-  const [stock, setStock] = useState<any[]>([]);
-  const [busquedaStock, setBusquedaStock] = useState('');
+  // Stock con filtros
+  const [todosProductos, setTodosProductos] = useState<any[]>([]);
+  const [productosFiltrados, setProductosFiltrados] = useState<any[]>([]);
+  const [busquedaNombre, setBusquedaNombre] = useState('');
+  const [categoriasUnicas, setCategoriasUnicas] = useState<string[]>([]);
+  const [categoriasSeleccionadas, setCategoriasSeleccionadas] = useState<string[]>([]);
+  const [mostrarFiltroCategorias, setMostrarFiltroCategorias] = useState(false);
   
   // Movimientos
   const [movimientos, setMovimientos] = useState<any[]>([]);
@@ -27,23 +31,37 @@ export default function InventariosPage() {
   const [tipoAjuste, setTipoAjuste] = useState<'entrada' | 'salida' | 'merma' | 'ajuste'>('ajuste');
   const [cantidadAjuste, setCantidadAjuste] = useState('');
   const [motivoAjuste, setMotivoAjuste] = useState('');
+  
+  const filtroRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    cargarDatos();
-  }, []);
-
-  async function cargarDatos() {
+  const cargarDatos = useCallback(async () => {
     setLoading(true);
     await Promise.all([cargarStock(), cargarMovimientos()]);
     setLoading(false);
-  }
+  }, []);
+
+  useEffect(() => {
+    cargarDatos();
+  }, [cargarDatos]);
 
   async function cargarStock() {
     const { data } = await supabase
       .from('stock')
       .select('*')
       .order('ingrediente_nombre');
-    if (data) setStock(data);
+    
+    if (data) {
+      setTodosProductos(data);
+      setProductosFiltrados(data);
+      
+      // Extraer categorías únicas
+      const categorias = Array.from(
+        new Set(
+          data.map((p: any) => p.categoria || 'Sin categoría')
+        )
+      ) as string[];
+      setCategoriasUnicas(categorias.sort());
+    }
   }
 
   async function cargarMovimientos() {
@@ -55,13 +73,62 @@ export default function InventariosPage() {
     if (data) setMovimientos(data);
   }
 
-  // ========== STOCK ==========
-  const stockFiltrado = stock.filter((s) =>
-    s.ingrediente_nombre?.toLowerCase().includes(busquedaStock.toLowerCase())
-  );
+  // Filtrado
+  useEffect(() => {
+    let filtrados = [...todosProductos];
 
-  const stockBajo = stock.filter((s) => s.stock_minimo > 0 && s.cantidad_actual <= s.stock_minimo);
-  const stockAgotado = stock.filter((s) => s.cantidad_actual === 0);
+    if (busquedaNombre.trim()) {
+      const busqueda = busquedaNombre.toLowerCase();
+      filtrados = filtrados.filter((p: any) => {
+        const nombre = p.ingrediente_nombre?.toLowerCase() || '';
+        const categoria = p.categoria?.toLowerCase() || '';
+        return nombre.includes(busqueda) || categoria.includes(busqueda);
+      });
+    }
+
+    if (categoriasSeleccionadas.length > 0) {
+      filtrados = filtrados.filter((p: any) => 
+        categoriasSeleccionadas.includes(p.categoria || 'Sin categoría')
+      );
+    }
+
+    setProductosFiltrados(filtrados);
+  }, [busquedaNombre, categoriasSeleccionadas, todosProductos]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (filtroRef.current && !filtroRef.current.contains(event.target as Node)) {
+        setMostrarFiltroCategorias(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  function toggleCategoria(categoria: string) {
+    setCategoriasSeleccionadas(prev => 
+      prev.includes(categoria)
+        ? prev.filter(c => c !== categoria)
+        : [...prev, categoria]
+    );
+  }
+
+  function toggleTodasCategorias() {
+    if (categoriasSeleccionadas.length === categoriasUnicas.length) {
+      setCategoriasSeleccionadas([]);
+    } else {
+      setCategoriasSeleccionadas([...categoriasUnicas]);
+    }
+  }
+
+  function limpiarFiltros() {
+    setBusquedaNombre('');
+    setCategoriasSeleccionadas([]);
+  }
+
+  // ========== STOCK ==========
+  const stockBajo = todosProductos.filter((s) => s.stock_minimo > 0 && s.cantidad_actual <= s.stock_minimo);
+  const stockAgotado = todosProductos.filter((s) => s.cantidad_actual === 0);
 
   async function abrirModalAjuste(item: any, tipo: 'entrada' | 'salida' | 'merma' | 'ajuste') {
     setModalAjuste(item);
@@ -131,7 +198,7 @@ export default function InventariosPage() {
       .insert([{
         usuario: 'Usuario',
         estado: 'borrador',
-        total_items: stock.length,
+        total_items: todosProductos.length,
         hotel_id: '00000000-0000-0000-0000-000000000001'
       }])
       .select()
@@ -142,7 +209,7 @@ export default function InventariosPage() {
       return;
     }
 
-    const items = stock.map((s) => ({
+    const items = todosProductos.map((s) => ({
       conteo_id: conteo.id,
       ingrediente_id: s.ingrediente_id,
       ingrediente_nombre: s.ingrediente_nombre,
@@ -242,9 +309,9 @@ export default function InventariosPage() {
   };
 
   const tabs = [
-    { id: 'stock', label: '📦 Stock Actual', count: stock.length },
+    { id: 'stock', label: ' Stock Actual', count: productosFiltrados.length },
     { id: 'movimientos', label: '📋 Movimientos', count: movimientos.length },
-    { id: 'conteo', label: ' Conteo Cíclico', count: null },
+    { id: 'conteo', label: '📝 Conteo Cíclico', count: null },
     { id: 'alertas', label: '⚠️ Alertas', count: stockBajo.length + stockAgotado.length },
   ];
 
@@ -285,7 +352,7 @@ export default function InventariosPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
             <p className="text-xs font-semibold text-slate-500 uppercase">Total Productos</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{stock.length}</p>
+            <p className="text-2xl font-bold text-slate-900 mt-1">{todosProductos.length}</p>
             <p className="text-xs text-slate-500 mt-1">en inventario</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
@@ -332,11 +399,12 @@ export default function InventariosPage() {
         {/* ========== TAB: STOCK ========== */}
         {tabActiva === 'stock' && (
           <div>
+            {/* FILTROS IGUAL QUE PEDIDOS */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6">
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1">
+              <div className="flex flex-col md:flex-row gap-4 items-start">
+                <div className="flex-1 w-full">
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                    Buscar producto
+                    Buscar por nombre o categoría
                   </label>
                   <div className="relative">
                     <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -344,16 +412,85 @@ export default function InventariosPage() {
                     </svg>
                     <input
                       type="text"
-                      placeholder="Buscar por nombre..."
-                      value={busquedaStock}
-                      onChange={(e) => setBusquedaStock(e.target.value)}
+                      placeholder="Ej: Tomate, Verduras, Frutas..."
+                      value={busquedaNombre}
+                      onChange={(e) => setBusquedaNombre(e.target.value)}
                       className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition text-sm"
                     />
                   </div>
                 </div>
+
+                <div className="relative w-full md:w-auto" ref={filtroRef}>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Categorías
+                  </label>
+                  <button
+                    onClick={() => setMostrarFiltroCategorias(!mostrarFiltroCategorias)}
+                    className="w-full md:w-auto px-4 py-2.5 border border-slate-300 rounded-lg font-medium transition-all hover:border-indigo-400 hover:bg-slate-50 flex items-center justify-between gap-2 text-sm text-slate-700"
+                  >
+                    <span className="truncate">
+                      {categoriasSeleccionadas.length > 0 
+                        ? `${categoriasSeleccionadas.length} seleccionada(s)`
+                        : 'Todas las categorías'
+                      }
+                    </span>
+                    <svg className={`w-4 h-4 text-slate-400 transition-transform ${mostrarFiltroCategorias ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {mostrarFiltroCategorias && (
+                    <div className="absolute top-full left-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="p-3 border-b border-slate-100 bg-slate-50">
+                        <button
+                          onClick={toggleTodasCategorias}
+                          className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 w-full text-left"
+                        >
+                          {categoriasSeleccionadas.length === categoriasUnicas.length 
+                            ? 'Deseleccionar todas' 
+                            : 'Seleccionar todas'}
+                        </button>
+                      </div>
+                      <div className="max-h-64 overflow-y-auto p-2">
+                        {categoriasUnicas.map((categoria) => (
+                          <label
+                            key={categoria}
+                            className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={categoriasSeleccionadas.includes(categoria)}
+                              onChange={() => toggleCategoria(categoria)}
+                              className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+                            />
+                            <span className="text-sm text-slate-700 flex-1 truncate">{categoria}</span>
+                            <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                              {todosProductos.filter((p: any) => (p.categoria || 'Sin categoría') === categoria).length}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {(busquedaNombre || categoriasSeleccionadas.length > 0) && (
+                  <div className="pt-6 w-full md:w-auto">
+                    <button
+                      onClick={limpiarFiltros}
+                      className="w-full md:w-auto px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-lg font-medium transition text-sm flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Limpiar filtros
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
+            {/* TABLA DE STOCK */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -375,19 +512,23 @@ export default function InventariosPage() {
                           <p className="text-slate-600 font-medium mt-3">Cargando stock...</p>
                         </td>
                       </tr>
-                    ) : stockFiltrado.length === 0 ? (
+                    ) : productosFiltrados.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
                           <p className="text-lg font-medium">No se encontraron productos</p>
+                          <p className="text-sm mt-1">Prueba ajustando los filtros de búsqueda</p>
                         </td>
                       </tr>
                     ) : (
-                      stockFiltrado.map((item) => {
+                      productosFiltrados.map((item) => {
                         const estado = item.cantidad_actual === 0 ? 'agotado' : 
                                       item.stock_minimo > 0 && item.cantidad_actual <= item.stock_minimo ? 'bajo' : 'normal';
                         return (
                           <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-6 py-4 text-sm font-medium text-slate-900">{item.ingrediente_nombre}</td>
+                            <td className="px-6 py-4">
+                              <p className="text-sm font-medium text-slate-900">{item.ingrediente_nombre}</p>
+                              <p className="text-xs text-slate-500 mt-0.5">{item.categoria || 'Sin categoría'}</p>
+                            </td>
                             <td className="px-6 py-4 text-center">
                               <span className={`text-sm font-bold ${
                                 estado === 'agotado' ? 'text-red-600' : 
@@ -644,7 +785,7 @@ export default function InventariosPage() {
                   <div className="bg-white rounded-xl shadow-sm border border-red-200 overflow-hidden">
                     <div className="p-4 bg-red-50 border-b border-red-200">
                       <h2 className="font-bold text-red-800 flex items-center gap-2">
-                        <span className="text-xl">🚨</span> Productos Agotados ({stockAgotado.length})
+                        <span className="text-xl"></span> Productos Agotados ({stockAgotado.length})
                       </h2>
                     </div>
                     <div className="divide-y divide-slate-100">
@@ -670,7 +811,7 @@ export default function InventariosPage() {
                   <div className="bg-white rounded-xl shadow-sm border border-amber-200 overflow-hidden">
                     <div className="p-4 bg-amber-50 border-b border-amber-200">
                       <h2 className="font-bold text-amber-800 flex items-center gap-2">
-                        <span className="text-xl">️</span> Stock Bajo ({stockBajo.length})
+                        <span className="text-xl">⚠️</span> Stock Bajo ({stockBajo.length})
                       </h2>
                     </div>
                     <div className="divide-y divide-slate-100">
