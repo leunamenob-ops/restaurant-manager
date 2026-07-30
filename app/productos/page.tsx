@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 
 export default function ProductosPage() {
+  const router = useRouter();
   const [todosProductos, setTodosProductos] = useState<any[]>([]);
   const [productosFiltrados, setProductosFiltrados] = useState<any[]>([]);
   const [busquedaNombre, setBusquedaNombre] = useState('');
@@ -37,7 +39,7 @@ export default function ProductosPage() {
     contacto: '',
     telefono: '',
     email: '',
-    hotel_id: '' // Añadido hotel_id
+    hotel_id: ''
   });
   
   const [paginaActual, setPaginaActual] = useState(1);
@@ -216,7 +218,7 @@ export default function ProductosPage() {
           contacto: nuevoProveedor.contacto,
           telefono: nuevoProveedor.telefono,
           email: nuevoProveedor.email,
-          hotel_id: nuevoProveedor.hotel_id || null // Añadido hotel_id
+          hotel_id: nuevoProveedor.hotel_id || null
         }]);
 
       if (error) throw error;
@@ -334,6 +336,18 @@ export default function ProductosPage() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                 Nuevo Proveedor
               </button>
+              
+              {/* NUEVO BOTÓN: VER TODOS LOS PROVEEDORES */}
+              <button
+                onClick={() => router.push('/productos/proveedores')}
+                className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-medium transition-all shadow-sm text-sm flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                Ver Todos
+              </button>
+
               <button
                 onClick={() => setMostrarModalIngrediente(true)}
                 className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium transition-all shadow-sm hover:shadow-md text-sm flex items-center gap-2"
