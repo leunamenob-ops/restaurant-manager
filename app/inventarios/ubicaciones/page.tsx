@@ -97,28 +97,19 @@ export default function UbicacionesPage() {
     const productos = data?.map((d: any) => d.ingredientes) || [];
     setProductosUbicacion(productos);
     
-    // 2. Generar QR de la ubicación
-    const qrDataUbicacion = JSON.stringify({
-      tipo: 'ubicacion',
-      id: ubicacion.id,
-      nombre: ubicacion.nombre
-    });
-    const qrCodeUbicacion = await QRCode.toDataURL(qrDataUbicacion, { 
+    // 2. Generar QR de la ubicación (AHORA CON URL)
+    const urlUbicacion = `${window.location.origin}/inventarios/conteo?ubicacion=${ubicacion.id}`;
+    const qrCodeUbicacion = await QRCode.toDataURL(urlUbicacion, { 
       width: 300,
       margin: 2
     });
     setQrUbicacion(qrCodeUbicacion);
     
-    // 3. Generar QRs de cada producto
+    // 3. Generar QRs de cada producto (AHORA CON URL)
     const qrs: {[key: string]: string} = {};
     for (const prod of productos) {
-      const qrDataProducto = JSON.stringify({
-        tipo: 'producto',
-        id: prod.id,
-        nombre: prod.nombre,
-        ubicacion: ubicacion.nombre
-      });
-      qrs[prod.id] = await QRCode.toDataURL(qrDataProducto, { 
+      const urlProducto = `${window.location.origin}/inventarios/conteo?ubicacion=${ubicacion.id}&producto=${prod.id}`;
+      qrs[prod.id] = await QRCode.toDataURL(urlProducto, { 
         width: 200,
         margin: 2
       });
@@ -194,6 +185,8 @@ export default function UbicacionesPage() {
       return;
     }
     
+    const urlUbicacion = `${window.location.origin}/inventarios/conteo?ubicacion=${ubicacionSeleccionada?.id}`;
+    
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -239,6 +232,12 @@ export default function UbicacionesPage() {
             font-size: 12px;
             color: #475569;
           }
+          .url {
+            font-size: 10px;
+            color: #94a3b8;
+            word-break: break-all;
+            margin-top: 10px;
+          }
         </style>
       </head>
       <body>
@@ -248,7 +247,8 @@ export default function UbicacionesPage() {
           <img src="${qrUbicacion}" alt="QR Ubicación" />
           <div class="info">
             <p><strong>ID:</strong> ${ubicacionSeleccionada?.id.substring(0, 8)}...</p>
-            <p>Escanea para ver productos y hacer inventario</p>
+            <p>Escanea para hacer inventario de esta ubicación</p>
+            <div class="url">${urlUbicacion}</div>
           </div>
         </div>
         <script>
@@ -272,7 +272,9 @@ export default function UbicacionesPage() {
       return;
     }
     
-    const productosHTML = productosUbicacion.map(prod => `
+    const productosHTML = productosUbicacion.map(prod => {
+      const urlProd = `${window.location.origin}/inventarios/conteo?ubicacion=${ubicacionSeleccionada?.id}&producto=${prod.id}`;
+      return `
       <div class="producto-card">
         <h3>${prod.nombre}</h3>
         <div class="producto-info">
@@ -281,8 +283,9 @@ export default function UbicacionesPage() {
         </div>
         <img src="${qrsProductos[prod.id]}" alt="QR ${prod.nombre}" />
         <div class="producto-id">ID: ${prod.id.substring(0, 8)}...</div>
+        <div class="url">${urlProd}</div>
       </div>
-    `).join('');
+    `}).join('');
     
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -343,6 +346,12 @@ export default function UbicacionesPage() {
             color: #94a3b8;
             margin-top: 5px;
           }
+          .url {
+            font-size: 8px;
+            color: #94a3b8;
+            word-break: break-all;
+            margin-top: 5px;
+          }
         </style>
       </head>
       <body>
@@ -372,6 +381,8 @@ export default function UbicacionesPage() {
       alert('QR no disponible para este producto');
       return;
     }
+    
+    const urlProducto = `${window.location.origin}/inventarios/conteo?ubicacion=${ubicacionSeleccionada?.id}&producto=${producto.id}`;
     
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -433,6 +444,12 @@ export default function UbicacionesPage() {
             border-radius: 4px;
             font-size: 11px;
           }
+          .url {
+            font-size: 10px;
+            color: #94a3b8;
+            word-break: break-all;
+            margin-top: 10px;
+          }
         </style>
       </head>
       <body>
@@ -444,6 +461,7 @@ export default function UbicacionesPage() {
             <span class="badge">${producto.categoria || 'Sin categoría'}</span>
             <span class="badge">${producto.unidad_compra || '-'}</span>
           </div>
+          <div class="url">${urlProducto}</div>
         </div>
         <script>
           window.onload = function() {
@@ -467,7 +485,7 @@ export default function UbicacionesPage() {
       case 'nevera': return '❄️';
       case 'congelador': return '🥶';
       case 'estanteria': return '📦';
-      case 'otro': return '';
+      case 'otro': return '📍';
       default: return '📍';
     }
   };
@@ -607,7 +625,7 @@ export default function UbicacionesPage() {
                 <option value="todos">Todos los tipos ({ubicaciones.length})</option>
                 <option value="camara">🏪 Cámaras ({conteoPorTipo.camara})</option>
                 <option value="nevera">❄️ Neveras ({conteoPorTipo.nevera})</option>
-                <option value="congelador"> Congeladores ({conteoPorTipo.congelador})</option>
+                <option value="congelador">🥶 Congeladores ({conteoPorTipo.congelador})</option>
                 <option value="estanteria">📦 Estanterías ({conteoPorTipo.estanteria})</option>
                 <option value="otro">📍 Otros ({conteoPorTipo.otro})</option>
               </select>
@@ -746,7 +764,7 @@ export default function UbicacionesPage() {
                     className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition bg-white"
                   >
                     <option value="camara">🏪 Cámara Fría</option>
-                    <option value="nevera">️ Nevera</option>
+                    <option value="nevera">❄️ Nevera</option>
                     <option value="congelador">🥶 Congelador</option>
                     <option value="estanteria">📦 Estantería</option>
                     <option value="otro">📍 Otro</option>
@@ -843,7 +861,7 @@ export default function UbicacionesPage() {
                     <img src={qrUbicacion} alt="QR Ubicación" className="w-48 h-48 rounded-lg border-2 border-white shadow-md" />
                   </div>
                   <p className="text-center text-sm text-slate-600 mt-3">
-                    Escanea para ver todos los productos de esta ubicación
+                    Escanea para hacer inventario de esta ubicación
                   </p>
                 </div>
 
