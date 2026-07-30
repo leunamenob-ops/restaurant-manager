@@ -14,7 +14,7 @@ export default function AsignarProductosPage() {
   const [busqueda, setBusqueda] = useState('');
   const [guardando, setGuardando] = useState(false);
   
-  // PAGINACIÓN
+  // PAGINACIÓN VISUAL
   const [paginaActual, setPaginaActual] = useState(1);
   const productosPorPagina = 50;
 
@@ -33,13 +33,46 @@ export default function AsignarProductosPage() {
   async function cargarDatos() {
     setLoading(true);
     
-    const [resUb, resProd] = await Promise.all([
-      supabase.from('ubicaciones').select('*').eq('hotel_id', HOTEL_ID).order('orden'),
-      supabase.from('ingredientes').select('*').order('nombre').limit(1000)
-    ]);
+    // 1. Cargar ubicaciones
+    const { data: resUb } = await supabase
+      .from('ubicaciones')
+      .select('*')
+      .eq('hotel_id', HOTEL_ID)
+      .order('orden');
+    
+    if (resUb) setUbicaciones(resUb);
 
-    if (resUb.data) setUbicaciones(resUb.data);
-    if (resProd.data) setTodosProductos(resProd.data);
+    // 2. Cargar TODOS los ingredientes por bloques de 1000 (Sistema Recetas)
+    let todosLosIngredientes: any[] = [];
+    let desde = 0;
+    const lote = 1000;
+    let hayMas = true;
+
+    while (hayMas) {
+      const { data, error } = await supabase
+        .from('ingredientes')
+        .select('*')
+        .order('nombre')
+        .range(desde, desde + lote - 1);
+
+      if (error) { 
+        console.error('Error cargando lote de ingredientes:', error); 
+        break; 
+      }
+      
+      if (!data || data.length === 0) { 
+        hayMas = false; 
+      } else {
+        todosLosIngredientes = todosLosIngredientes.concat(data);
+        if (data.length < lote) {
+          hayMas = false; // Último bloque
+        } else {
+          desde += lote; // Siguiente bloque
+        }
+      }
+    }
+
+    setTodosProductos(todosLosIngredientes);
     setLoading(false);
   }
 
@@ -129,6 +162,7 @@ export default function AsignarProductosPage() {
     alert(`✅ ${productosAsignados.length} productos asignados a ${ubicacionActiva.nombre}`);
   }
 
+  // FILTRADO EN MEMORIA (RÁPIDO)
   const productosDisponibles = todosProductos
     .filter(p => !productosAsignados.find(a => a.id === p.id))
     .filter(p => 
@@ -137,7 +171,7 @@ export default function AsignarProductosPage() {
       p.categoria?.toLowerCase().includes(busqueda.toLowerCase())
     );
 
-  // PAGINACIÓN
+  // LÓGICA DE PAGINACIÓN VISUAL
   const indiceUltimo = paginaActual * productosPorPagina;
   const indicePrimero = indiceUltimo - productosPorPagina;
   const productosPagina = productosDisponibles.slice(indicePrimero, indiceUltimo);
@@ -146,7 +180,9 @@ export default function AsignarProductosPage() {
   const irAPagina = (pagina: number) => {
     if (pagina < 1 || pagina > totalPaginas) return;
     setPaginaActual(pagina);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Scroll suave al inicio de la lista de productos
+    const lista = document.getElementById('lista-productos-disponibles');
+    if (lista) lista.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const obtenerNumerosPagina = () => {
@@ -203,7 +239,7 @@ export default function AsignarProductosPage() {
                 <button
                   onClick={guardarTodos}
                   disabled={guardando}
-                  className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium transition text-sm disabled:opacity-50"
+                  className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium transition text-sm disabled:opacity-50 flex items-center gap-2"
                 >
                   {guardando ? 'Guardando...' : `💾 Guardar (${productosAsignados.length})`}
                 </button>
@@ -217,18 +253,18 @@ export default function AsignarProductosPage() {
         {loading ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-teal-200 border-t-teal-600"></div>
-            <p className="mt-3 text-slate-600">Cargando...</p>
+            <p className="mt-3 text-slate-600">Cargando todos los productos...</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* COLUMNA IZQUIERDA: Ubicaciones */}
             <div className="lg:col-span-1">
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden sticky top-24">
                 <div className="p-4 bg-slate-50 border-b border-slate-200">
                   <h2 className="font-semibold text-slate-800">📍 Ubicaciones ({ubicaciones.length})</h2>
                   <p className="text-xs text-slate-500 mt-1">Selecciona una para gestionar sus productos</p>
                 </div>
-                <div className="divide-y divide-slate-100 max-h-[70vh] overflow-y-auto">
+                <div className="divide-y divide-slate-100 max-h-[calc(100vh-200px)] overflow-y-auto">
                   {ubicaciones.map((ub) => (
                     <button
                       key={ub.id}
@@ -302,7 +338,7 @@ export default function AsignarProductosPage() {
 
                   {/* Buscador y productos disponibles */}
                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="p-4 bg-slate-50 border-b border-slate-200">
+                    <div id="lista-productos-disponibles" className="p-4 bg-slate-50 border-b border-slate-200 scroll-mt-24">
                       <h2 className="font-semibold text-slate-800 mb-3">➕ Añadir productos</h2>
                       <div className="relative">
                         <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -320,6 +356,7 @@ export default function AsignarProductosPage() {
                         />
                       </div>
                     </div>
+                    
                     <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
                       {productosPagina.length === 0 ? (
                         <div className="p-8 text-center text-slate-500">
@@ -349,7 +386,7 @@ export default function AsignarProductosPage() {
                       )}
                     </div>
 
-                    {/* PAGINACIÓN */}
+                    {/* PAGINACIÓN VISUAL */}
                     {totalPaginas > 1 && (
                       <div className="p-4 bg-slate-50 border-t border-slate-200">
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
