@@ -72,7 +72,13 @@ export default function AsignarProductosPage() {
       }
     }
 
-    setTodosProductos(todosLosIngredientes);
+    // Normalizar datos: asegurar que nombre y categoria no sean null
+    setTodosProductos(todosLosIngredientes.map(p => ({
+      ...p,
+      nombre: p.nombre || 'Sin nombre',
+      categoria: p.categoria || 'Sin categoría'
+    })));
+    
     setLoading(false);
   }
 
@@ -162,14 +168,16 @@ export default function AsignarProductosPage() {
     alert(`✅ ${productosAsignados.length} productos asignados a ${ubicacionActiva.nombre}`);
   }
 
-  // FILTRADO EN MEMORIA (RÁPIDO)
+  // FILTRADO EN MEMORIA (RÁPIDO) - CON VALIDACIÓN DE NULLS
   const productosDisponibles = todosProductos
     .filter(p => !productosAsignados.find(a => a.id === p.id))
-    .filter(p => 
-      busqueda === '' || 
-      p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-      p.categoria?.toLowerCase().includes(busqueda.toLowerCase())
-    );
+    .filter(p => {
+      if (busqueda === '') return true;
+      const nombre = (p.nombre || '').toLowerCase();
+      const categoria = (p.categoria || '').toLowerCase();
+      const busquedaLower = busqueda.toLowerCase();
+      return nombre.includes(busquedaLower) || categoria.includes(busquedaLower);
+    });
 
   // LÓGICA DE PAGINACIÓN VISUAL
   const indiceUltimo = paginaActual * productosPorPagina;
@@ -261,7 +269,7 @@ export default function AsignarProductosPage() {
             <div className="lg:col-span-1">
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden sticky top-24">
                 <div className="p-4 bg-slate-50 border-b border-slate-200">
-                  <h2 className="font-semibold text-slate-800">📍 Ubicaciones ({ubicaciones.length})</h2>
+                  <h2 className="font-semibold text-slate-800"> Ubicaciones ({ubicaciones.length})</h2>
                   <p className="text-xs text-slate-500 mt-1">Selecciona una para gestionar sus productos</p>
                 </div>
                 <div className="divide-y divide-slate-100 max-h-[calc(100vh-200px)] overflow-y-auto">
