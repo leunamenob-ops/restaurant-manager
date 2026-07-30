@@ -382,7 +382,7 @@ export default function UbicacionesPage() {
       return;
     }
     
-    const urlProducto = `${window.location.origin}/inventarios/conteo-rapido?producto=${prod.id}`;
+    const urlProducto = `${window.location.origin}/inventarios/conteo-rapido?producto=${producto.id}`;
     
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
