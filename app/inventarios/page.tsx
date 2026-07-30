@@ -52,7 +52,7 @@ export default function InventariosPage() {
   }, [cargarDatos]);
 
   async function cargarStock() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('stock')
       .select(`
         *,
@@ -64,34 +64,51 @@ export default function InventariosPage() {
       `)
       .order('ingrediente_nombre');
     
-    if (data) {
-      setTodosProductos(data);
-      setProductosFiltrados(data);
-      
-      const categorias = Array.from(
-        new Set(
-          data.map((p: any) => p.categoria || 'Sin categoría')
-        )
-      ) as string[];
-      setCategoriasUnicas(categorias.sort());
+    if (error) {
+      console.error('❌ Error cargando stock:', error);
+      alert('Error al cargar el stock: ' + error.message + '\n\nVerifica que RLS esté desactivado en la tabla stock.');
+      return;
     }
+    
+    console.log('✅ Stock cargado correctamente. Total:', data?.length || 0);
+    
+    const productos = data || [];
+    setTodosProductos(productos);
+    setProductosFiltrados(productos);
+    
+    const categorias = Array.from(
+      new Set(
+        productos.map((p: any) => p.categoria || 'Sin categoría')
+      )
+    ) as string[];
+    setCategoriasUnicas(categorias.sort());
   }
 
   async function cargarUbicaciones() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('ubicaciones')
       .select('*')
       .order('orden');
-    if (data) setUbicaciones(data);
+    
+    if (error) {
+      console.error('❌ Error cargando ubicaciones:', error);
+    } else if (data) {
+      setUbicaciones(data);
+    }
   }
 
   async function cargarMovimientos() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('movimientos_stock')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(100);
-    if (data) setMovimientos(data);
+    
+    if (error) {
+      console.error('❌ Error cargando movimientos:', error);
+    } else if (data) {
+      setMovimientos(data);
+    }
   }
 
   // Filtrado
@@ -383,15 +400,15 @@ export default function InventariosPage() {
             </div>
             <div className="flex gap-3">
               <button
-  onClick={() => router.push('/inventarios/ubicaciones')}
-  className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 font-medium transition text-sm flex items-center gap-2"
->
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-  </svg>
-  Ubicaciones
-</button>
+                onClick={() => router.push('/inventarios/ubicaciones')}
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 font-medium transition text-sm flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Ubicaciones
+              </button>
               <button
                 onClick={() => router.push('/dashboard')}
                 className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium transition text-sm flex items-center gap-2"
@@ -591,7 +608,11 @@ export default function InventariosPage() {
                       <tr>
                         <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
                           <p className="text-lg font-medium">No se encontraron productos</p>
-                          <p className="text-sm mt-1">Prueba ajustando los filtros de búsqueda</p>
+                          <p className="text-sm mt-1">
+                            {todosProductos.length === 0 
+                              ? 'La base de datos está vacía o hay un error de conexión. Revisa la consola (F12).' 
+                              : 'Prueba ajustando los filtros de búsqueda'}
+                          </p>
                         </td>
                       </tr>
                     ) : (
