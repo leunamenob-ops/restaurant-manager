@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 
-export default function ConteoRapidoPage() {
+// Componente interno que usa useSearchParams
+function ConteoRapidoContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const productoId = searchParams.get('producto');
@@ -25,7 +26,6 @@ export default function ConteoRapidoPage() {
     }
   }, [productoId]);
 
-  // Auto-focus en el input cuando carga el producto
   useEffect(() => {
     if (producto && inputRef.current) {
       setTimeout(() => {
@@ -37,7 +37,6 @@ export default function ConteoRapidoPage() {
 
   async function cargarProducto(id: string) {
     try {
-      // Cargar datos del producto
       const { data: prodData } = await supabase
         .from('ingredientes')
         .select('*')
@@ -45,11 +44,10 @@ export default function ConteoRapidoPage() {
         .single();
 
       if (!prodData) {
-        setMensaje('❌ Producto no encontrado');
+        setMensaje(' Producto no encontrado');
         return;
       }
 
-      // Cargar stock actual
       const { data: stockData } = await supabase
         .from('stock')
         .select('cantidad_actual')
@@ -77,7 +75,6 @@ export default function ConteoRapidoPage() {
     const cantidad = parseFloat(cantidadReal);
 
     try {
-      // 1. Actualizar stock
       const { error: errorStock } = await supabase
         .from('stock')
         .upsert({
@@ -90,7 +87,6 @@ export default function ConteoRapidoPage() {
 
       if (errorStock) throw errorStock;
 
-      // 2. Registrar movimiento si hay diferencia
       const diferencia = cantidad - stockActual;
       if (diferencia !== 0) {
         const { error: errorMov } = await supabase
@@ -108,11 +104,9 @@ export default function ConteoRapidoPage() {
         if (errorMov) throw errorMov;
       }
 
-      // 3. Feedback visual
       setMensaje(`✅ Guardado: ${producto.nombre} = ${cantidad} ${producto.unidad_compra}`);
       setUltimoActualizado(new Date().toLocaleTimeString());
       
-      // 4. Limpiar para el siguiente
       setTimeout(() => {
         setCantidadReal('');
         setMotivo('');
@@ -162,7 +156,6 @@ export default function ConteoRapidoPage() {
 
         {/* TARJETA PRINCIPAL */}
         <div className="bg-white rounded-3xl shadow-2xl p-6 mb-6">
-          {/* Producto */}
           <div className="text-center mb-6">
             <h2 className="text-xl font-bold text-slate-900 mb-2">{producto.nombre}</h2>
             <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
@@ -171,14 +164,12 @@ export default function ConteoRapidoPage() {
             </div>
           </div>
 
-          {/* Stock Actual */}
           <div className="bg-slate-50 rounded-2xl p-4 mb-6 text-center">
             <p className="text-sm text-slate-500 mb-1">Stock Actual</p>
             <p className="text-4xl font-bold text-slate-900">{stockActual}</p>
             <p className="text-xs text-slate-400 mt-1">{producto.unidad_compra}</p>
           </div>
 
-          {/* Input Cantidad Real */}
           <div className="mb-6">
             <label className="block text-sm font-semibold text-slate-700 mb-2 text-center">
               Cantidad Real Contada
@@ -202,7 +193,6 @@ export default function ConteoRapidoPage() {
             </div>
           </div>
 
-          {/* Input Motivo (opcional) */}
           {cantidadReal && parseFloat(cantidadReal) !== stockActual && (
             <div className="mb-6 animate-in fade-in slide-in-from-top-2">
               <input
@@ -216,7 +206,6 @@ export default function ConteoRapidoPage() {
             </div>
           )}
 
-          {/* Botón Guardar */}
           <button
             onClick={guardarConteo}
             disabled={guardando || !cantidadReal}
@@ -241,7 +230,6 @@ export default function ConteoRapidoPage() {
           </button>
         </div>
 
-        {/* MENSAJE */}
         {mensaje && (
           <div className={`p-4 rounded-2xl text-center font-semibold animate-in fade-in slide-in-from-bottom-2 ${
             mensaje.includes('✅') ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
@@ -250,19 +238,33 @@ export default function ConteoRapidoPage() {
           </div>
         )}
 
-        {/* ÚLTIMO ACTUALIZADO */}
         {ultimoActualizado && (
           <p className="text-center text-emerald-100 text-xs mt-4">
             Último: {ultimoActualizado}
           </p>
         )}
 
-        {/* INFO */}
         <div className="mt-8 text-center text-emerald-100 text-xs space-y-1">
           <p>📱 Escanea el siguiente QR para continuar</p>
           <p>⌨️ O pulsa Enter para guardar rápido</p>
         </div>
       </div>
     </div>
+  );
+}
+
+// Componente principal con Suspense
+export default function ConteoRapidoPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+        <div className="text-center text-white">
+          <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-emerald-500 border-t-transparent mb-4"></div>
+          <p className="text-lg font-medium">Cargando...</p>
+        </div>
+      </div>
+    }>
+      <ConteoRapidoContent />
+    </Suspense>
   );
 }
