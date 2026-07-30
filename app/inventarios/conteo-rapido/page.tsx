@@ -67,7 +67,7 @@ function ConteoRapidoContent() {
 
   async function guardarConteo() {
     if (!producto || cantidadReal === '') {
-      setMensaje('❌ Introduce la cantidad real');
+      setMensaje(' Introduce la cantidad real');
       return;
     }
 
@@ -209,10 +209,10 @@ function ConteoRapidoContent() {
                 onChange={(e) => setCantidadReal(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="0.00"
-                className="w-full px-6 py-5 text-4xl font-bold text-center border-4 border-emerald-200 rounded-2xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-200 outline-none transition bg-emerald-50"
+                className="w-full px-6 py-5 text-4xl font-bold text-center text-emerald-900 border-4 border-emerald-200 rounded-2xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-200 outline-none transition bg-emerald-50 placeholder-emerald-300"
                 autoFocus
               />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-lg font-semibold text-slate-400">
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-lg font-semibold text-emerald-600">
                 {producto.unidad_compra}
               </span>
             </div>
@@ -226,7 +226,7 @@ function ConteoRapidoContent() {
                 onChange={(e) => setMotivo(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Motivo diferencia (opcional)..."
-                className="w-full px-4 py-3 text-sm border-2 border-amber-200 bg-amber-50 rounded-xl focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none transition"
+                className="w-full px-4 py-3 text-sm text-slate-900 border-2 border-amber-200 bg-amber-50 rounded-xl focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none transition placeholder-amber-300"
               />
             </div>
           )}
@@ -270,7 +270,7 @@ function ConteoRapidoContent() {
         )}
 
         <div className="mt-8 text-center text-emerald-100 text-xs space-y-1">
-          <p>📱 Escanea el siguiente QR para continuar</p>
+          <p> Escanea el siguiente QR para continuar</p>
           <p>⌨️ O pulsa Enter para guardar rápido</p>
         </div>
       </div>
