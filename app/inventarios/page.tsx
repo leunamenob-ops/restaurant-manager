@@ -1052,4 +1052,4 @@ export default function InventariosPage() {
       )}
     </div>
   );
-}
+}. 
