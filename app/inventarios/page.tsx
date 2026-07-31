@@ -36,6 +36,9 @@ export default function InventariosPage() {
   const [cantidadAjuste, setCantidadAjuste] = useState('');
   const [motivoAjuste, setMotivoAjuste] = useState('');
   
+  // Modal ubicación
+  const [modalUbicacion, setModalUbicacion] = useState<any>(null);
+  
   const filtroRef = useRef<HTMLDivElement>(null);
 
   const cargarDatos = useCallback(async () => {
@@ -48,49 +51,28 @@ export default function InventariosPage() {
     cargarDatos();
   }, [cargarDatos]);
 
-  // ✅ CORREGIDO: Ahora lee la ubicación desde la tabla 'productos_ubicacion'
- async function cargarStock() {
-  const { data, error } = await supabase
-    .from('stock')
-    .select(`
-      *,
-      ubicaciones:ubicacion_id (
-        id,
-        nombre,
-        tipo
-      )
-    `)
-    .eq('hotel_id', '00000000-0000-0000-0000-000000000001')
-    .order('ingrediente_nombre');
-  
-  if (error) {
-    console.error('❌ Error cargando stock:', error);
-    alert('Error al cargar el stock: ' + error.message);
-    return;
-  }
-  
-  console.log('✅ Stock cargado correctamente. Total:', data?.length || 0);
-  
-  const productos = data || [];
-  setTodosProductos(productos);
-  setProductosFiltrados(productos);
-  
-  const categorias = Array.from(
-    new Set(
-      productos.map((p: any) => p.categoria || 'Sin categoría')
-    )
-  ) as string[];
-  setCategoriasUnicas(categorias.sort());
-}
+  async function cargarStock() {
+    const { data, error } = await supabase
+      .from('stock')
+      .select(`
+        *,
+        ubicaciones:ubicacion_id (
+          id,
+          nombre,
+          tipo
+        )
+      `)
+      .order('ingrediente_nombre');
+    
+    if (error) {
+      console.error('❌ Error cargando stock:', error);
+      alert('Error al cargar el stock: ' + error.message + '\n\nVerifica que RLS esté desactivado en la tabla stock.');
+      return;
+    }
     
     console.log('✅ Stock cargado correctamente. Total:', data?.length || 0);
     
-    // Transformar los datos para que 'ubicaciones' esté en el nivel correcto y sea fácil de usar
-    const productos = (data || []).map((item: any) => ({
-      ...item,
-      ubicaciones: item.productos_ubicacion?.[0]?.ubicaciones || null
-    }));
-    
+    const productos = data || [];
     setTodosProductos(productos);
     setProductosFiltrados(productos);
     
@@ -148,7 +130,6 @@ export default function InventariosPage() {
       );
     }
 
-    // ✅ El filtro de ubicación ahora funciona perfectamente con los datos transformados
     if (ubicacionSeleccionada !== 'todas') {
       filtrados = filtrados.filter((p: any) => 
         p.ubicaciones?.id === ubicacionSeleccionada
@@ -188,6 +169,27 @@ export default function InventariosPage() {
     setBusquedaNombre('');
     setCategoriasSeleccionadas([]);
     setUbicacionSeleccionada('todas');
+  }
+
+  async function abrirModalUbicacion(item: any) {
+    setModalUbicacion(item);
+  }
+
+  async function confirmarUbicacion(ubicacionId: string) {
+    if (!modalUbicacion) return;
+    
+    const { error } = await supabase
+      .from('stock')
+      .update({ ubicacion_id: ubicacionId })
+      .eq('id', modalUbicacion.id);
+    
+    if (error) {
+      alert('Error: ' + error.message);
+      return;
+    }
+    
+    setModalUbicacion(null);
+    await cargarStock();
   }
 
   // ========== STOCK ==========
@@ -242,7 +244,7 @@ export default function InventariosPage() {
         cantidad: cantidad,
         motivo: motivoAjuste || tipoAjuste,
         usuario: 'Usuario',
-        hotel_id: modalAjuste.hotel_id || '00000000-0000-0000-0000-000000000001'
+        hotel_id: modalAjuste.hotel_id
       }]);
 
     if (errorMov) {
@@ -281,7 +283,7 @@ export default function InventariosPage() {
       cantidad_real: s.cantidad_actual,
       diferencia: 0,
       motivo: '',
-      hotel_id: s.hotel_id || '00000000-0000-0000-0000-000000000001'
+      hotel_id: s.hotel_id
     }));
 
     await supabase.from('conteo_items').insert(items);
@@ -345,7 +347,7 @@ export default function InventariosPage() {
             motivo: `Conteo cíclico: ${item.motivo || 'Ajuste por conteo'}`,
             referencia: conteoActivo.id,
             usuario: 'Usuario',
-            hotel_id: item.hotel_id || '00000000-0000-0000-0000-000000000001'
+            hotel_id: item.hotel_id
           }]);
       }
     }
@@ -632,18 +634,20 @@ export default function InventariosPage() {
                               </span>
                             </td>
                             <td className="px-6 py-4 text-center text-sm text-slate-600">{item.stock_minimo || '-'}</td>
-                            
-                            {/* ✅ AQUÍ ESTÁ EL CAMBIO CLAVE: Muestra la ubicación de productos_ubicacion o "Sin asignar" */}
                             <td className="px-6 py-4 text-sm text-slate-600">
                               {item.ubicaciones?.nombre ? (
                                 <span className="inline-flex items-center px-2 py-1 rounded-md bg-indigo-50 text-indigo-700 text-xs font-medium">
                                   {item.ubicaciones.nombre}
                                 </span>
                               ) : (
-                                <span className="text-slate-400 text-xs italic">Sin asignar</span>
+                                <button
+                                  onClick={() => abrirModalUbicacion(item)}
+                                  className="text-indigo-600 hover:text-indigo-700 underline text-xs font-medium"
+                                >
+                                  + Asignar ubicación
+                                </button>
                               )}
                             </td>
-
                             <td className="px-6 py-4 text-center">
                               <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${
                                 estado === 'agotado' ? 'bg-red-100 text-red-800 border-red-200' :
@@ -952,7 +956,7 @@ export default function InventariosPage() {
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-slate-900">
-                {tipoAjuste === 'entrada' ? '📥 Entrada de Stock' :
+                {tipoAjuste === 'entrada' ? ' Entrada de Stock' :
                  tipoAjuste === 'salida' ? '📤 Salida de Stock' :
                  tipoAjuste === 'merma' ? '🗑️ Registrar Merma' : '⚙️ Ajuste de Stock'}
               </h2>
@@ -1009,6 +1013,47 @@ export default function InventariosPage() {
                 Cancelar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ASIGNAR UBICACIÓN */}
+      {modalUbicacion && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-slate-900">Asignar Ubicación</h2>
+              <button onClick={() => setModalUbicacion(null)} className="text-slate-400 hover:text-slate-600 transition">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="bg-slate-50 rounded-lg p-4 mb-4">
+              <p className="text-sm text-slate-600">Producto:</p>
+              <p className="font-bold text-slate-900">{modalUbicacion.ingrediente_nombre}</p>
+            </div>
+
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {ubicaciones.map((ub) => (
+                <button
+                  key={ub.id}
+                  onClick={() => confirmarUbicacion(ub.id)}
+                  className="w-full px-4 py-3 text-left rounded-lg border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 transition"
+                >
+                  <p className="font-semibold text-slate-900">{ub.nombre}</p>
+                  {ub.descripcion && <p className="text-xs text-slate-500 mt-0.5">{ub.descripcion}</p>}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setModalUbicacion(null)}
+              className="mt-4 w-full px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition font-medium text-sm"
+            >
+              Cancelar
+            </button>
           </div>
         </div>
       )}
