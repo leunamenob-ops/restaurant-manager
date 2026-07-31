@@ -49,28 +49,39 @@ export default function InventariosPage() {
   }, [cargarDatos]);
 
   // ✅ CORREGIDO: Ahora lee la ubicación desde la tabla 'productos_ubicacion'
-  async function cargarStock() {
-    const { data, error } = await supabase
-      .from('stock')
-      .select(`
-        *,
-        productos_ubicacion (
-          ubicacion_id,
-          ubicaciones:ubicacion_id (
-            id,
-            nombre,
-            tipo
-          )
-        )
-      `)
-      .eq('hotel_id', '00000000-0000-0000-0000-000000000001')
-      .order('ingrediente_nombre');
-    
-    if (error) {
-      console.error('❌ Error cargando stock:', error);
-      alert('Error al cargar el stock: ' + error.message + '\n\nVerifica que RLS esté desactivado en la tabla stock.');
-      return;
-    }
+ async function cargarStock() {
+  const { data, error } = await supabase
+    .from('stock')
+    .select(`
+      *,
+      ubicaciones:ubicacion_id (
+        id,
+        nombre,
+        tipo
+      )
+    `)
+    .eq('hotel_id', '00000000-0000-0000-0000-000000000001')
+    .order('ingrediente_nombre');
+  
+  if (error) {
+    console.error('❌ Error cargando stock:', error);
+    alert('Error al cargar el stock: ' + error.message);
+    return;
+  }
+  
+  console.log('✅ Stock cargado correctamente. Total:', data?.length || 0);
+  
+  const productos = data || [];
+  setTodosProductos(productos);
+  setProductosFiltrados(productos);
+  
+  const categorias = Array.from(
+    new Set(
+      productos.map((p: any) => p.categoria || 'Sin categoría')
+    )
+  ) as string[];
+  setCategoriasUnicas(categorias.sort());
+}
     
     console.log('✅ Stock cargado correctamente. Total:', data?.length || 0);
     
