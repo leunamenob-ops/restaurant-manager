@@ -36,9 +36,6 @@ export default function InventariosPage() {
   const [cantidadAjuste, setCantidadAjuste] = useState('');
   const [motivoAjuste, setMotivoAjuste] = useState('');
   
-  // Modal ubicación
-  const [modalUbicacion, setModalUbicacion] = useState<any>(null);
-  
   const filtroRef = useRef<HTMLDivElement>(null);
 
   const cargarDatos = useCallback(async () => {
@@ -51,11 +48,18 @@ export default function InventariosPage() {
     cargarDatos();
   }, [cargarDatos]);
 
+  // ✅ MODIFICADO: Query con JOIN para traer el nombre de la ubicación
   async function cargarStock() {
-  const { data, error } = await supabase
-    .from('stock')
-    .select('*')
-    .order('ingrediente_nombre');
+    const { data, error } = await supabase
+      .from('stock')
+      .select(`
+        *,
+        ubicaciones:ubicacion_id (
+          id,
+          nombre
+        )
+      `)
+      .order('ingrediente_nombre');
     
     if (error) {
       console.error('❌ Error cargando stock:', error);
@@ -123,10 +127,11 @@ export default function InventariosPage() {
       );
     }
 
-    if (ubicacionSeleccionada !== 'todas') {
-      filtrados = filtrados.filter((p: any) => 
-        p.ubicaciones?.id === ubicacionSeleccionada
-      );
+    // ✅ MODIFICADO: Lógica de filtro de ubicación corregida
+    if (ubicacionSeleccionada === 'sin-ubicacion') {
+      filtrados = filtrados.filter((p: any) => !p.ubicacion_id);
+    } else if (ubicacionSeleccionada !== 'todas') {
+      filtrados = filtrados.filter((p: any) => p.ubicacion_id === ubicacionSeleccionada);
     }
 
     setProductosFiltrados(filtrados);
@@ -164,30 +169,10 @@ export default function InventariosPage() {
     setUbicacionSeleccionada('todas');
   }
 
-  async function abrirModalUbicacion(item: any) {
-    setModalUbicacion(item);
-  }
-
-  async function confirmarUbicacion(ubicacionId: string) {
-    if (!modalUbicacion) return;
-    
-    const { error } = await supabase
-      .from('stock')
-      .update({ ubicacion_id: ubicacionId })
-      .eq('id', modalUbicacion.id);
-    
-    if (error) {
-      alert('Error: ' + error.message);
-      return;
-    }
-    
-    setModalUbicacion(null);
-    await cargarStock();
-  }
-
   // ========== STOCK ==========
   const stockBajo = todosProductos.filter((s) => s.stock_minimo > 0 && s.cantidad_actual <= s.stock_minimo);
   const stockAgotado = todosProductos.filter((s) => s.cantidad_actual === 0);
+  const sinUbicacion = todosProductos.filter((s) => !s.ubicacion_id); // ✅ Nuevo KPI
 
   async function abrirModalAjuste(item: any, tipo: 'entrada' | 'salida' | 'merma' | 'ajuste') {
     setModalAjuste(item);
@@ -417,8 +402,8 @@ export default function InventariosPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* DASHBOARD RESUMEN */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {/* DASHBOARD RESUMEN - ✅ MODIFICADO A 5 COLUMNAS */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
             <p className="text-xs font-semibold text-slate-500 uppercase">Total Productos</p>
             <p className="text-2xl font-bold text-slate-900 mt-1">{todosProductos.length}</p>
@@ -433,6 +418,12 @@ export default function InventariosPage() {
             <p className="text-xs font-semibold text-slate-500 uppercase">Agotados</p>
             <p className="text-2xl font-bold text-red-600 mt-1">{stockAgotado.length}</p>
             <p className="text-xs text-slate-500 mt-1">sin stock</p>
+          </div>
+          {/* ✅ NUEVO KPI: SIN UBICACIÓN */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase">Sin Ubicación</p>
+            <p className="text-2xl font-bold text-slate-600 mt-1">{sinUbicacion.length}</p>
+            <p className="text-xs text-slate-500 mt-1">por asignar</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
             <p className="text-xs font-semibold text-slate-500 uppercase">Movimientos</p>
@@ -553,6 +544,7 @@ export default function InventariosPage() {
                     className="w-full md:w-auto px-4 py-2.5 border border-slate-300 rounded-lg font-medium transition-all hover:border-indigo-400 hover:bg-slate-50 text-sm text-slate-700 bg-white"
                   >
                     <option value="todas">Todas las ubicaciones</option>
+                    <option value="sin-ubicacion">⚠️ Sin ubicación asignada</option>
                     {ubicaciones.map((ub) => (
                       <option key={ub.id} value={ub.id}>{ub.nombre}</option>
                     ))}
@@ -627,20 +619,27 @@ export default function InventariosPage() {
                               </span>
                             </td>
                             <td className="px-6 py-4 text-center text-sm text-slate-600">{item.stock_minimo || '-'}</td>
-                            <td className="px-6 py-4 text-sm text-slate-600">
+                            
+                            {/* ✅ MODIFICADO: Muestra ubicación o badge "Sin ubicación" (SIN BOTÓN) */}
+                            <td className="px-6 py-4 text-sm">
                               {item.ubicaciones?.nombre ? (
-                                <span className="inline-flex items-center px-2 py-1 rounded-md bg-indigo-50 text-indigo-700 text-xs font-medium">
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 text-xs font-medium border border-indigo-100">
+                                  <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  </svg>
                                   {item.ubicaciones.nombre}
                                 </span>
                               ) : (
-                                <button
-                                  onClick={() => abrirModalUbicacion(item)}
-                                  className="text-indigo-600 hover:text-indigo-700 underline text-xs font-medium"
-                                >
-                                  + Asignar ubicación
-                                </button>
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-slate-100 text-slate-500 text-xs font-medium border border-slate-200">
+                                  <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                  </svg>
+                                  Sin ubicación
+                                </span>
                               )}
                             </td>
+
                             <td className="px-6 py-4 text-center">
                               <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${
                                 estado === 'agotado' ? 'bg-red-100 text-red-800 border-red-200' :
@@ -1010,46 +1009,7 @@ export default function InventariosPage() {
         </div>
       )}
 
-      {/* MODAL ASIGNAR UBICACIÓN */}
-      {modalUbicacion && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-slate-900">Asignar Ubicación</h2>
-              <button onClick={() => setModalUbicacion(null)} className="text-slate-400 hover:text-slate-600 transition">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="bg-slate-50 rounded-lg p-4 mb-4">
-              <p className="text-sm text-slate-600">Producto:</p>
-              <p className="font-bold text-slate-900">{modalUbicacion.ingrediente_nombre}</p>
-            </div>
-
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {ubicaciones.map((ub) => (
-                <button
-                  key={ub.id}
-                  onClick={() => confirmarUbicacion(ub.id)}
-                  className="w-full px-4 py-3 text-left rounded-lg border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 transition"
-                >
-                  <p className="font-semibold text-slate-900">{ub.nombre}</p>
-                  {ub.descripcion && <p className="text-xs text-slate-500 mt-0.5">{ub.descripcion}</p>}
-                </button>
-              ))}
-            </div>
-
-            <button
-              onClick={() => setModalUbicacion(null)}
-              className="mt-4 w-full px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition font-medium text-sm"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      )}
+      {/* ✅ ELIMINADO: Modal de Asignar Ubicación (ya no existe) */}
     </div>
   );
-}. 
+}
