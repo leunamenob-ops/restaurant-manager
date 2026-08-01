@@ -21,7 +21,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // Definición de módulos con el nuevo estilo visual (coherente con la Landing)
+  // Definición de módulos - Facturas reemplaza Análisis de Costes (posición 8)
+  // Análisis de Costes + Informes combinados en posición 9
   const todosLosModulos: Modulo[] = [
     { 
       id: 1, 
@@ -102,19 +103,19 @@ export default function DashboardPage() {
     },
     { 
       id: 8, 
-      nombre: 'Análisis de Costes', 
-      descripcion: 'KPIs financieros, márgenes y evolución de costes histórica.', 
-      icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>, 
-      ruta: '/costes', 
-      color: 'from-emerald-50 to-white', 
-      border: 'border-emerald-200',
-      iconBg: 'bg-emerald-600',
-      hoverText: 'group-hover:text-emerald-700'
+      nombre: 'Facturas', 
+      descripcion: 'Procesa facturas con IA. Extracción automática de datos y líneas de producto.', 
+      icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>, 
+      ruta: '/facturas', 
+      color: 'from-blue-50 to-white', 
+      border: 'border-blue-200',
+      iconBg: 'bg-blue-600',
+      hoverText: 'group-hover:text-blue-700'
     },
     { 
       id: 9, 
-      nombre: 'Informes', 
-      descripcion: 'Exporta reportes detallados en PDF, Excel y más formatos.', 
+      nombre: 'Análisis e Informes', 
+      descripcion: 'KPIs financieros, márgenes y exportación de reportes en PDF y Excel.', 
       icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>, 
       ruta: '/informes', 
       color: 'from-orange-50 to-white', 

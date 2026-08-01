@@ -1,0 +1,10 @@
+{
+  "/inventarios/asignar-productos/page": "app/inventarios/asignar-productos/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/api/facturas/analizar/route": "app/api/facturas/analizar/route.js",
+  "/api/facturas/guardar/route": "app/api/facturas/guardar/route.js",
+  "/facturas/page": "app/facturas/page.js",
+  "/facturas/upload/page": "app/facturas/upload/page.js",
+  "/facturas/revisar/page": "app/facturas/revisar/page.js",
+  "/facturas/[id]/page": "app/facturas/[id]/page.js"
+}
