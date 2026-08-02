@@ -1,25 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
-interface PCC {
-  id_pcc: string;
-  nombre_pcc: string;
-  frecuencia: string;
-  tipo_control: string;
-  limite_min: number | null;
-  limite_max: number | null;
-  unidad: string;
-}
+import { useRouter } from 'next/navigation';
 
 export default function HACCPPage() {
-  const [pendientes, setPendientes] = useState<PCC[]>([]);
+  const router = useRouter();
+  const [usuario, setUsuario] = useState<any>(null);
+  const [pendientes, setPendientes] = useState<any[]>([]);
   const [completados, setCompletados] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState('');
-
-  // Estados del formulario
+  
+  // Form states
   const [pccSeleccionado, setPccSeleccionado] = useState<string>('');
   const [valorMedido, setValorMedido] = useState<string>('');
   const [cumpleSiNo, setCumpleSiNo] = useState<string>('SÍ');
@@ -27,19 +20,24 @@ export default function HACCPPage() {
   const [fotoEvidencia, setFotoEvidencia] = useState<string>('');
 
   useEffect(() => {
+    const user = sessionStorage.getItem('haccp_usuario');
+    if (!user) {
+      router.push('/haccp?login=true');
+      return;
+    }
+    setUsuario(JSON.parse(user));
     cargarPendientes();
   }, []);
 
   async function cargarPendientes() {
     setLoading(true);
     try {
-      // NOTA: En producción, 'cocinero001' vendrá de la sesión del usuario logueado
-      const res = await fetch('/api/haccp/pcc-pendientes?usuario=cocinero001');
+      const user = JSON.parse(sessionStorage.getItem('haccp_usuario') || '{}');
+      const res = await fetch(`/api/haccp/pcc-pendientes?usuario=${user.id_usuario}`);
       const data = await res.json();
       setPendientes(data.pendientes || []);
       setCompletados(data.completados || []);
       
-      // Seleccionar el primero por defecto si hay pendientes
       if (data.pendientes?.length > 0) {
         setPccSeleccionado(data.pendientes[0].id_pcc);
       }
@@ -51,8 +49,8 @@ export default function HACCPPage() {
     }
   }
 
-  // Detectar automáticamente si el valor está fuera de rango para mostrar campos de incidencia
   const pccActual = pendientes.find(p => p.id_pcc === pccSeleccionado);
+  
   const estaFueraDeRango = pccActual && pccActual.tipo_control === 'NUMERICO' && valorMedido !== '' 
     ? (parseFloat(valorMedido) < (pccActual.limite_min || 0) || parseFloat(valorMedido) > (pccActual.limite_max || 100))
     : false;
@@ -64,10 +62,12 @@ export default function HACCPPage() {
     setGuardando(true);
     setMensaje('');
 
+    const user = JSON.parse(sessionStorage.getItem('haccp_usuario') || '{}');
+    
     const registro = {
       id_pcc: pccActual.id_pcc,
-      id_usuario: 'cocinero001', // Reemplazar con usuario real de la sesión
-      hotel_id: '00000000-0000-0000-0000-000000000001', // Reemplazar con hotel_id real
+      id_usuario: user.id_usuario,
+      hotel_id: user.hotel_id || '00000000-0000-0000-0000-000000000001',
       valor_medido: valorMedido,
       unidad: pccActual.unidad,
       cumple_si_no: estaFueraDeRango || cumpleSiNo === 'NO' ? 'NO' : 'SÍ',
@@ -86,17 +86,15 @@ export default function HACCPPage() {
       
       if (data.success) {
         setMensaje(data.mensaje);
-        // Limpiar formulario
         setValorMedido('');
         setAccionCorrectora('');
         setFotoEvidencia('');
         setCumpleSiNo('SÍ');
         
-        // Recargar para actualizar la lista
         setTimeout(() => {
           setMensaje('');
           cargarPendientes();
-        }, 2500);
+        }, 3000);
       } else {
         setMensaje(`❌ Error: ${data.error}`);
       }
@@ -108,13 +106,25 @@ export default function HACCPPage() {
     }
   }
 
+  if (!usuario) return null;
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
-        <h1 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-          📝 Registro HACCP
-        </h1>
-        
+        {/* Header */}
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">📝 Registro HACCP</h1>
+            <p className="text-sm text-gray-600">{usuario.nombre} - {usuario.cargo}</p>
+          </div>
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="px-4 py-2 bg-cyan-600 text-white rounded-lg text-sm"
+          >
+            ← Dashboard
+          </button>
+        </div>
+
         {loading ? (
           <div className="text-center py-8 text-gray-500">Cargando controles...</div>
         ) : pendientes.length === 0 ? (
@@ -124,14 +134,14 @@ export default function HACCPPage() {
             <p className="text-gray-600 mb-4">No hay PCC pendientes para hoy.</p>
             <button 
               onClick={cargarPendientes}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
               🔄 Recargar
             </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Resumen de estado */}
+            {/* Resumen */}
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
                 <p className="text-blue-800 font-semibold text-sm">⏳ Pendientes</p>
@@ -143,9 +153,11 @@ export default function HACCPPage() {
               </div>
             </div>
 
-            {/* Selector de PCC */}
+            {/* Selector PCC */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Selecciona el PCC a registrar:</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Selecciona el PCC a registrar:
+              </label>
               <select 
                 value={pccSeleccionado}
                 onChange={(e) => {
@@ -154,7 +166,7 @@ export default function HACCPPage() {
                   setAccionCorrectora('');
                   setFotoEvidencia('');
                 }}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 required
               >
                 {pendientes.map(pcc => (
@@ -165,7 +177,7 @@ export default function HACCPPage() {
               </select>
             </div>
 
-            {/* Información del PCC seleccionado */}
+            {/* Info PCC */}
             {pccActual && (
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                 <p className="text-sm text-gray-600 mb-2">
@@ -179,7 +191,7 @@ export default function HACCPPage() {
               </div>
             )}
 
-            {/* Campo de Valor Medido (para Numérico o Proceso) */}
+            {/* Campo Valor Numérico */}
             {pccActual && (pccActual.tipo_control === 'NUMERICO' || pccActual.tipo_control === 'PROCESO') && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -197,15 +209,19 @@ export default function HACCPPage() {
                   required
                 />
                 {estaFueraDeRango && (
-                  <p className="text-red-600 text-sm mt-1 font-semibold">⚠️ Valor fuera de rango. Se requiere acción correctora.</p>
+                  <p className="text-red-600 text-sm mt-1 font-semibold">
+                    ⚠️ Valor fuera de rango. Se requiere acción correctora.
+                  </p>
                 )}
               </div>
             )}
 
-            {/* Campo Cualitativo (Sí/No) */}
+            {/* Campo Cualitativo */}
             {pccActual && pccActual.tipo_control === 'CUALITATIVO' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">¿Cumple con el estándar?</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  ¿Cumple con el estándar?
+                </label>
                 <div className="flex gap-4">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input 
@@ -233,61 +249,52 @@ export default function HACCPPage() {
               </div>
             )}
 
-            {/* Campos de Incidencia (Solo si está fuera de rango o es NO) */}
+            {/* Campos Incidencia */}
             {(estaFueraDeRango || cumpleSiNo === 'NO') && (
-              <div className="space-y-4 p-4 bg-red-50 border border-red-200 rounded-lg animate-fade-in">
-                <h3 className="font-semibold text-red-800 flex items-center gap-2">
-                  ⚠️ Incidencia Detectada
-                </h3>
+              <div className="space-y-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <h3 className="font-semibold text-red-800">⚠️ Incidencia Detectada</h3>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Acción Correctora (Obligatorio):</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Acción Correctora (Obligatorio):
+                  </label>
                   <textarea
                     value={accionCorrectora}
                     onChange={(e) => setAccionCorrectora(e.target.value)}
                     className="w-full p-3 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500"
                     rows={3}
-                    placeholder="Describe qué acción se tomó para corregir el problema..."
+                    placeholder="Describe qué acción se tomó..."
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">URL de Foto de Evidencia (Opcional):</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    URL de Foto de Evidencia:
+                  </label>
                   <input
                     type="text"
                     value={fotoEvidencia}
                     onChange={(e) => setFotoEvidencia(e.target.value)}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="https://... o dejar en blanco por ahora"
+                    placeholder="https://... o dejar en blanco"
                   />
-                  <p className="text-xs text-gray-500 mt-1">* La subida directa de archivos se puede integrar después.</p>
                 </div>
               </div>
             )}
 
-            {/* Botón de Guardar */}
+            {/* Botón Guardar */}
             <button
               type="submit"
               disabled={guardando}
-              className={`w-full py-3 px-4 rounded-lg font-semibold text-white transition flex items-center justify-center gap-2 ${
-                guardando ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+              className={`w-full py-3 px-4 rounded-lg font-semibold text-white transition ${
+                guardando ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
               }`}
             >
-              {guardando ? (
-                <>
-                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Guardando...
-                </>
-              ) : (
-                '✅ Guardar Control'
-              )}
+              {guardando ? 'Guardando...' : '✅ Guardar Control'}
             </button>
 
-            {/* Mensaje de éxito/error */}
+            {/* Mensaje */}
             {mensaje && (
               <div className={`p-4 rounded-lg text-center font-semibold ${
                 mensaje.includes('✅') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
