@@ -3,9 +3,9 @@
   "/dashboard/page": "app/dashboard/page.js",
   "/haccp/page": "app/haccp/page.js",
   "/api/haccp/pcc-pendientes/route": "app/api/haccp/pcc-pendientes/route.js",
-  "/api/haccp/registros/route": "app/api/haccp/registros/route.js",
-  "/api/haccp/estadisticas/route": "app/api/haccp/estadisticas/route.js",
   "/haccp/dashboard/page": "app/haccp/dashboard/page.js",
+  "/api/haccp/estadisticas/route": "app/api/haccp/estadisticas/route.js",
+  "/api/haccp/registros/route": "app/api/haccp/registros/route.js",
   "/api/haccp/incidencias/route": "app/api/haccp/incidencias/route.js",
   "/api/haccp/categorias/route": "app/api/haccp/categorias/route.js",
   "/api/haccp/reporte-pdf/route": "app/api/haccp/reporte-pdf/route.js"

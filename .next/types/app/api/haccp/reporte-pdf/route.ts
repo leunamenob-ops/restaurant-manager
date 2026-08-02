@@ -1,4 +1,4 @@
-// File: /workspaces/restaurant-manager/app/api/haccp/reporte-pdf/route.tsx
+// File: /workspaces/restaurant-manager/app/api/haccp/reporte-pdf/route.ts
 import * as entry from '../../../../../../app/api/haccp/reporte-pdf/route.js'
 import type { NextRequest } from 'next/server.js'
 

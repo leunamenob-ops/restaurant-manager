@@ -90,14 +90,14 @@ export default function HACCPDashboard() {
   async function handleExportarPDF() {
     try {
       const catParam = categoriaFiltro === 'todas' ? '' : `&categoria=${categoriaFiltro}`;
-      // NOTA: Apunta a la nueva ruta que usa @react-pdf/renderer
+      // Apunta a la ruta que genera un HTML profesional listo para imprimir/guardar como PDF
       const url = `/api/haccp/reporte-pdf?inicio=${fechaInicio}&fin=${fechaFin}${catParam}`;
       
-      // Abrir en nueva pestaña para descargar el PDF generado
+      // Abrir en nueva pestaña
       window.open(url, '_blank');
     } catch (error) {
-      console.error('Error exportando PDF:', error);
-      alert('Error al generar el PDF');
+      console.error('Error exportando reporte:', error);
+      alert('Error al generar el reporte');
     }
   }
 
@@ -195,9 +195,9 @@ export default function HACCPDashboard() {
               <button
                 onClick={handleExportarPDF}
                 className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition shadow-sm flex items-center gap-2"
-                title="Descargar reporte en PDF"
+                title="Generar reporte para imprimir/guardar como PDF"
               >
-                <span>📄</span> PDF
+                <span>📄</span> Reporte
               </button>
             </div>
           </div>

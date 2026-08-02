@@ -1,10 +1,5 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import * as pdfMake from 'pdfmake/build/pdfmake';
-import * as pdfFonts from 'pdfmake/build/vfs_fonts';
-
-// Configurar fuentes
-(pdfMake as any).vfs = (pdfFonts as any).vfs;
 
 export async function GET(request: Request) {
   try {
@@ -36,7 +31,6 @@ export async function GET(request: Request) {
     const { data: registros, error } = await query;
     if (error) throw error;
 
-    // Obtener PCCs y categorías
     const { data: pccData } = await supabase
       .from('haccp_pcc')
       .select('id_pcc, nombre_pcc, categoria_id');
@@ -60,13 +54,11 @@ export async function GET(request: Request) {
       });
     });
 
-    // Calcular estadísticas
     const totalRegistros = registros?.length || 0;
     const totalOK = registros?.filter((r: any) => r.estado === 'OK').length || 0;
     const totalNOK = registros?.filter((r: any) => r.estado === 'NO_OK').length || 0;
     const porcentajeCumplimiento = totalRegistros > 0 ? Math.round((totalOK / totalRegistros) * 100) : 0;
 
-    // Construir documento PDF
     const categoriasMap: any = {};
     categoriasData?.forEach(cat => {
       categoriasMap[cat.id] = cat.nombre;
@@ -88,179 +80,178 @@ export async function GET(request: Request) {
       });
     };
 
-    // Construir contenido del PDF
-    const contentDefinition: any = [
-      // Header
-      { text: 'KOST SOFTWARE', style: 'header', alignment: 'center' },
-      { text: 'Reporte HACCP - Control de Puntos Críticos', style: 'subheader', alignment: 'center' },
-      { text: `Período: ${formatearFecha(inicio)} al ${formatearFecha(fin)}`, style: 'small', alignment: 'center' },
-      { text: `Generado: ${new Date().toLocaleString('es-ES')}`, style: 'small', alignment: 'center' },
-      { text: '\n' },
-      
-      // Estadísticas
-      { text: 'RESUMEN GENERAL', style: 'sectionTitle' },
-      {
-        style: 'statsTable',
-        table: {
-          widths: ['*', '*', '*', '*'],
-          body: [
-            [
-              { text: `Total: ${totalRegistros}`, bold: true },
-              { text: `OK: ${totalOK}`, color: 'green' },
-              { text: `NO_OK: ${totalNOK}`, color: 'red' },
-              { text: `Cumplimiento: ${porcentajeCumplimiento}%`, bold: true, color: porcentajeCumplimiento >= 95 ? 'green' : 'red' }
-            ]
-          ]
-        },
-        layout: 'lightHorizontalLines'
-      },
-      { text: '\n' }
-    ];
+    // Generar HTML
+    let htmlContent = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Reporte HACCP ${inicio} - ${fin}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; color: #333; }
+    .header { text-align: center; border-bottom: 3px solid #0891b2; padding-bottom: 20px; margin-bottom: 30px; }
+    .header h1 { color: #0891b2; margin: 0; font-size: 28px; }
+    .header h2 { color: #0e7490; margin: 10px 0; font-size: 18px; }
+    .header p { margin: 5px 0; color: #666; font-size: 14px; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }
+    .stat-box { background: #f8fafc; border-left: 4px solid #0891b2; padding: 15px; border-radius: 5px; }
+    .stat-box.ok { border-left-color: #16a34a; }
+    .stat-box.nok { border-left-color: #dc2626; }
+    .stat-box h3 { margin: 0; font-size: 14px; color: #666; }
+    .stat-box p { margin: 10px 0 0; font-size: 24px; font-weight: bold; color: #0891b2; }
+    .stat-box.ok p { color: #16a34a; }
+    .stat-box.nok p { color: #dc2626; }
+    .section { margin-bottom: 30px; page-break-inside: avoid; }
+    .section-title { background: #0891b2; color: white; padding: 10px; font-size: 16px; font-weight: bold; border-radius: 5px; margin-bottom: 15px; }
+    .category { margin-bottom: 25px; page-break-inside: avoid; }
+    .category-title { color: #0891b2; font-size: 15px; font-weight: bold; border-bottom: 2px solid #0891b2; padding-bottom: 5px; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { background: #f1f5f9; text-align: left; padding: 8px; border-bottom: 2px solid #0891b2; }
+    td { padding: 8px; border-bottom: 1px solid #e2e8f0; }
+    tr:hover { background: #f8fafc; }
+    .estado-ok { color: #16a34a; font-weight: bold; }
+    .estado-nok { color: #dc2626; font-weight: bold; }
+    .accion { background: #fef2f2; color: #dc2626; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 11px; }
+    .footer { margin-top: 50px; text-align: center; color: #999; font-size: 11px; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+    @media print {
+      body { margin: 20px; }
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>KOST SOFTWARE</h1>
+    <h2>Reporte HACCP - Control de Puntos Críticos</h2>
+    <p>Período: ${formatearFecha(inicio)} al ${formatearFecha(fin)}</p>
+    <p>Generado: ${new Date().toLocaleString('es-ES')}</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat-box">
+      <h3>Total Registros</h3>
+      <p>${totalRegistros}</p>
+    </div>
+    <div class="stat-box ok">
+      <h3>Registros OK</h3>
+      <p>${totalOK}</p>
+    </div>
+    <div class="stat-box nok">
+      <h3>Incidencias NO_OK</h3>
+      <p>${totalNOK}</p>
+    </div>
+    <div class="stat-box">
+      <h3>% Cumplimiento</h3>
+      <p style="color: ${porcentajeCumplimiento >= 95 ? '#16a34a' : '#dc2626'}">${porcentajeCumplimiento}%</p>
+    </div>
+  </div>
+    `;
 
     // Registros por categoría
     Object.keys(registrosPorCategoria).forEach(catId => {
       const catNombre = categoriasMap[catId] || catId;
       const regs = registrosPorCategoria[catId];
 
-      contentDefinition.push({ text: catNombre, style: 'categoryTitle' });
-
-      // Tabla de registros
-      const tableBody: any[] = [
-        [
-          { text: 'Fecha/Hora', style: 'tableHeader' },
-          { text: 'PCC', style: 'tableHeader' },
-          { text: 'Valor', style: 'tableHeader' },
-          { text: 'Estado', style: 'tableHeader' },
-          { text: 'Usuario', style: 'tableHeader' }
-        ]
-      ];
+      htmlContent += `
+  <div class="category">
+    <div class="category-title">${catNombre}</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha/Hora</th>
+          <th>PCC</th>
+          <th>Valor</th>
+          <th>Estado</th>
+          <th>Usuario</th>
+        </tr>
+      </thead>
+      <tbody>
+      `;
 
       regs.forEach((reg: any) => {
-        tableBody.push([
-          formatearFechaHora(reg.fecha_hora),
-          reg.nombre_pcc,
-          `${reg.valor_medido || reg.temp_final || '-'} ${reg.unidad || ''}`,
-          { 
-            text: reg.estado, 
-            color: reg.estado === 'OK' ? 'green' : 'red',
-            bold: true
-          },
-          reg.id_usuario
-        ]);
+        const estadoClass = reg.estado === 'OK' ? 'estado-ok' : 'estado-nok';
+        htmlContent += `
+        <tr>
+          <td>${formatearFechaHora(reg.fecha_hora)}</td>
+          <td>${reg.nombre_pcc}</td>
+          <td>${reg.valor_medido || reg.temp_final || '-'} ${reg.unidad || ''}</td>
+          <td class="${estadoClass}">${reg.estado}</td>
+          <td>${reg.id_usuario}</td>
+        </tr>`;
 
         if (reg.accion_correctora) {
-          tableBody.push([
-            { text: `⚠️ Acción: ${reg.accion_correctora}`, colSpan: 5, alignment: 'left', color: 'red' },
-            {}, {}, {}, {}
-          ]);
+          htmlContent += `
+        <tr>
+          <td colspan="5" class="accion">⚠️ Acción: ${reg.accion_correctora}</td>
+        </tr>`;
         }
       });
 
-      contentDefinition.push({
-        style: 'table',
-        table: {
-          widths: ['20%', '35%', '15%', '15%', '15%'],
-          body: tableBody
-        },
-        layout: 'lightHorizontalLines'
-      });
-
-      contentDefinition.push({ text: '\n' });
+      htmlContent += `
+      </tbody>
+    </table>
+  </div>
+      `;
     });
 
     // Incidencias destacadas
-    const incidencias = registros?.filter((r: any) => r.estado === 'NO_OK') || [];
-    if (incidencias.length > 0) {
-      contentDefinition.push({ text: 'INCIDENCIAS DETECTADAS', style: 'sectionTitle', color: 'red' });
-      
+    if (totalNOK > 0) {
+      htmlContent += `
+  <div class="section">
+    <div class="section-title" style="background: #dc2626;">️ INCIDENCIAS DETECTADAS</div>
+      `;
+
+      const incidencias = registros?.filter((r: any) => r.estado === 'NO_OK') || [];
       incidencias.forEach((inc: any, index: number) => {
         const pcc = pccData?.find(p => p.id_pcc === inc.id_pcc);
-        contentDefinition.push({
-          stack: [
-            { text: `${index + 1}. ${pcc?.nombre_pcc || inc.id_pcc}`, bold: true, fontSize: 11 },
-            { text: `Fecha: ${formatearFechaHora(inc.fecha_hora)}`, fontSize: 9, margin: [10, 2, 0, 0] },
-            { text: `Valor: ${inc.valor_medido || inc.temp_final} ${inc.unidad || ''}`, fontSize: 9, margin: [10, 2, 0, 0] },
-            { text: `Acción correctora: ${inc.accion_correctora || 'No documentada'}`, fontSize: 9, color: 'red', margin: [10, 2, 0, 0] }
-          ],
-          margin: [0, 0, 0, 10]
-        });
+        htmlContent += `
+    <div style="margin-bottom: 15px; padding: 10px; background: #fef2f2; border-left: 3px solid #dc2626;">
+      <strong>${index + 1}. ${pcc?.nombre_pcc || inc.id_pcc}</strong><br>
+      <span style="font-size: 11px; color: #666;">
+        Fecha: ${formatearFechaHora(inc.fecha_hora)} | 
+        Valor: ${inc.valor_medido || inc.temp_final} ${inc.unidad || ''}
+      </span><br>
+      <span style="font-size: 11px; color: #dc2626;">
+        Acción: ${inc.accion_correctora || 'No documentada'}
+      </span>
+    </div>
+        `;
       });
+
+      htmlContent += `</div>`;
     }
 
-    // Footer
-    contentDefinition.push(
-      { text: '\n\n________________________________________', alignment: 'center', fontSize: 8, color: 'gray' },
-      { text: 'Reporte generado automáticamente por KOST Software', alignment: 'center', fontSize: 8, color: 'gray' },
-      { text: 'Sistema de Gestión HACCP para Hostelería', alignment: 'center', fontSize: 8, color: 'gray' }
-    );
+    htmlContent += `
+  <div class="footer">
+    <p>________________________________________</p>
+    <p>Reporte generado automáticamente por KOST Software</p>
+    <p>Sistema de Gestión HACCP para Hostelería</p>
+  </div>
 
-    const docDefinition = {
-      content: contentDefinition,
-      styles: {
-        header: {
-          fontSize: 20,
-          bold: true,
-          color: '#0891b2',
-          margin: [0, 0, 0, 10]
-        },
-        subheader: {
-          fontSize: 14,
-          color: '#0e7490',
-          margin: [0, 0, 0, 5]
-        },
-        small: {
-          fontSize: 10,
-          color: '#666',
-          margin: [0, 0, 0, 2]
-        },
-        sectionTitle: {
-          fontSize: 14,
-          bold: true,
-          color: '#0891b2',
-          margin: [0, 10, 0, 5]
-        },
-        categoryTitle: {
-          fontSize: 13,
-          bold: true,
-          color: '#0891b2',
-          margin: [0, 15, 0, 5],
-          decoration: 'underline'
-        },
-        tableHeader: {
-          bold: true,
-          fontSize: 10,
-          color: '#0891b2'
-        },
-        table: {
-          margin: [0, 5, 0, 15]
-        },
-        statsTable: {
-          margin: [0, 5, 0, 10]
-        }
-      },
-      defaultStyle: {
-        fontSize: 9
-      },
-      pageMargins: [40, 50, 40, 50]
-    };
+  <button class="no-print" onclick="window.print()" style="position: fixed; bottom: 20px; right: 20px; padding: 15px 30px; background: #0891b2; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+    📄 Imprimir / Guardar como PDF
+  </button>
 
-    // Generar PDF
-    const pdfDoc = (pdfMake as any).createPdf(docDefinition);
-    
-    return new Promise((resolve) => {
-      pdfDoc.getBlob((blob: Blob) => {
-        const arrayBuffer = blob.arrayBuffer();
-        resolve(new NextResponse(arrayBuffer as any, {
-          headers: {
-            'Content-Type': 'application/pdf',
-            'Content-Disposition': `attachment; filename="reporte-haccp-${inicio}-a-${fin}.pdf"`
-          }
-        }));
-      });
+  <script>
+    // Auto-imprimir al cargar
+    setTimeout(() => {
+      if (confirm('¿Deseas imprimir o guardar como PDF?')) {
+        window.print();
+      }
+    }, 500);
+  </script>
+</body>
+</html>
+    `;
+
+    return new NextResponse(htmlContent, {
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8'
+      }
     });
 
   } catch (error: any) {
-    console.error('Error generando PDF:', error);
+    console.error('Error generando reporte:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
