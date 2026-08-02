@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '../../../lib/supabaseClient';
+import { createClient } from '@supabase/supabase-js';
 
 export async function GET(request: Request) {
   try {
@@ -7,14 +7,22 @@ export async function GET(request: Request) {
     const inicio = searchParams.get('inicio');
     const fin = searchParams.get('fin');
 
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
     // 1. Total registros
     let queryTotal = supabase
       .from('haccp_registros')
       .select('*', { count: 'exact', head: true });
 
     if (inicio && fin) {
-      queryTotal = queryTotal.gte('fecha_hora', inicio).lte('fecha_hora', fin);
+      // Añadir hora completa al rango
+      queryTotal = queryTotal
+        .gte('fecha_hora', `${inicio}T00:00:00`)
+        .lte('fecha_hora', `${fin}T23:59:59`);
     }
+
     const { count: totalRegistros } = await queryTotal;
     const total = totalRegistros || 0;
 
@@ -25,8 +33,11 @@ export async function GET(request: Request) {
       .eq('estado', 'OK');
 
     if (inicio && fin) {
-      queryOK = queryOK.gte('fecha_hora', inicio).lte('fecha_hora', fin);
+      queryOK = queryOK
+        .gte('fecha_hora', `${inicio}T00:00:00`)
+        .lte('fecha_hora', `${fin}T23:59:59`);
     }
+
     const { count: registrosOK } = await queryOK;
     const ok = registrosOK || 0;
 
@@ -37,8 +48,11 @@ export async function GET(request: Request) {
       .eq('estado', 'NO_OK');
 
     if (inicio && fin) {
-      queryNOK = queryNOK.gte('fecha_hora', inicio).lte('fecha_hora', fin);
+      queryNOK = queryNOK
+        .gte('fecha_hora', `${inicio}T00:00:00`)
+        .lte('fecha_hora', `${fin}T23:59:59`);
     }
+
     const { count: registrosNOK } = await queryNOK;
     const nok = registrosNOK || 0;
 
@@ -48,11 +62,12 @@ export async function GET(request: Request) {
       .from('haccp_registros')
       .select('*', { count: 'exact', head: true })
       .eq('estado', 'NO_OK')
-      .gte('fecha_hora', hoy);
-    
+      .gte('fecha_hora', `${hoy}T00:00:00`)
+      .lte('fecha_hora', `${hoy}T23:59:59`);
+
     const hoyNok = incidenciasHoy || 0;
 
-    // 5. Calcular porcentaje de cumplimiento (100% seguro, sin división por cero ni nulls)
+    // 5. Calcular porcentaje
     const porcentajeCumplimiento = total > 0
       ? Math.round((ok / total) * 100)
       : 0;
@@ -66,7 +81,7 @@ export async function GET(request: Request) {
     });
 
   } catch (error: any) {
-    console.error('Error en estadísticas HACCP:', error);
+    console.error('Error en estadísticas:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
