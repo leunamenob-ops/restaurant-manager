@@ -22,7 +22,7 @@ export default function HACCPPage() {
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState('');
   
-  // Form states
+  // Estados del formulario
   const [pccSeleccionado, setPccSeleccionado] = useState<string>('');
   const [valorMedido, setValorMedido] = useState<string>('');
   const [cumpleSiNo, setCumpleSiNo] = useState<string>('SÍ');
@@ -39,16 +39,26 @@ export default function HACCPPage() {
       router.push('/');
       return;
     }
-    const usuarioParseado = JSON.parse(usuarioData);
-    setUsuario(usuarioParseado);
-    cargarPendientes();
+    try {
+      const usuarioParseado = JSON.parse(usuarioData);
+      setUsuario(usuarioParseado);
+      cargarPendientes(usuarioParseado);
+    } catch (error) {
+      console.error('Error al parsear usuario:', error);
+      router.push('/');
+    }
   }
 
-  async function cargarPendientes() {
+  async function cargarPendientes(user: any) {
     setLoading(true);
+    setMensaje('');
     try {
-      const user = JSON.parse(sessionStorage.getItem('usuario') || '{}');
-      const res = await fetch(`/api/haccp/pcc-pendientes?usuario=${user.id_usuario || 'cocinero001'}`);
+      // Usamos 'B0003' como fallback porque sabemos que existe en haccp_usuarios
+      const userId = user?.id_usuario || 'B0003';
+      const res = await fetch(`/api/haccp/pcc-pendientes?usuario=${userId}`);
+      
+      if (!res.ok) throw new Error('Error al obtener pendientes');
+      
       const data = await res.json();
       setPendientes(data.pendientes || []);
       setCompletados(data.completados || []);
@@ -58,7 +68,7 @@ export default function HACCPPage() {
       }
     } catch (error) {
       console.error('Error:', error);
-      setMensaje(' Error al cargar los datos');
+      setMensaje('❌ Error al cargar los datos');
     } finally {
       setLoading(false);
     }
@@ -66,6 +76,7 @@ export default function HACCPPage() {
 
   const pccActual = pendientes.find(p => p.id_pcc === pccSeleccionado);
   
+  // Validación en tiempo real para mostrar alerta visual
   const estaFueraDeRango = pccActual && pccActual.tipo_control === 'NUMERICO' && valorMedido !== '' 
     ? (parseFloat(valorMedido) < (pccActual.limite_min || 0) || parseFloat(valorMedido) > (pccActual.limite_max || 100))
     : false;
@@ -79,15 +90,16 @@ export default function HACCPPage() {
 
     const user = JSON.parse(sessionStorage.getItem('usuario') || '{}');
     
+    // Preparar el objeto de registro
     const registro = {
       id_pcc: pccActual.id_pcc,
-      id_usuario: user.id_usuario || 'cocinero001',
+      id_usuario: user.id_usuario || 'B0003', // Fallback seguro
       hotel_id: user.hotel_id || '00000000-0000-0000-0000-000000000001',
-      valor_medido: valorMedido,
+      valor_medido: valorMedido !== '' ? valorMedido : null,
       unidad: pccActual.unidad,
-      cumple_si_no: estaFueraDeRango || cumpleSiNo === 'NO' ? 'NO' : 'SÍ',
-      accion_correctora: (estaFueraDeRango || cumpleSiNo === 'NO') ? accionCorrectora : '',
-      foto_evidencia: (estaFueraDeRango || cumpleSiNo === 'NO') ? fotoEvidencia : '',
+      cumple_si_no: (estaFueraDeRango || cumpleSiNo === 'NO') ? 'NO' : 'SÍ',
+      accion_correctora: (estaFueraDeRango || cumpleSiNo === 'NO') ? accionCorrectora : null,
+      foto_evidencia: (estaFueraDeRango || cumpleSiNo === 'NO') ? fotoEvidencia : null,
     };
 
     try {
@@ -101,19 +113,21 @@ export default function HACCPPage() {
       
       if (data.success) {
         setMensaje(data.mensaje);
+        // Limpiar formulario
         setValorMedido('');
         setAccionCorrectora('');
         setFotoEvidencia('');
         setCumpleSiNo('SÍ');
         
+        // Recargar la lista después de 2.5 segundos
         setTimeout(() => {
           setMensaje('');
-          cargarPendientes();
-        }, 3000);
+          cargarPendientes(user);
+        }, 2500);
       } else {
-        setMensaje(`❌ Error: ${data.error}`);
+        setMensaje(`❌ Error: ${data.error}${data.details ? ' (' + data.details + ')' : ''}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al guardar:', error);
       setMensaje('❌ Error de conexión al guardar');
     } finally {
@@ -121,12 +135,13 @@ export default function HACCPPage() {
     }
   }
 
+  // Pantalla de carga inicial
   if (!usuario) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Verificando sesión...</p>
         </div>
       </div>
     );
@@ -142,19 +157,22 @@ export default function HACCPPage() {
               <button
                 onClick={() => router.push('/dashboard')}
                 className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition"
+                title="Volver al Dashboard"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
               </button>
               <div>
-                <h1 className="text-2xl font-bold">📝 Registro HACCP</h1>
+                <h1 className="text-2xl font-bold flex items-center gap-2">
+                  📝 Registro HACCP
+                </h1>
                 <p className="text-cyan-100 text-sm">{usuario.nombre} - {usuario.cargo}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <span className="px-4 py-2 bg-white/20 rounded-lg text-sm font-medium">
-                {usuario.rol === 'ADMIN' ? '👑 Admin' : '👤 Usuario'}
+                {usuario.rol === 'ADMIN' ? '👑 Admin' : '👤 Operario'}
               </span>
             </div>
           </div>
@@ -163,11 +181,12 @@ export default function HACCPPage() {
 
       {/* Main Content */}
       <main className="max-w-4xl mx-auto p-6">
+        {/* Mensajes de feedback */}
         {mensaje && (
-          <div className={`mb-6 p-4 rounded-lg text-center font-semibold ${
-            mensaje.includes('✅') ? 'bg-green-100 text-green-800' :
-            mensaje.includes('⚠️') ? 'bg-yellow-100 text-yellow-800' :
-            'bg-red-100 text-red-800'
+          <div className={`mb-6 p-4 rounded-lg text-center font-semibold shadow-sm ${
+            mensaje.includes('✅') ? 'bg-green-100 text-green-800 border border-green-200' :
+            mensaje.includes('⚠️') ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
+            'bg-red-100 text-red-800 border border-red-200'
           }`}>
             {mensaje}
           </div>
@@ -175,27 +194,27 @@ export default function HACCPPage() {
 
         {loading ? (
           <div className="bg-white rounded-xl shadow-lg p-12 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Cargando controles pendientes...</p>
           </div>
         ) : pendientes.length === 0 ? (
           <div className="bg-white rounded-xl shadow-lg p-12 text-center">
-            <div className="text-6xl mb-4"></div>
+            <div className="text-6xl mb-4">🎉</div>
             <h2 className="text-2xl text-green-600 font-bold mb-2">¡Todo completado!</h2>
-            <p className="text-gray-600 mb-6">No hay PCC pendientes para hoy.</p>
+            <p className="text-gray-600 mb-6">No hay PCC pendientes para registrar en este turno.</p>
             <button 
-              onClick={cargarPendientes}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold transition"
+              onClick={() => cargarPendientes(usuario)}
+              className="px-6 py-3 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-semibold transition shadow-md"
             >
-              🔄 Recargar
+              🔄 Recargar lista
             </button>
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Resumen */}
+            {/* Resumen de estado */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500">
-                <p className="text-gray-600 text-sm font-medium mb-1">⏳ Pendientes</p>
+                <p className="text-gray-600 text-sm font-medium mb-1">⏳ Pendientes de registrar</p>
                 <p className="text-3xl font-bold text-blue-600">{pendientes.length}</p>
               </div>
               <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-green-500">
@@ -204,14 +223,16 @@ export default function HACCPPage() {
               </div>
             </div>
 
-            {/* Formulario */}
+            {/* Formulario de Registro */}
             <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-lg p-8">
-              <h2 className="text-xl font-bold text-gray-800 mb-6">Registrar Control</h2>
+              <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                <span>📋</span> Registrar Nuevo Control
+              </h2>
               
-              {/* Selector PCC */}
+              {/* Selector de PCC */}
               <div className="mb-6">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Punto de Control (PCC):
+                  Punto de Control Crítico (PCC): *
                 </label>
                 <select 
                   value={pccSeleccionado}
@@ -221,7 +242,7 @@ export default function HACCPPage() {
                     setAccionCorrectora('');
                     setFotoEvidencia('');
                   }}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition"
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition bg-white"
                   required
                 >
                   {pendientes.map(pcc => (
@@ -232,19 +253,19 @@ export default function HACCPPage() {
                 </select>
               </div>
 
-              {/* Info PCC */}
+              {/* Información del PCC seleccionado */}
               {pccActual && (
                 <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm text-gray-600">
-                        <span className="font-semibold">Tipo:</span> {pccActual.tipo_control}
+                        <span className="font-semibold">Tipo de control:</span> {pccActual.tipo_control}
                       </p>
                     </div>
                     {pccActual.limite_min !== null && pccActual.limite_max !== null && (
                       <div>
                         <p className="text-sm text-gray-600">
-                          <span className="font-semibold">Rango:</span> {pccActual.limite_min} - {pccActual.limite_max} {pccActual.unidad}
+                          <span className="font-semibold">Rango aceptable:</span> {pccActual.limite_min} - {pccActual.limite_max} {pccActual.unidad}
                         </p>
                       </div>
                     )}
@@ -252,7 +273,7 @@ export default function HACCPPage() {
                 </div>
               )}
 
-              {/* Campo Valor Numérico */}
+              {/* Campo para Valor Numérico o Proceso */}
               {pccActual && (pccActual.tipo_control === 'NUMERICO' || pccActual.tipo_control === 'PROCESO') && (
                 <div className="mb-6">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -263,46 +284,46 @@ export default function HACCPPage() {
                     step="0.1"
                     value={valorMedido}
                     onChange={(e) => setValorMedido(e.target.value)}
-                    className={`w-full p-3 border-2 rounded-lg focus:ring-2 focus:ring-cyan-500 transition ${
-                      estaFueraDeRango ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    className={`w-full p-3 border-2 rounded-lg focus:ring-2 focus:ring-cyan-500 transition text-lg ${
+                      estaFueraDeRango ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-300'
                     }`}
                     placeholder="Ej: 3.5"
                     required
                   />
                   {estaFueraDeRango && (
-                    <p className="text-red-600 text-sm mt-2 font-semibold flex items-center gap-2">
-                      <span>⚠️</span> Valor fuera de rango. Se requiere acción correctora.
+                    <p className="text-red-600 text-sm mt-2 font-semibold flex items-center gap-2 animate-pulse">
+                      <span>⚠️</span> ¡Valor fuera de rango! Se requiere acción correctora.
                     </p>
                   )}
                 </div>
               )}
 
-              {/* Campo Cualitativo */}
+              {/* Campo para Control Cualitativo (Sí/No) */}
               {pccActual && pccActual.tipo_control === 'CUALITATIVO' && (
                 <div className="mb-6">
                   <label className="block text-sm font-semibold text-gray-700 mb-3">
-                    ¿Cumple con el estándar? *
+                    ¿Cumple con el estándar establecido? *
                   </label>
                   <div className="flex gap-4">
-                    <label className="flex-1 flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-green-500 transition">
+                    <label className="flex-1 flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-green-500 hover:bg-green-50 transition">
                       <input 
                         type="radio" 
                         name="cumple" 
                         value="SÍ" 
                         checked={cumpleSiNo === 'SÍ'} 
                         onChange={() => setCumpleSiNo('SÍ')}
-                        className="w-5 h-5 text-green-600"
+                        className="w-5 h-5 text-green-600 focus:ring-green-500"
                       />
                       <span className="text-gray-700 font-medium">✅ SÍ, cumple</span>
                     </label>
-                    <label className="flex-1 flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-red-500 transition">
+                    <label className="flex-1 flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-red-500 hover:bg-red-50 transition">
                       <input 
                         type="radio" 
                         name="cumple" 
                         value="NO" 
                         checked={cumpleSiNo === 'NO'} 
                         onChange={() => setCumpleSiNo('NO')}
-                        className="w-5 h-5 text-red-600"
+                        className="w-5 h-5 text-red-600 focus:ring-red-500"
                       />
                       <span className="text-gray-700 font-medium">❌ NO, no cumple</span>
                     </label>
@@ -310,30 +331,30 @@ export default function HACCPPage() {
                 </div>
               )}
 
-              {/* Campos Incidencia */}
+              {/* Campos de Incidencia (Solo se muestran si hay fallo) */}
               {(estaFueraDeRango || cumpleSiNo === 'NO') && (
-                <div className="space-y-4 p-6 bg-red-50 border-2 border-red-200 rounded-lg mb-6">
-                  <h3 className="font-bold text-red-800 flex items-center gap-2">
-                    <span>⚠️</span> Incidencia Detectada
+                <div className="space-y-4 p-6 bg-red-50 border-2 border-red-200 rounded-lg mb-6 animate-fade-in">
+                  <h3 className="font-bold text-red-800 flex items-center gap-2 text-lg">
+                    <span>🚨</span> Incidencia Detectada
                   </h3>
                   
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Acción Correctora (Obligatorio): *
+                      Acción Correctora aplicada (Obligatorio): *
                     </label>
                     <textarea
                       value={accionCorrectora}
                       onChange={(e) => setAccionCorrectora(e.target.value)}
-                      className="w-full p-3 border-2 border-red-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                      className="w-full p-3 border-2 border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
                       rows={3}
-                      placeholder="Describe qué acción se tomó para corregir el problema..."
+                      placeholder="Describe qué acción se tomó para corregir el problema (ej: 'Se ajustó el termostato', 'Se desechó el producto')..."
                       required
                     />
                   </div>
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      URL de Foto de Evidencia:
+                      URL de Foto de Evidencia (Opcional):
                     </label>
                     <input
                       type="text"
@@ -342,21 +363,24 @@ export default function HACCPPage() {
                       className="w-full p-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500"
                       placeholder="https://... o dejar en blanco"
                     />
-                    <p className="text-xs text-gray-500 mt-1">* La subida directa de archivos se puede integrar después.</p>
+                    <p className="text-xs text-gray-500 mt-1">* La subida directa de archivos desde el móvil se integrará en la próxima versión.</p>
                   </div>
                 </div>
               )}
 
-              {/* Botón Guardar */}
+              {/* Botón de Guardar */}
               <button
                 type="submit"
                 disabled={guardando}
-                className={`w-full py-4 px-6 rounded-lg font-bold text-white text-lg transition flex items-center justify-center gap-2 ${
-                  guardando ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 shadow-lg'
+                className={`w-full py-4 px-6 rounded-lg font-bold text-white text-lg transition flex items-center justify-center gap-2 shadow-md ${
+                  guardando ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 hover:shadow-lg transform hover:-translate-y-0.5'
                 }`}
               >
                 {guardando ? (
-                  <><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>Guardando...</>
+                  <>
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                    Guardando registro...
+                  </>
                 ) : (
                   <>✅ Guardar Control</>
                 )}
