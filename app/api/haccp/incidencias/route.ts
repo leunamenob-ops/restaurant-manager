@@ -13,31 +13,42 @@ export async function GET(request: Request) {
 
     let query = supabase
       .from('haccp_registros')
-      .select(`
-        *,
-        haccp_pcc (
-          nombre_pcc,
-          unidad
-        )
-      `)
+      .select('*')
       .eq('estado', 'NO_OK')
       .order('fecha_hora', { ascending: false });
 
     if (inicio && fin) {
-      query = query.gte('fecha_hora', inicio).lte('fecha_hora', fin);
+      query = query
+        .gte('fecha_hora', `${inicio}T00:00:00`)
+        .lte('fecha_hora', `${fin}T23:59:59`);
     }
 
     const { data, error } = await query;
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error en incidencias:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
 
-    const incidencias = (data || []).map((inc: any) => ({
-      ...inc,
-      nombre_pcc: inc.haccp_pcc?.nombre_pcc || 'PCC desconocido',
-      unidad: inc.haccp_pcc?.unidad || ''
-    }));
+    // Obtener nombres de PCC para cada incidencia
+    const incidenciasConNombre = await Promise.all(
+      (data || []).map(async (inc: any) => {
+        const { data: pccData } = await supabase
+          .from('haccp_pcc')
+          .select('nombre_pcc, unidad')
+          .eq('id_pcc', inc.id_pcc)
+          .single();
 
-    return NextResponse.json(incidencias);
+        return {
+          ...inc,
+          nombre_pcc: pccData?.nombre_pcc || 'PCC desconocido',
+          unidad: pccData?.unidad || inc.unidad || ''
+        };
+      })
+    );
+
+    return NextResponse.json(incidenciasConNombre);
+
   } catch (error: any) {
     console.error('Error obteniendo incidencias:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
