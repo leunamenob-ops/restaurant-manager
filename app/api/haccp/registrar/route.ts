@@ -4,6 +4,8 @@ import { createClient } from '@supabase/supabase-js';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    console.log('📥 Datos recibidos:', body);
+
     const {
       id_pcc,
       id_usuario,
@@ -21,6 +23,12 @@ export async function POST(request: Request) {
     // Conectar a Supabase
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('❌ Variables de entorno faltantes');
+      return NextResponse.json({ error: 'Configuración de Supabase incompleta' }, { status: 500 });
+    }
+
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // 1. Obtener la configuración del PCC para validar
@@ -31,8 +39,11 @@ export async function POST(request: Request) {
       .single();
 
     if (pccError || !pccInfo) {
+      console.error('❌ Error buscando PCC:', pccError);
       return NextResponse.json({ error: 'PCC no encontrado' }, { status: 404 });
     }
+
+    console.log('✅ PCC encontrado:', pccInfo.nombre_pcc);
 
     // 2. Determinar si es OK o NO_OK
     let estado = 'OK';
@@ -57,31 +68,43 @@ export async function POST(request: Request) {
       }
     }
 
-    // 3. Guardar el registro en la base de datos
+    console.log(' Estado determinado:', estado);
+
+    // 3. Preparar datos para insertar
+    const registroData = {
+      id_pcc,
+      id_usuario: id_usuario || 'operario',
+      hotel_id: hotel_id || '00000000-0000-0000-0000-000000000001',
+      valor_medido: valor_medido ? parseFloat(valor_medido) : null,
+      unidad: unidad || null,
+      temp_inicial: temp_inicial ? parseFloat(temp_inicial) : null,
+      temp_final: temp_final ? parseFloat(temp_final) : null,
+      tiempo_minutos: tiempo_minutos ? parseInt(tiempo_minutos) : null,
+      cumple_si_no: cumple_si_no || 'SÍ',
+      estado,
+      accion_correctora: estado === 'NO_OK' ? (accion_correctora || accionAutomatica) : null,
+      foto_evidencia: estado === 'NO_OK' ? foto_evidencia : null,
+      notificado: estado === 'NO_OK'
+    };
+
+    console.log('💾 Datos a insertar:', registroData);
+
+    // 4. Guardar el registro en la base de datos
     const { data: registro, error: registroError } = await supabase
       .from('haccp_registros')
-      .insert({
-        id_pcc,
-        id_usuario: id_usuario || 'operario',
-        hotel_id: hotel_id || '00000000-0000-0000-0000-000000000001',
-        valor_medido: valor_medido ? parseFloat(valor_medido) : null,
-        unidad,
-        temp_inicial: temp_inicial ? parseFloat(temp_inicial) : null,
-        temp_final: temp_final ? parseFloat(temp_final) : null,
-        tiempo_minutos: tiempo_minutos ? parseInt(tiempo_minutos) : null,
-        cumple_si_no: cumple_si_no || 'SÍ',
-        estado,
-        accion_correctora: estado === 'NO_OK' ? (accion_correctora || accionAutomatica) : null,
-        foto_evidencia: estado === 'NO_OK' ? foto_evidencia : null,
-        notificado: estado === 'NO_OK'
-      })
+      .insert(registroData)
       .select()
       .single();
 
     if (registroError) {
-      console.error('Error guardando registro:', registroError);
-      return NextResponse.json({ error: 'Error al guardar el registro' }, { status: 500 });
+      console.error('❌ Error guardando registro:', registroError);
+      return NextResponse.json({ 
+        error: 'Error al guardar el registro',
+        details: registroError.message 
+      }, { status: 500 });
     }
+
+    console.log('✅ Registro guardado:', registro);
 
     return NextResponse.json({ 
       success: true, 
@@ -90,7 +113,10 @@ export async function POST(request: Request) {
     });
 
   } catch (error: any) {
-    console.error('Error en API registrar:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('❌ Error en API registrar:', error);
+    return NextResponse.json({ 
+      error: 'Error interno del servidor',
+      details: error.message 
+    }, { status: 500 });
   }
 }
