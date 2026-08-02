@@ -1,20 +1,22 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '../../../lib/supabaseClient';
+import { createClient } from '@supabase/supabase-js';
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const inicio = searchParams.get('inicio');
     const fin = searchParams.get('fin');
-    const categoria = searchParams.get('categoria');
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     let query = supabase
       .from('haccp_registros')
       .select(`
         *,
         haccp_pcc (
-          nombre_pcc,
-          categoria_id
+          nombre_pcc
         )
       `)
       .order('fecha_hora', { ascending: false });
@@ -27,8 +29,7 @@ export async function GET(request: Request) {
 
     if (error) throw error;
 
-    // Transformar a CSV
-    const csvData = data?.map(reg => ({
+    const csvData = (data || []).map((reg: any) => ({
       Fecha: new Date(reg.fecha_hora).toLocaleString('es-ES'),
       PCC: reg.haccp_pcc?.nombre_pcc || '',
       Usuario: reg.id_usuario,
@@ -36,12 +37,11 @@ export async function GET(request: Request) {
       Unidad: reg.unidad || '',
       Estado: reg.estado,
       Cumple: reg.cumple_si_no,
-      Acción_Correctora: reg.accion_correctora || ''
+      Accion_Correctora: reg.accion_correctora || ''
     }));
 
-    // Convertir a CSV
     const headers = Object.keys(csvData[0] || {}).join(',');
-    const rows = csvData.map(row => 
+    const rows = csvData.map((row: any) => 
       Object.values(row).map(val => `"${val}"`).join(',')
     ).join('\n');
     
@@ -53,7 +53,6 @@ export async function GET(request: Request) {
         'Content-Disposition': 'attachment; filename=reporte-haccp.csv'
       }
     });
-
   } catch (error: any) {
     console.error('Error exportando CSV:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
