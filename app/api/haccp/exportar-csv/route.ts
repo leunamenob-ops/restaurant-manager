@@ -13,46 +13,71 @@ export async function GET(request: Request) {
 
     let query = supabase
       .from('haccp_registros')
-      .select(`
-        *,
-        haccp_pcc (
-          nombre_pcc
-        )
-      `)
+      .select('*')
       .order('fecha_hora', { ascending: false });
 
     if (inicio && fin) {
-      query = query.gte('fecha_hora', inicio).lte('fecha_hora', fin);
+      query = query
+        .gte('fecha_hora', `${inicio}T00:00:00`)
+        .lte('fecha_hora', `${fin}T23:59:59`);
     }
 
     const { data, error } = await query;
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error exportando:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
 
-    const csvData = (data || []).map((reg: any) => ({
-      Fecha: new Date(reg.fecha_hora).toLocaleString('es-ES'),
-      PCC: reg.haccp_pcc?.nombre_pcc || '',
-      Usuario: reg.id_usuario,
-      Valor: reg.valor_medido || reg.temp_final || '',
-      Unidad: reg.unidad || '',
-      Estado: reg.estado,
-      Cumple: reg.cumple_si_no,
-      Accion_Correctora: reg.accion_correctora || ''
-    }));
+    // Obtener nombres de PCC para cada registro
+    const registrosConNombre = await Promise.all(
+      (data || []).map(async (reg: any) => {
+        const { data: pccData } = await supabase
+          .from('haccp_pcc')
+          .select('nombre_pcc')
+          .eq('id_pcc', reg.id_pcc)
+          .single();
 
-    const headers = Object.keys(csvData[0] || {}).join(',');
-    const rows = csvData.map((row: any) => 
-      Object.values(row).map(val => `"${val}"`).join(',')
-    ).join('\n');
-    
-    const csv = `${headers}\n${rows}`;
+        return {
+          ...reg,
+          nombre_pcc: pccData?.nombre_pcc || 'PCC desconocido'
+        };
+      })
+    );
+
+    // Convertir a CSV
+    const headers = [
+      'Fecha', 'PCC', 'Usuario', 'Valor', 'Unidad', 
+      'Estado', 'Cumple', 'Accion_Correctora'
+    ];
+
+    const rows = registrosConNombre.map((reg: any) => {
+      const fecha = new Date(reg.fecha_hora).toLocaleString('es-ES');
+      const valor = reg.valor_medido || reg.temp_final || '';
+      const unidad = reg.unidad || '';
+      const accion = reg.accion_correctora || '';
+      
+      return [
+        `"${fecha}"`,
+        `"${reg.nombre_pcc}"`,
+        `"${reg.id_usuario || ''}"`,
+        `"${valor}"`,
+        `"${unidad}"`,
+        `"${reg.estado}"`,
+        `"${reg.cumple_si_no || ''}"`,
+        `"${accion}"`
+      ].join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
 
     return new NextResponse(csv, {
       headers: {
-        'Content-Type': 'text/csv',
-        'Content-Disposition': 'attachment; filename=reporte-haccp.csv'
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename=reporte-haccp-${inicio || 'todo'}-a-${fin || 'hoy'}.csv`
       }
     });
+
   } catch (error: any) {
     console.error('Error exportando CSV:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
