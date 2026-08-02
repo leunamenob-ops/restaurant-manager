@@ -31,6 +31,7 @@
     "typescript": "5.2.2"
   },
   "devDependencies": {
+    "@types/pdfkit": "^0.17.6",
     "@types/qrcode": "^1.5.5"
   }
 }
