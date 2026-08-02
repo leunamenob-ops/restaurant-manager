@@ -25,6 +25,7 @@ export default function HACCPDashboard() {
   const [registrosRecientes, setRegistrosRecientes] = useState<any[]>([]);
   const [incidencias, setIncidencias] = useState<any[]>([]);
   const [categorias, setCategorias] = useState<any[]>([]);
+  const [errorConexion, setErrorConexion] = useState('');
 
   useEffect(() => {
     // Establecer fechas por defecto (últimos 7 días)
@@ -38,29 +39,45 @@ export default function HACCPDashboard() {
 
   async function cargarDatos(inicio: string, fin: string) {
     setLoading(true);
+    setErrorConexion('');
+    
     try {
+      console.log('🔍 Cargando datos HACCP desde:', inicio, 'hasta:', fin);
+      
       // Cargar estadísticas
       const resStats = await fetch(`/api/haccp/estadisticas?inicio=${inicio}&fin=${fin}`);
       const dataStats = await resStats.json();
-      setStats(dataStats);
+      
+      if (dataStats.error) {
+        throw new Error(dataStats.error);
+      }
+      
+      setStats({
+        totalRegistros: dataStats.totalRegistros || 0,
+        registrosOK: dataStats.registrosOK || 0,
+        registrosNOK: dataStats.registrosNOK || 0,
+        porcentajeCumplimiento: dataStats.porcentajeCumplimiento || 0,
+        incidenciasHoy: dataStats.incidenciasHoy || 0
+      });
 
       // Cargar registros recientes
       const resRegistros = await fetch(`/api/haccp/registros?inicio=${inicio}&fin=${fin}&limite=10`);
       const dataRegistros = await resRegistros.json();
-      setRegistrosRecientes(dataRegistros);
+      setRegistrosRecientes(Array.isArray(dataRegistros) ? dataRegistros : []);
 
       // Cargar incidencias NO_OK
       const resIncidencias = await fetch(`/api/haccp/incidencias?inicio=${inicio}&fin=${fin}`);
       const dataIncidencias = await resIncidencias.json();
-      setIncidencias(dataIncidencias);
+      setIncidencias(Array.isArray(dataIncidencias) ? dataIncidencias : []);
 
       // Cargar categorías para el filtro
       const resCategorias = await fetch('/api/haccp/categorias');
       const dataCategorias = await resCategorias.json();
-      setCategorias(dataCategorias);
+      setCategorias(Array.isArray(dataCategorias) ? dataCategorias : []);
 
     } catch (error) {
-      console.error('Error cargando datos:', error);
+      console.error('❌ Error cargando datos del dashboard:', error);
+      setErrorConexion('Error al cargar datos. Verifica la conexión o reintenta.');
     } finally {
       setLoading(false);
     }
@@ -73,7 +90,8 @@ export default function HACCPDashboard() {
   async function handleExportarPDF() {
     try {
       const catParam = categoriaFiltro === 'todas' ? '' : `&categoria=${categoriaFiltro}`;
-      const url = `/api/haccp/exportar-pdf?inicio=${fechaInicio}&fin=${fechaFin}${catParam}`;
+      // NOTA: Apunta a la nueva ruta que usa @react-pdf/renderer
+      const url = `/api/haccp/reporte-pdf?inicio=${fechaInicio}&fin=${fechaFin}${catParam}`;
       
       // Abrir en nueva pestaña para descargar el PDF generado
       window.open(url, '_blank');
@@ -117,6 +135,19 @@ export default function HACCPDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto p-6 space-y-6">
+        {/* Mensaje de error de conexión */}
+        {errorConexion && (
+          <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
+            <p className="font-semibold">⚠️ {errorConexion}</p>
+            <button 
+              onClick={() => cargarDatos(fechaInicio, fechaFin)}
+              className="mt-2 text-sm underline hover:no-underline"
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
+
         {/* Filtros */}
         <div className="bg-white rounded-xl shadow-md p-6 border border-slate-100">
           <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -149,7 +180,7 @@ export default function HACCPDashboard() {
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 bg-white"
               >
                 <option value="todas">Todas las categorías</option>
-                {categorias.map((cat: any) => (
+                {Array.isArray(categorias) && categorias.map((cat: any) => (
                   <option key={cat.id} value={cat.id}>{cat.nombre}</option>
                 ))}
               </select>
