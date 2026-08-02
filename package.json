@@ -12,7 +12,6 @@
     "@aws-sdk/client-textract": "^3.1100.0",
     "@react-pdf/renderer": "^3.1.14",
     "@supabase/supabase-js": "^2.110.6",
-    "@types/node": "20.6.2",
     "@types/react": "18.2.22",
     "@types/react-dom": "18.2.7",
     "autoprefixer": "10.4.15",
@@ -31,6 +30,7 @@
     "typescript": "5.2.2"
   },
   "devDependencies": {
+    "@types/node": "^26.1.2",
     "@types/pdfkit": "^0.17.6",
     "@types/qrcode": "^1.5.5"
   }
