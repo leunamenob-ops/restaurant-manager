@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '../../../lib/supabaseClient';
+import { createClient } from '@supabase/supabase-js';
 
 export async function GET(request: Request) {
   try {
@@ -7,6 +7,10 @@ export async function GET(request: Request) {
     const inicio = searchParams.get('inicio');
     const fin = searchParams.get('fin');
     const limite = parseInt(searchParams.get('limite') || '10');
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     let query = supabase
       .from('haccp_registros')
@@ -27,14 +31,12 @@ export async function GET(request: Request) {
 
     if (error) throw error;
 
-    // Transformar datos
-    const registros = data?.map(reg => ({
+    const registros = (data || []).map((reg: any) => ({
       ...reg,
       nombre_pcc: reg.haccp_pcc?.nombre_pcc || 'PCC desconocido'
     }));
 
-    return NextResponse.json(registros || []);
-
+    return NextResponse.json(registros);
   } catch (error: any) {
     console.error('Error obteniendo registros:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
