@@ -12,9 +12,13 @@ export async function GET() {
       .select('*')
       .order('nombre');
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error en categorías:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
 
     return NextResponse.json(data || []);
+
   } catch (error: any) {
     console.error('Error obteniendo categorías:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
