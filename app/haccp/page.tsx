@@ -12,6 +12,12 @@ export default function HACCPPage() {
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState('');
   
+  // Login states
+  const [codigo, setCodigo] = useState('');
+  const [pin, setPin] = useState('');
+  const [errorLogin, setErrorLogin] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  
   // Form states
   const [pccSeleccionado, setPccSeleccionado] = useState<string>('');
   const [valorMedido, setValorMedido] = useState<string>('');
@@ -21,13 +27,42 @@ export default function HACCPPage() {
 
   useEffect(() => {
     const user = sessionStorage.getItem('haccp_usuario');
-    if (!user) {
-      router.push('/haccp?login=true');
-      return;
+    if (user) {
+      setUsuario(JSON.parse(user));
+      cargarPendientes();
+    } else {
+      setLoading(false);
     }
-    setUsuario(JSON.parse(user));
-    cargarPendientes();
   }, []);
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setLoginLoading(true);
+    setErrorLogin('');
+
+    try {
+      const res = await fetch('/api/haccp/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codigo, pin }),
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        sessionStorage.setItem('haccp_usuario', JSON.stringify(data.usuario));
+        setUsuario(data.usuario);
+        await cargarPendientes();
+      } else {
+        setErrorLogin(data.error || 'Código o PIN incorrecto');
+      }
+    } catch (error) {
+      console.error('Error login:', error);
+      setErrorLogin('Error de conexión');
+    } finally {
+      setLoginLoading(false);
+    }
+  }
 
   async function cargarPendientes() {
     setLoading(true);
@@ -47,6 +82,15 @@ export default function HACCPPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function logout() {
+    sessionStorage.removeItem('haccp_usuario');
+    setUsuario(null);
+    setPendientes([]);
+    setCompletados([]);
+    setCodigo('');
+    setPin('');
   }
 
   const pccActual = pendientes.find(p => p.id_pcc === pccSeleccionado);
@@ -106,8 +150,84 @@ export default function HACCPPage() {
     }
   }
 
-  if (!usuario) return null;
+  // Si no hay usuario, mostrar formulario de login
+  if (!usuario) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-800 mb-2"> HACCP</h1>
+            <p className="text-gray-600">Sistema de Registro de Controles</p>
+          </div>
 
+          {errorLogin && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+              {errorLogin}
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Código de Usuario:
+              </label>
+              <input
+                type="text"
+                value={codigo}
+                onChange={(e) => setCodigo(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Ej: B0001"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                PIN:
+              </label>
+              <input
+                type="password"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="••••"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loginLoading}
+              className={`w-full py-3 px-4 rounded-lg font-semibold text-white transition ${
+                loginLoading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              {loginLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+            </button>
+          </form>
+
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-800 font-semibold mb-2">Usuarios de prueba:</p>
+            <ul className="text-sm text-blue-700 space-y-1">
+              <li>🔑 <strong>B0001</strong> / PIN: 4321 (Admin)</li>
+              <li>🔑 <strong>B0003</strong> / PIN: 1234 (User)</li>
+            </ul>
+          </div>
+
+          <div className="mt-6 text-center">
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="text-cyan-600 hover:text-cyan-700 text-sm font-medium"
+            >
+              ← Volver al Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Si hay usuario, mostrar formulario de registro HACCP
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
@@ -117,12 +237,20 @@ export default function HACCPPage() {
             <h1 className="text-2xl font-bold text-gray-800">📝 Registro HACCP</h1>
             <p className="text-sm text-gray-600">{usuario.nombre} - {usuario.cargo}</p>
           </div>
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="px-4 py-2 bg-cyan-600 text-white rounded-lg text-sm"
-          >
-            ← Dashboard
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="px-4 py-2 bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-700"
+            >
+              ← Dashboard
+            </button>
+            <button
+              onClick={logout}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
+            >
+              Salir
+            </button>
+          </div>
         </div>
 
         {loading ? (
