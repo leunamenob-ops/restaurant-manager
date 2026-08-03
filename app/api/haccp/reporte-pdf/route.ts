@@ -6,6 +6,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const inicio = searchParams.get('inicio');
     const fin = searchParams.get('fin');
+    const modo = searchParams.get('modo') || 'compacto'; // 'ejecutivo', 'compacto', 'detallado'
 
     if (!inicio || !fin) {
       return NextResponse.json({ error: 'Fechas requeridas' }, { status: 400 });
@@ -47,7 +48,7 @@ export async function GET(request: Request) {
       }
       
       if (!registrosPorCategoria[catNombre]) {
-        registrosPorCategoria[catNombre] = { items: [], ok: 0, nok: 0 };
+        registrosPorCategoria[catNombre] = { items: [], ok: 0, nok: 0, incidencias: [] };
       }
       
       registrosPorCategoria[catNombre].items.push({
@@ -59,6 +60,7 @@ export async function GET(request: Request) {
         registrosPorCategoria[catNombre].ok++;
       } else {
         registrosPorCategoria[catNombre].nok++;
+        registrosPorCategoria[catNombre].incidencias.push(reg);
       }
     });
 
@@ -66,6 +68,12 @@ export async function GET(request: Request) {
     const totalOK = registros?.filter((r: any) => r.estado === 'OK').length || 0;
     const totalNOK = registros?.filter((r: any) => r.estado === 'NO_OK').length || 0;
     const porcentajeCumplimiento = totalRegistros > 0 ? Math.round((totalOK / totalRegistros) * 100) : 0;
+
+    // Calcular días del período
+    const fechaInicio = new Date(inicio);
+    const fechaFin = new Date(fin);
+    const dias = Math.ceil((fechaFin.getTime() - fechaInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const promedioDiario = dias > 0 ? Math.round(totalRegistros / dias) : 0;
 
     const formatearFecha = (f: string) => {
       const [y, m, d] = f.split('-');
@@ -79,7 +87,7 @@ export async function GET(request: Request) {
       });
     };
 
-    // Generar HTML mejorado
+    // Generar HTML optimizado
     let html = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -90,374 +98,388 @@ export async function GET(request: Request) {
     body { 
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
       margin: 0; 
-      padding: 40px; 
+      padding: 30px; 
       color: #1e293b;
       background: #ffffff;
-      line-height: 1.6;
+      line-height: 1.5;
+      font-size: 11px;
     }
     
     .header { 
       text-align: center; 
-      padding: 40px 20px;
+      padding: 25px 20px;
       background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
       color: white;
-      border-radius: 12px;
-      margin-bottom: 40px;
-      box-shadow: 0 10px 30px rgba(8, 145, 178, 0.3);
+      border-radius: 8px;
+      margin-bottom: 25px;
     }
     .header h1 { 
       margin: 0; 
-      font-size: 36px; 
+      font-size: 28px; 
       font-weight: 700;
-      letter-spacing: 1px;
     }
     .header h2 { 
-      margin: 10px 0; 
-      font-size: 20px;
+      margin: 8px 0; 
+      font-size: 16px;
       font-weight: 400;
       opacity: 0.9;
     }
     .header p { 
-      margin: 8px 0; 
-      font-size: 15px;
+      margin: 5px 0; 
+      font-size: 13px;
       opacity: 0.85;
     }
     
-    .stats-grid { 
+    /* KPIs en grid compacto */
+    .kpi-grid { 
       display: grid; 
-      grid-template-columns: repeat(4, 1fr); 
-      gap: 20px; 
-      margin-bottom: 40px; 
+      grid-template-columns: repeat(5, 1fr); 
+      gap: 12px; 
+      margin-bottom: 25px; 
     }
-    .stat-card { 
-      background: white;
-      padding: 25px;
-      border-radius: 12px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-      border-top: 4px solid #0891b2;
-      transition: transform 0.2s;
+    .kpi-card { 
+      background: #f8fafc;
+      padding: 15px;
+      border-radius: 8px;
+      border-left: 3px solid #0891b2;
     }
-    .stat-card:hover { transform: translateY(-5px); }
-    .stat-card.ok { border-top-color: #16a34a; }
-    .stat-card.nok { border-top-color: #dc2626; }
-    .stat-card.warning { border-top-color: #eab308; }
-    .stat-label { 
-      font-size: 13px; 
+    .kpi-card.ok { border-left-color: #16a34a; }
+    .kpi-card.nok { border-left-color: #dc2626; }
+    .kpi-label { 
+      font-size: 10px; 
       color: #64748b; 
       text-transform: uppercase;
       font-weight: 600;
-      letter-spacing: 0.5px;
-      margin-bottom: 10px;
+      margin-bottom: 5px;
     }
-    .stat-value { 
-      font-size: 42px; 
+    .kpi-value { 
+      font-size: 28px; 
       font-weight: 700; 
       color: #0f172a;
       margin: 0;
     }
-    .stat-card.ok .stat-value { color: #16a34a; }
-    .stat-card.nok .stat-value { color: #dc2626; }
-    
-    .progress-container {
-      margin-top: 15px;
-      background: #e2e8f0;
-      border-radius: 10px;
-      overflow: hidden;
-      height: 8px;
-    }
-    .progress-bar {
-      height: 100%;
-      background: linear-gradient(90deg, #16a34a 0%, #22c55e 100%);
-      transition: width 0.5s ease;
-    }
-    .progress-bar.warning {
-      background: linear-gradient(90deg, #eab308 0%, #f59e0b 100%);
-    }
-    .progress-bar.danger {
-      background: linear-gradient(90deg, #dc2626 0%, #ef4444 100%);
+    .kpi-card.ok .kpi-value { color: #16a34a; }
+    .kpi-card.nok .kpi-value { color: #dc2626; }
+    .kpi-sub {
+      font-size: 9px;
+      color: #94a3b8;
+      margin-top: 3px;
     }
     
-    .category-section { 
-      margin-bottom: 35px; 
-      page-break-inside: avoid;
+    /* Resumen por categoría - tabla compacta */
+    .resumen-categorias {
+      margin-bottom: 25px;
       background: white;
-      border-radius: 12px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
       overflow: hidden;
     }
-    .cat-header { 
-      background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
-      color: white;
-      padding: 18px 25px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .cat-title { 
-      font-size: 18px; 
+    .resumen-header {
+      background: #f1f5f9;
+      padding: 10px 15px;
       font-weight: 700;
-      margin: 0;
-    }
-    .cat-stats {
-      display: flex;
-      gap: 15px;
-      font-size: 14px;
-    }
-    .cat-stat {
-      background: rgba(255,255,255,0.2);
-      padding: 5px 12px;
-      border-radius: 20px;
-    }
-    
-    table { 
-      width: 100%; 
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-    th { 
-      background: #f8fafc;
-      text-align: left; 
-      padding: 14px 20px; 
+      font-size: 12px;
       color: #475569;
       text-transform: uppercase;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-      border-bottom: 2px solid #e2e8f0;
     }
-    td { 
-      padding: 14px 20px; 
+    .resumen-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    .resumen-table th {
+      background: #f8fafc;
+      padding: 8px 12px;
+      text-align: left;
+      font-size: 10px;
+      color: #64748b;
+      text-transform: uppercase;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .resumen-table td {
+      padding: 8px 12px;
       border-bottom: 1px solid #f1f5f9;
     }
-    tr:hover { background: #f8fafc; }
+    .resumen-table tr:hover { background: #f8fafc; }
     
     .badge {
       display: inline-block;
-      padding: 5px 12px;
-      border-radius: 20px;
-      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 10px;
       font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
     }
-    .badge-ok { 
-      background: #dcfce7; 
-      color: #16a34a;
-      border: 1px solid #86efac;
-    }
-    .badge-nok { 
-      background: #fee2e2; 
-      color: #dc2626;
-      border: 1px solid #fca5a5;
-    }
+    .badge-ok { background: #dcfce7; color: #16a34a; }
+    .badge-nok { background: #fee2e2; color: #dc2626; }
     
-    .accion-box { 
-      background: #fef2f2;
-      border-left: 4px solid #dc2626;
-      padding: 12px 16px;
-      margin: 8px 20px;
-      border-radius: 6px;
-      font-size: 12px;
-      color: #991b1b;
-      font-style: italic;
+    /* Barra de progreso mini */
+    .progress-mini {
+      width: 60px;
+      height: 6px;
+      background: #e2e8f0;
+      border-radius: 3px;
+      overflow: hidden;
+      display: inline-block;
+      vertical-align: middle;
+      margin-left: 8px;
     }
-    .accion-box::before {
-      content: '⚠️ ';
+    .progress-mini-bar {
+      height: 100%;
+      background: #16a34a;
     }
+    .progress-mini-bar.warning { background: #eab308; }
+    .progress-mini-bar.danger { background: #dc2626; }
     
+    /* Incidencias - solo estas se detallan */
     .incidencias-section {
-      margin-top: 40px;
+      margin-top: 25px;
       page-break-inside: avoid;
     }
     .incidencias-header {
       background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
       color: white;
-      padding: 18px 25px;
-      border-radius: 12px 12px 0 0;
-      font-size: 18px;
+      padding: 12px 18px;
+      border-radius: 8px 8px 0 0;
+      font-size: 14px;
       font-weight: 700;
     }
-    .incidencia-item {
+    .incidencia-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      padding: 15px;
       background: #fef2f2;
-      border-left: 4px solid #dc2626;
-      padding: 18px 25px;
-      margin-bottom: 12px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(220, 38, 38, 0.1);
+      border-radius: 0 0 8px 8px;
+    }
+    .incidencia-card {
+      background: white;
+      padding: 10px 12px;
+      border-radius: 6px;
+      border-left: 3px solid #dc2626;
+      box-shadow: 0 1px 3px rgba(220, 38, 38, 0.1);
     }
     .incidencia-title {
-      font-size: 15px;
+      font-size: 12px;
       font-weight: 700;
       color: #1e293b;
-      margin-bottom: 8px;
+      margin-bottom: 5px;
     }
-    .incidencia-detail {
-      font-size: 12px;
+    .incidencia-meta {
+      font-size: 10px;
       color: #64748b;
-      margin: 4px 0;
+      margin: 2px 0;
     }
     .incidencia-action {
-      font-size: 12px;
+      font-size: 10px;
       color: #dc2626;
       font-weight: 600;
-      margin-top: 8px;
+      margin-top: 5px;
+      padding-top: 5px;
+      border-top: 1px solid #fee2e2;
     }
     
+    /* Footer */
     .footer { 
-      margin-top: 60px; 
+      margin-top: 40px; 
       text-align: center; 
       color: #94a3b8; 
-      font-size: 12px;
-      padding-top: 30px;
-      border-top: 2px solid #e2e8f0;
+      font-size: 10px;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
     }
     
-    @media print { 
-      body { margin: 20px; padding: 20px; }
-      .no-print { display: none !important; }
-      .stat-card { box-shadow: none; border: 1px solid #e2e8f0; }
-      .category-section { box-shadow: none; border: 1px solid #e2e8f0; }
-    }
-    
-    .print-button {
+    /* Controles de impresión */
+    .print-controls {
       position: fixed;
-      bottom: 30px;
-      right: 30px;
-      padding: 16px 32px;
+      bottom: 20px;
+      right: 20px;
+      background: white;
+      padding: 15px;
+      border-radius: 12px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+      z-index: 1000;
+    }
+    .print-controls h4 {
+      margin: 0 0 10px 0;
+      font-size: 12px;
+      color: #475569;
+    }
+    .mode-btn {
+      display: block;
+      width: 100%;
+      padding: 8px 12px;
+      margin: 5px 0;
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11px;
+      text-align: left;
+      transition: all 0.2s;
+    }
+    .mode-btn:hover { background: #e2e8f0; }
+    .mode-btn.active { 
+      background: #0891b2; 
+      color: white;
+      border-color: #0891b2;
+    }
+    .print-btn {
+      width: 100%;
+      padding: 10px;
       background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
       color: white;
       border: none;
-      border-radius: 12px;
-      font-size: 16px;
+      border-radius: 6px;
+      font-size: 12px;
       font-weight: 700;
       cursor: pointer;
-      box-shadow: 0 8px 25px rgba(8, 145, 178, 0.4);
-      transition: all 0.3s;
-      z-index: 1000;
+      margin-top: 10px;
     }
-    .print-button:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 12px 35px rgba(8, 145, 178, 0.5);
+    
+    @media print { 
+      body { margin: 15px; padding: 15px; font-size: 10px; }
+      .no-print { display: none !important; }
+      .kpi-card { box-shadow: none; border: 1px solid #e2e8f0; }
+      .resumen-categorias { box-shadow: none; border: 1px solid #e2e8f0; }
+      .incidencia-grid { grid-template-columns: 1fr; }
+      @page { margin: 1cm; }
     }
+    
+    .page-break { page-break-before: always; }
   </style>
 </head>
 <body>
   <div class="header">
     <h1>🛡️ KOST SOFTWARE</h1>
-    <h2>Reporte de Control de Puntos Críticos (HACCP)</h2>
-    <p>📅 Período: ${formatearFecha(inicio)} al ${formatearFecha(fin)}</p>
-    <p> Generado: ${new Date().toLocaleString('es-ES')}</p>
+    <h2>Reporte Ejecutivo HACCP</h2>
+    <p>📅 Período: ${formatearFecha(inicio)} al ${formatearFecha(fin)} (${dias} días)</p>
+    <p>📊 Promedio diario: ${promedioDiario} registros</p>
   </div>
 
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-label">📊 Total Registros</div>
-      <div class="stat-value">${totalRegistros}</div>
+  <!-- KPIs Principales -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">📊 Total Registros</div>
+      <div class="kpi-value">${totalRegistros}</div>
+      <div class="kpi-sub">${promedioDiario}/día</div>
     </div>
-    <div class="stat-card ok">
-      <div class="stat-label">✅ Registros OK</div>
-      <div class="stat-value">${totalOK}</div>
+    <div class="kpi-card ok">
+      <div class="kpi-label">✅ Registros OK</div>
+      <div class="kpi-value">${totalOK}</div>
+      <div class="kpi-sub">${totalRegistros > 0 ? Math.round((totalOK/totalRegistros)*100) : 0}% del total</div>
     </div>
-    <div class="stat-card nok">
-      <div class="stat-label">⚠️ Incidencias NO_OK</div>
-      <div class="stat-value">${totalNOK}</div>
+    <div class="kpi-card nok">
+      <div class="kpi-label">⚠️ Incidencias</div>
+      <div class="kpi-value">${totalNOK}</div>
+      <div class="kpi-sub">${totalRegistros > 0 ? Math.round((totalNOK/totalRegistros)*100) : 0}% del total</div>
     </div>
-    <div class="stat-card ${porcentajeCumplimiento >= 95 ? 'ok' : porcentajeCumplimiento >= 85 ? 'warning' : 'nok'}">
-      <div class="stat-label">📈 % Cumplimiento</div>
-      <div class="stat-value">${porcentajeCumplimiento}%</div>
-      <div class="progress-container">
-        <div class="progress-bar ${porcentajeCumplimiento >= 95 ? '' : porcentajeCumplimiento >= 85 ? 'warning' : 'danger'}" style="width: ${porcentajeCumplimiento}%"></div>
+    <div class="kpi-card ${porcentajeCumplimiento >= 95 ? 'ok' : porcentajeCumplimiento >= 85 ? '' : 'nok'}">
+      <div class="kpi-label">📈 Cumplimiento</div>
+      <div class="kpi-value">${porcentajeCumplimiento}%</div>
+      <div class="kpi-sub">
+        ${porcentajeCumplimiento >= 95 ? '✅ Excelente' : porcentajeCumplimiento >= 85 ? '⚠️ Aceptable' : '❌ Crítico'}
       </div>
     </div>
-  </div>`;
-
-    // Registros por categoría
-    Object.keys(registrosPorCategoria).forEach(catNombre => {
-      const catData = registrosPorCategoria[catNombre];
-      const regs = catData.items;
-      const catTotal = regs.length;
-      const catOK = catData.ok;
-      const catNOK = catData.nok;
-
-      html += `
-  <div class="category-section">
-    <div class="cat-header">
-      <h3 class="cat-title">📁 ${catNombre}</h3>
-      <div class="cat-stats">
-        <span class="cat-stat">📊 ${catTotal} registros</span>
-        <span class="cat-stat" style="background: rgba(22, 163, 74, 0.3);">✅ ${catOK} OK</span>
-        ${catNOK > 0 ? `<span class="cat-stat" style="background: rgba(220, 38, 38, 0.3);">️ ${catNOK} NO_OK</span>` : ''}
-      </div>
+    <div class="kpi-card">
+      <div class="kpi-label">📅 Días Analizados</div>
+      <div class="kpi-value">${dias}</div>
+      <div class="kpi-sub">${Object.keys(registrosPorCategoria).length} categorías</div>
     </div>
-    <table>
+  </div>
+
+  <!-- Resumen por Categoría (TABLA COMPACTA) -->
+  <div class="resumen-categorias">
+    <div class="resumen-header">📊 Resumen por Categoría</div>
+    <table class="resumen-table">
       <thead>
         <tr>
-          <th style="width: 22%">🕐 Fecha / Hora</th>
-          <th style="width: 35%">📍 Punto de Control</th>
-          <th style="width: 15%">📏 Valor</th>
-          <th style="width: 13%">✓ Estado</th>
-          <th style="width: 15%">👤 Usuario</th>
+          <th>Categoría</th>
+          <th>Total</th>
+          <th>OK</th>
+          <th>NO_OK</th>
+          <th>Cumplimiento</th>
+          <th>Estado</th>
         </tr>
       </thead>
       <tbody>`;
 
-      regs.forEach((reg: any) => {
-        const badgeClass = reg.estado === 'OK' ? 'badge-ok' : 'badge-nok';
-        html += `
-        <tr>
-          <td>${formatearFechaHora(reg.fecha_hora)}</td>
-          <td style="font-weight: 600;">${reg.nombre_pcc}</td>
-          <td>${reg.valor_medido || reg.temp_final || '-'} ${reg.unidad || ''}</td>
-          <td><span class="badge ${badgeClass}">${reg.estado}</span></td>
-          <td>${reg.id_usuario}</td>
-        </tr>`;
-
-        if (reg.accion_correctora) {
-          html += `
-        <tr>
-          <td colspan="5">
-            <div class="accion-box">Acción Correctora: ${reg.accion_correctora}</div>
-          </td>
-        </tr>`;
-        }
-      });
+    Object.keys(registrosPorCategoria).forEach(catNombre => {
+      const catData = registrosPorCategoria[catNombre];
+      const catTotal = catData.items.length;
+      const catOK = catData.ok;
+      const catNOK = catData.nok;
+      const catCumplimiento = catTotal > 0 ? Math.round((catOK/catTotal)*100) : 0;
+      const estadoClass = catCumplimiento >= 95 ? 'badge-ok' : catCumplimiento >= 85 ? 'badge-nok' : 'badge-nok';
+      const progressClass = catCumplimiento >= 95 ? '' : catCumplimiento >= 85 ? 'warning' : 'danger';
 
       html += `
-      </tbody>
-    </table>
-  </div>`;
+        <tr>
+          <td style="font-weight: 600;"> ${catNombre}</td>
+          <td>${catTotal}</td>
+          <td style="color: #16a34a; font-weight: 600;">${catOK}</td>
+          <td style="color: #dc2626; font-weight: 600;">${catNOK}</td>
+          <td>
+            ${catCumplimiento}%
+            <div class="progress-mini">
+              <div class="progress-mini-bar ${progressClass}" style="width: ${catCumplimiento}%"></div>
+            </div>
+          </td>
+          <td><span class="badge ${estadoClass}">${catCumplimiento >= 95 ? 'OK' : 'REV'}</span></td>
+        </tr>`;
     });
 
-    // Incidencias destacadas
+    html += `
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SOLO INCIDENCIAS DETALLADAS (No todos los registros OK) -->`;
+
     if (totalNOK > 0) {
       html += `
   <div class="incidencias-section">
-    <div class="incidencias-header">🚨 INCIDENCIAS DETECTADAS (${totalNOK})</div>`;
+    <div class="incidencias-header">🚨 INCIDENCIAS DETECTADAS (${totalNOK})</div>
+    <div class="incidencia-grid">`;
 
       const incidencias = registros?.filter((r: any) => r.estado === 'NO_OK') || [];
       incidencias.forEach((inc: any, index: number) => {
         html += `
-    <div class="incidencia-item">
-      <div class="incidencia-title">${index + 1}. ${inc.haccp_pcc?.nombre_pcc || 'PCC'}</div>
-      <div class="incidencia-detail">📅 Fecha: ${formatearFechaHora(inc.fecha_hora)}</div>
-      <div class="incidencia-detail"> Valor Registrado: ${inc.valor_medido || inc.temp_final || 'N/A'} ${inc.unidad || ''}</div>
-      <div class="incidencia-action">🔧 Acción Correctora: ${inc.accion_correctora || 'No documentada'}</div>
-    </div>`;
+      <div class="incidencia-card">
+        <div class="incidencia-title">${index + 1}. ${inc.haccp_pcc?.nombre_pcc || 'PCC'}</div>
+        <div class="incidencia-meta">📅 ${formatearFechaHora(inc.fecha_hora)}</div>
+        <div class="incidencia-meta">📏 Valor: ${inc.valor_medido || inc.temp_final || 'N/A'} ${inc.unidad || ''}</div>
+        <div class="incidencia-action">🔧 ${inc.accion_correctora || 'Sin acción documentada'}</div>
+      </div>`;
       });
 
-      html += `</div>`;
+      html += `
+    </div>
+  </div>`;
     }
 
     html += `
   <div class="footer">
-    <p>________________________________________</p>
     <p><strong>KOST Software</strong> - Sistema de Gestión HACCP para Hostelería</p>
-    <p style="margin-top: 10px; font-size: 11px;">© ${new Date().getFullYear()} Todos los derechos reservados</p>
+    <p style="margin-top: 5px;">© ${new Date().getFullYear()} | Reporte generado automáticamente</p>
+    <p style="margin-top: 5px; font-size: 9px;">Total: ${totalRegistros} registros | ${totalOK} OK | ${totalNOK} NO_OK | ${porcentajeCumplimiento}% cumplimiento</p>
   </div>
 
-  <button class="print-button no-print" onclick="window.print()">
-    📄 Imprimir / Guardar PDF
-  </button>
+  <!-- Controles de Impresión -->
+  <div class="print-controls no-print">
+    <h4>🖨️ Opciones de Reporte</h4>
+    <button class="mode-btn active" onclick="window.location.href='?inicio=${inicio}&fin=${fin}&modo=ejecutivo'">
+      📊 Ejecutivo (1-2 páginas)
+    </button>
+    <button class="mode-btn" onclick="window.location.href='?inicio=${inicio}&fin=${fin}&modo=compacto'">
+      📋 Compacto (Resumen + Incidencias)
+    </button>
+    <button class="mode-btn" onclick="window.location.href='?inicio=${inicio}&fin=${fin}&modo=detallado'">
+      📄 Detallado (Todos los registros)
+    </button>
+    <button class="print-btn" onclick="window.print()">
+      📄 Imprimir / Guardar PDF
+    </button>
+  </div>
 
   <script>
     setTimeout(() => {
