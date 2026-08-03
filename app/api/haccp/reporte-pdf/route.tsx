@@ -18,17 +18,14 @@ export async function GET(request: Request) {
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 🔥 CONSULTA CON JOIN: Obtiene el nombre de la categoría directamente de la BD
+    // Obtener registros con sus PCCs
     let query = supabase
       .from('haccp_registros')
       .select(`
         *,
         haccp_pcc (
           nombre_pcc,
-          haccp_categorias (
-            id,
-            nombre
-          )
+          categoria_id
         )
       `)
       .gte('fecha_hora', `${inicio}T00:00:00`)
@@ -36,19 +33,28 @@ export async function GET(request: Request) {
       .order('fecha_hora', { ascending: false });
 
     if (categoria && categoria !== 'todas') {
-      query = query.eq('haccp_pcc.haccp_categorias.id', categoria);
+      query = query.eq('haccp_pcc.categoria_id', categoria);
     }
 
     const { data: registros, error } = await query;
     if (error) throw error;
 
-    // Organizar por categoría (ahora con el nombre garantizado)
+    // Obtener categorías por separado
+    const { data: categoriasData } = await supabase
+      .from('haccp_categorias')
+      .select('id, nombre');
+
+    const categoriasMap: Record<string, string> = {};
+    categoriasData?.forEach(cat => {
+      categoriasMap[cat.id] = cat.nombre;
+    });
+
+    // Organizar por categoría
     const registrosPorCategoria: any = {};
     registros?.forEach((reg: any) => {
       const pcc = reg.haccp_pcc || {};
-      const cat = pcc.haccp_categorias || {};
-      const catId = cat.id || 'SIN_CATEGORIA';
-      const catNombre = cat.nombre || 'Sin Categoría';
+      const catId = pcc.categoria_id || 'SIN_CATEGORIA';
+      const catNombre = categoriasMap[catId] || 'Sin Categoría';
       
       if (!registrosPorCategoria[catId]) {
         registrosPorCategoria[catId] = {
