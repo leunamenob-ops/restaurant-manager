@@ -173,4 +173,4 @@ const ReporteHACCP: React.FC<Props> = ({
   );
 };
 
-export default ReporteHACCP; 
+export default ReporteHACCP;
