@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 export async function GET() {
   try {
-    console.log('📂 API /api/haccp/categorias - Iniciando carga...');
+    console.log('📂 [API CATEGORIAS] Iniciando consulta...');
     
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,17 +16,17 @@ export async function GET() {
       .order('nombre');
 
     if (error) {
-      console.error('❌ Error en Supabase:', error);
+      console.error('❌ [API CATEGORIAS] Error en Supabase:', error);
       throw error;
     }
 
-    console.log('✅ Categorías encontradas:', data?.length || 0);
-    console.log('📋 Datos:', data);
+    console.log('✅ [API CATEGORIAS] Datos encontrados:', data?.length || 0);
+    console.log('📋 [API CATEGORIAS] Data:', JSON.stringify(data, null, 2));
 
     return NextResponse.json(data || []);
 
   } catch (error: any) {
-    console.error('❌ Error en API de categorías:', error);
+    console.error('❌ [API CATEGORIAS] Error fatal:', error);
     return NextResponse.json({ 
       error: error.message,
       details: error.toString()
