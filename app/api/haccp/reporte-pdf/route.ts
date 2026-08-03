@@ -6,7 +6,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const inicio = searchParams.get('inicio');
     const fin = searchParams.get('fin');
-    const modo = searchParams.get('modo') || 'ejecutivo'; // 'ejecutivo', 'compacto', 'detallado'
+    const modo = searchParams.get('modo') || 'ejecutivo';
 
     if (!inicio || !fin) {
       return NextResponse.json({ error: 'Fechas requeridas' }, { status: 400 });
@@ -84,7 +84,7 @@ export async function GET(request: Request) {
       });
     };
 
-    // Generar HTML según el modo
+    // Generar HTML
     let html = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -98,317 +98,183 @@ export async function GET(request: Request) {
       padding: ${modo === 'detallado' ? '20px' : '30px'}; 
       color: #1e293b;
       background: #ffffff;
-      line-height: ${modo === 'detallado' ? '1.4' : '1.5'};
+      line-height: 1.5;
       font-size: ${modo === 'detallado' ? '10px' : '11px'};
     }
     
     .header { 
       text-align: center; 
-      padding: ${modo === 'detallado' ? '15px' : '25px'} ${modo === 'detallado' ? '10px' : '20px'};
+      padding: ${modo === 'detallado' ? '15px' : '25px'} 20px;
       background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
       color: white;
-      border-radius: ${modo === 'detallado' ? '4px' : '8px'};
-      margin-bottom: ${modo === 'detallado' ? '15px' : '25px'};
+      border-radius: 8px;
+      margin-bottom: 25px;
     }
-    .header h1 { 
-      margin: 0; 
-      font-size: ${modo === 'detallado' ? '20px' : '28px'}; 
-      font-weight: 700;
-    }
-    .header h2 { 
-      margin: ${modo === 'detallado' ? '5px' : '8px'} 0; 
-      font-size: ${modo === 'detallado' ? '12px' : '16px'};
-      font-weight: 400;
-    }
-    .header p { 
-      margin: ${modo === 'detallado' ? '3px' : '5px'} 0; 
-      font-size: ${modo === 'detallado' ? '10px' : '13px'};
-    }
+    .header h1 { margin: 0; font-size: ${modo === 'detallado' ? '20px' : '28px'}; font-weight: 700; }
+    .header h2 { margin: 8px 0; font-size: ${modo === 'detallado' ? '12px' : '16px'}; font-weight: 400; }
+    .header p { margin: 5px 0; font-size: ${modo === 'detallado' ? '10px' : '13px'}; }
     
     .kpi-grid { 
       display: grid; 
       grid-template-columns: repeat(5, 1fr); 
-      gap: ${modo === 'detallado' ? '8px' : '12px'}; 
-      margin-bottom: ${modo === 'detallado' ? '15px' : '25px'}; 
+      gap: 12px; 
+      margin-bottom: 25px; 
     }
     .kpi-card { 
       background: #f8fafc;
-      padding: ${modo === 'detallado' ? '10px' : '15px'};
-      border-radius: ${modo === 'detallado' ? '4px' : '8px'};
+      padding: 15px;
+      border-radius: 8px;
       border-left: 3px solid #0891b2;
     }
     .kpi-card.ok { border-left-color: #16a34a; }
     .kpi-card.nok { border-left-color: #dc2626; }
-    .kpi-label { 
-      font-size: ${modo === 'detallado' ? '8px' : '10px'}; 
-      color: #64748b; 
-      text-transform: uppercase;
-      font-weight: 600;
-      margin-bottom: ${modo === 'detallado' ? '3px' : '5px'};
-    }
-    .kpi-value { 
-      font-size: ${modo === 'detallado' ? '20px' : '28px'}; 
-      font-weight: 700; 
-      color: #0f172a;
-      margin: 0;
-    }
+    .kpi-label { font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 5px; }
+    .kpi-value { font-size: 28px; font-weight: 700; color: #0f172a; margin: 0; }
     .kpi-card.ok .kpi-value { color: #16a34a; }
     .kpi-card.nok .kpi-value { color: #dc2626; }
-    .kpi-sub {
-      font-size: ${modo === 'detallado' ? '8px' : '9px'};
-      color: #94a3b8;
-      margin-top: ${modo === 'detallado' ? '2px' : '3px'};
-    }
+    .kpi-sub { font-size: 9px; color: #94a3b8; margin-top: 3px; }
     
     ${modo !== 'detallado' ? `
     .resumen-categorias {
-      margin-bottom: ${modo === 'compacto' ? '15px' : '25px'};
+      margin-bottom: 25px;
       background: white;
-      border-radius: ${modo === 'compacto' ? '4px' : '8px'};
+      border-radius: 8px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
       overflow: hidden;
-      ${modo === 'detallado' ? 'display: none;' : ''}
     }
     .resumen-header {
       background: #f1f5f9;
-      padding: ${modo === 'compacto' ? '8px' : '10px'} ${modo === 'compacto' ? '12px' : '15px'};
+      padding: 10px 15px;
       font-weight: 700;
-      font-size: ${modo === 'compacto' ? '11px' : '12px'};
+      font-size: 12px;
       color: #475569;
       text-transform: uppercase;
     }
-    .resumen-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: ${modo === 'compacto' ? '10px' : '11px'};
-    }
-    .resumen-table th {
-      background: #f8fafc;
-      padding: ${modo === 'compacto' ? '6px' : '8px'} ${modo === 'compacto' ? '8px' : '12px'};
-      text-align: left;
-      font-size: ${modo === 'compacto' ? '9px' : '10px'};
-      color: #64748b;
-      text-transform: uppercase;
-      border-bottom: 1px solid #e2e8f0;
-    }
-    .resumen-table td {
-      padding: ${modo === 'compacto' ? '6px' : '8px'} ${modo === 'compacto' ? '8px' : '12px'};
-      border-bottom: 1px solid #f1f5f9;
-    }
+    .resumen-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .resumen-table th { background: #f8fafc; padding: 8px 12px; text-align: left; font-size: 10px; color: #64748b; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
+    .resumen-table td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }
     .resumen-table tr:hover { background: #f8fafc; }
     ` : ''}
     
-    .badge {
-      display: inline-block;
-      padding: ${modo === 'detallado' ? '2px 6px' : '2px 8px'};
-      border-radius: 12px;
-      font-size: ${modo === 'detallado' ? '8px' : '10px'};
-      font-weight: 700;
-    }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; }
     .badge-ok { background: #dcfce7; color: #16a34a; }
     .badge-nok { background: #fee2e2; color: #dc2626; }
     
-    .progress-mini {
-      width: 60px;
-      height: 6px;
-      background: #e2e8f0;
-      border-radius: 3px;
-      overflow: hidden;
-      display: inline-block;
-      vertical-align: middle;
-      margin-left: 8px;
-    }
-    .progress-mini-bar {
-      height: 100%;
-      background: #16a34a;
-    }
+    .progress-mini { width: 60px; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 8px; }
+    .progress-mini-bar { height: 100%; background: #16a34a; }
     .progress-mini-bar.warning { background: #eab308; }
     .progress-mini-bar.danger { background: #dc2626; }
     
-    /* Tabla detallada de registros */
-    .registros-section {
+    /* Sección por categoría con tabla propia */
+    .categoria-seccion {
       margin-bottom: 20px;
       page-break-inside: avoid;
       ${modo === 'ejecutivo' ? 'display: none;' : ''}
     }
     .cat-header {
-      background: ${modo === 'detallado' ? '#f1f5f9' : 'linear-gradient(135deg, #0891b2 0%, #0e7490 100%)'};
-      color: ${modo === 'detallado' ? '#1e293b' : 'white'};
-      padding: ${modo === 'detallado' ? '8px 12px' : '12px 18px'};
-      font-size: ${modo === 'detallado' ? '11px' : '14px'};
+      background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+      color: white;
+      padding: 12px 18px;
+      font-size: 14px;
       font-weight: 700;
-      border-radius: ${modo === 'detallado' ? '4px 4px 0 0' : '8px 8px 0 0'};
+      border-radius: 8px 8px 0 0;
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-    .cat-stats {
-      display: flex;
-      gap: 10px;
-      font-size: ${modo === 'detallado' ? '10px' : '12px'};
-    }
-    .cat-stat {
-      background: ${modo === 'detallado' ? '#e2e8f0' : 'rgba(255,255,255,0.2)'};
-      padding: 3px 8px;
-      border-radius: 12px;
-    }
+    .cat-stats { display: flex; gap: 10px; font-size: 12px; }
+    .cat-stat { background: rgba(255,255,255,0.2); padding: 3px 10px; border-radius: 12px; }
     
-    .tabla-registros {
+    .tabla-categoria {
       width: 100%;
       border-collapse: collapse;
       font-size: ${modo === 'detallado' ? '9px' : '11px'};
       background: white;
+      border: 1px solid #e2e8f0;
+      border-top: none;
     }
-    .tabla-registros th {
+    .tabla-categoria th {
       background: #f8fafc;
-      padding: ${modo === 'detallado' ? '6px' : '10px'} ${modo === 'detallado' ? '8px' : '12px'};
+      padding: ${modo === 'detallado' ? '6px' : '10px'} 12px;
       text-align: left;
       font-size: ${modo === 'detallado' ? '8px' : '10px'};
       color: #64748b;
       text-transform: uppercase;
       border-bottom: 2px solid #e2e8f0;
     }
-    .tabla-registros td {
-      padding: ${modo === 'detallado' ? '6px' : '10px'} ${modo === 'detallado' ? '8px' : '12px'};
+    .tabla-categoria td {
+      padding: ${modo === 'detallado' ? '6px' : '10px'} 12px;
       border-bottom: 1px solid #f1f5f9;
     }
-    .tabla-registros tr:hover { background: #f8fafc; }
+    .tabla-categoria tr:hover { background: #f8fafc; }
     
-    .accion-box {
-      background: #fef2f2;
+    .accion-row td {
+      background: #fef2f2 !important;
+      padding: ${modo === 'detallado' ? '4px 12px' : '8px 12px'} !important;
       border-left: 3px solid #dc2626;
-      padding: ${modo === 'detallado' ? '4px 8px' : '8px 12px'};
-      margin: ${modo === 'detallado' ? '4px' : '8px'} 0;
-      border-radius: 4px;
       font-size: ${modo === 'detallado' ? '9px' : '11px'};
       color: #991b1b;
       font-style: italic;
     }
     
-    .incidencias-section {
-      margin-top: ${modo === 'detallado' ? '20px' : '25px'};
-      page-break-inside: avoid;
-    }
+    .incidencias-section { margin-top: 25px; page-break-inside: avoid; }
     .incidencias-header {
       background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
       color: white;
-      padding: ${modo === 'detallado' ? '8px 15px' : '12px 18px'};
-      border-radius: ${modo === 'detallado' ? '4px' : '8px 8px 0 0'};
-      font-size: ${modo === 'detallado' ? '12px' : '14px'};
+      padding: 12px 18px;
+      border-radius: 8px 8px 0 0;
+      font-size: 14px;
       font-weight: 700;
     }
     .incidencia-grid {
       display: grid;
       grid-template-columns: ${modo === 'detallado' ? '1fr' : 'repeat(2, 1fr)'};
-      gap: ${modo === 'detallado' ? '8px' : '10px'};
-      padding: ${modo === 'detallado' ? '10px' : '15px'};
+      gap: 10px;
+      padding: 15px;
       background: #fef2f2;
-      border-radius: ${modo === 'detallado' ? '0 0 4px 4px' : '0 0 8px 8px'};
+      border-radius: 0 0 8px 8px;
     }
     .incidencia-card {
       background: white;
-      padding: ${modo === 'detallado' ? '8px' : '10px 12px'};
-      border-radius: ${modo === 'detallado' ? '4px' : '6px'};
+      padding: 10px 12px;
+      border-radius: 6px;
       border-left: 3px solid #dc2626;
       box-shadow: 0 1px 3px rgba(220, 38, 38, 0.1);
     }
-    .incidencia-title {
-      font-size: ${modo === 'detallado' ? '10px' : '12px'};
-      font-weight: 700;
-      color: #1e293b;
-      margin-bottom: ${modo === 'detallado' ? '3px' : '5px'};
-    }
-    .incidencia-meta {
-      font-size: ${modo === 'detallado' ? '8px' : '10px'};
-      color: #64748b;
-      margin: 2px 0;
-    }
-    .incidencia-action {
-      font-size: ${modo === 'detallado' ? '8px' : '10px'};
-      color: #dc2626;
-      font-weight: 600;
-      margin-top: ${modo === 'detallado' ? '4px' : '5px'};
-      padding-top: ${modo === 'detallado' ? '3px' : '5px'};
-      border-top: 1px solid #fee2e2;
-    }
+    .incidencia-title { font-size: 12px; font-weight: 700; color: #1e293b; margin-bottom: 5px; }
+    .incidencia-meta { font-size: 10px; color: #64748b; margin: 2px 0; }
+    .incidencia-action { font-size: 10px; color: #dc2626; font-weight: 600; margin-top: 5px; padding-top: 5px; border-top: 1px solid #fee2e2; }
     
-    .footer {
-      margin-top: ${modo === 'detallado' ? '20px' : '40px'};
-      text-align: center;
-      color: #94a3b8;
-      font-size: ${modo === 'detallado' ? '9px' : '10px'};
-      padding-top: ${modo === 'detallado' ? '10px' : '20px'};
-      border-top: 1px solid #e2e8f0;
-    }
+    .footer { margin-top: 40px; text-align: center; color: #94a3b8; font-size: 10px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
     
     .print-controls {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: white;
-      padding: 15px;
-      border-radius: 12px;
-      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-      z-index: 1000;
+      position: fixed; bottom: 20px; right: 20px; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.15); z-index: 1000;
       ${modo === 'detallado' ? 'display: none;' : ''}
     }
-    .print-controls h4 {
-      margin: 0 0 10px 0;
-      font-size: 12px;
-      color: #475569;
-    }
-    .mode-btn {
-      display: block;
-      width: 100%;
-      padding: 8px 12px;
-      margin: 5px 0;
-      background: #f1f5f9;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 11px;
-      text-align: left;
-      transition: all 0.2s;
-    }
+    .print-controls h4 { margin: 0 0 10px 0; font-size: 12px; color: #475569; }
+    .mode-btn { display: block; width: 100%; padding: 8px 12px; margin: 5px 0; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 11px; text-align: left; transition: all 0.2s; }
     .mode-btn:hover { background: #e2e8f0; }
-    .mode-btn.active {
-      background: #0891b2;
-      color: white;
-      border-color: #0891b2;
-    }
-    .print-btn {
-      width: 100%;
-      padding: 10px;
-      background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 700;
-      cursor: pointer;
-      margin-top: 10px;
-    }
+    .mode-btn.active { background: #0891b2; color: white; border-color: #0891b2; }
+    .print-btn { width: 100%; padding: 10px; background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%); color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; margin-top: 10px; }
     
     @media print {
-      body { margin: ${modo === 'detallado' ? '10px' : '15px'}; padding: ${modo === 'detallado' ? '10px' : '15px'}; }
+      body { margin: 15px; padding: 15px; }
       .no-print { display: none !important; }
       .kpi-card { box-shadow: none; border: 1px solid #e2e8f0; }
       ${modo !== 'detallado' ? '.resumen-categorias { box-shadow: none; border: 1px solid #e2e8f0; }' : ''}
       @page { margin: 1cm; }
     }
-    
-    .page-break { page-break-before: always; }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>🛡️ KOST SOFTWARE</h1>
+    <h1>️ KOST SOFTWARE</h1>
     <h2>Reporte ${modo === 'detallado' ? 'Detallado' : modo === 'compacto' ? 'Compacto' : 'Ejecutivo'} HACCP</h2>
     <p>📅 Período: ${formatearFecha(inicio)} al ${formatearFecha(fin)} (${dias} días)</p>
     <p>📊 Promedio diario: ${promedioDiario} registros</p>
   </div>
 
-  <!-- KPIs Principales (Siempre visibles) -->
+  <!-- KPIs -->
   <div class="kpi-grid">
     <div class="kpi-card">
       <div class="kpi-label">📊 Total Registros</div>
@@ -428,9 +294,7 @@ export async function GET(request: Request) {
     <div class="kpi-card ${porcentajeCumplimiento >= 95 ? 'ok' : porcentajeCumplimiento >= 85 ? '' : 'nok'}">
       <div class="kpi-label">📈 Cumplimiento</div>
       <div class="kpi-value">${porcentajeCumplimiento}%</div>
-      <div class="kpi-sub">
-        ${porcentajeCumplimiento >= 95 ? '✅ Excelente' : porcentajeCumplimiento >= 85 ? '⚠️ Aceptable' : '❌ Crítico'}
-      </div>
+      <div class="kpi-sub">${porcentajeCumplimiento >= 95 ? '✅ Excelente' : porcentajeCumplimiento >= 85 ? '️ Aceptable' : '❌ Crítico'}</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">📅 Días Analizados</div>
@@ -440,20 +304,11 @@ export async function GET(request: Request) {
   </div>
 
   ${modo !== 'detallado' ? `
-  <!-- Resumen por Categoría (Solo en Ejecutivo y Compacto) -->
+  <!-- Resumen por Categoría -->
   <div class="resumen-categorias">
     <div class="resumen-header">📊 Resumen por Categoría</div>
     <table class="resumen-table">
-      <thead>
-        <tr>
-          <th>Categoría</th>
-          <th>Total</th>
-          <th>OK</th>
-          <th>NO_OK</th>
-          <th>Cumplimiento</th>
-          <th>Estado</th>
-        </tr>
-      </thead>
+      <thead><tr><th>Categoría</th><th>Total</th><th>OK</th><th>NO_OK</th><th>Cumplimiento</th><th>Estado</th></tr></thead>
       <tbody>` : ''}
 
     ${modo !== 'detallado' ? Object.keys(registrosPorCategoria).map(catNombre => {
@@ -467,28 +322,18 @@ export async function GET(request: Request) {
 
       return `
         <tr>
-          <td style="font-weight: 600;"> ${catNombre}</td>
+          <td style="font-weight: 600;"> 📁 ${catNombre}</td>
           <td>${catTotal}</td>
           <td style="color: #16a34a; font-weight: 600;">${catOK}</td>
           <td style="color: #dc2626; font-weight: 600;">${catNOK}</td>
-          <td>
-            ${catCumplimiento}%
-            <div class="progress-mini">
-              <div class="progress-mini-bar ${progressClass}" style="width: ${catCumplimiento}%"></div>
-            </div>
-          </td>
+          <td>${catCumplimiento}%<div class="progress-mini"><div class="progress-mini-bar ${progressClass}" style="width: ${catCumplimiento}%"></div></div></td>
           <td><span class="badge ${estadoClass}">${catCumplimiento >= 95 ? 'OK' : 'REV'}</span></td>
         </tr>`;
     }).join('') : ''}
 
-    ${modo !== 'detallado' ? `
-      </tbody>
-    </table>
-  </div>` : ''}
+    ${modo !== 'detallado' ? `</tbody></table></div>` : ''}
 
-  ${modo !== 'ejecutivo' ? `
-  <!-- TODOS los registros (Solo en Compacto y Detallado) -->` : ''}
-
+  <!-- Registros Detallados por Categoría (Compacto y Detallado) -->
   ${modo !== 'ejecutivo' ? Object.keys(registrosPorCategoria).map(catNombre => {
     const catData = registrosPorCategoria[catNombre];
     const regs = catData.items;
@@ -497,21 +342,21 @@ export async function GET(request: Request) {
     const catNOK = catData.nok;
 
     return `
-  <div class="registros-section">
+  <div class="categoria-seccion">
     <div class="cat-header">
       <span>📁 ${catNombre}</span>
       <div class="cat-stats">
-        <span class="cat-stat"> ${catTotal}</span>
-        <span class="cat-stat" style="background: rgba(22, 163, 74, 0.3); color: #16a34a;">✅ ${catOK}</span>
-        ${catNOK > 0 ? `<span class="cat-stat" style="background: rgba(220, 38, 38, 0.3); color: #dc2626;">⚠️ ${catNOK}</span>` : ''}
+        <span class="cat-stat">📊 ${catTotal} registros</span>
+        <span class="cat-stat" style="background: rgba(22, 163, 74, 0.3);">✅ ${catOK} OK</span>
+        ${catNOK > 0 ? `<span class="cat-stat" style="background: rgba(220, 38, 38, 0.3);">⚠️ ${catNOK} NO_OK</span>` : ''}
       </div>
     </div>
-    <table class="tabla-registros">
+    <table class="tabla-categoria">
       <thead>
         <tr>
           <th style="width: 22%">🕐 Fecha/Hora</th>
           <th style="width: 35%">📍 Punto de Control</th>
-          <th style="width: 15%">📏 Valor</th>
+          <th style="width: 15%"> Valor</th>
           <th style="width: 13%">✓ Estado</th>
           <th style="width: 15%"> Usuario</th>
         </tr>
@@ -519,28 +364,31 @@ export async function GET(request: Request) {
       <tbody>`;
   }).join('') : ''}
 
-  ${modo !== 'ejecutivo' ? registros?.map((reg: any) => {
-    let catNombre = reg.categoria_nombre;
-    if (!catNombre || catNombre.startsWith('CAT_')) {
-      catNombre = CATEGORIAS_FALLBACK[catNombre] || catNombre || 'Sin Categoría';
-    }
-    const badgeClass = reg.estado === 'OK' ? 'badge-ok' : 'badge-nok';
-    
-    return `
+  ${modo !== 'ejecutivo' ? (() => {
+    let html = '';
+    Object.keys(registrosPorCategoria).forEach(catNombre => {
+      const regs = registrosPorCategoria[catNombre].items;
+      regs.forEach((reg: any) => {
+        const badgeClass = reg.estado === 'OK' ? 'badge-ok' : 'badge-nok';
+        html += `
         <tr>
           <td>${formatearFechaHora(reg.fecha_hora)}</td>
-          <td style="font-weight: 600;">${reg.haccp_pcc?.nombre_pcc || 'Desconocido'}</td>
+          <td style="font-weight: 600;">${reg.nombre_pcc}</td>
           <td>${reg.valor_medido || reg.temp_final || '-'} ${reg.unidad || ''}</td>
           <td><span class="badge ${badgeClass}">${reg.estado}</span></td>
           <td>${reg.id_usuario}</td>
-        </tr>
-        ${reg.accion_correctora ? `
-        <tr>
-          <td colspan="5">
-            <div class="accion-box">Acción Correctora: ${reg.accion_correctora}</div>
-          </td>
-        </tr>` : ''}`;
-  }).join('') : ''}
+        </tr>`;
+        
+        if (reg.accion_correctora) {
+          html += `
+        <tr class="accion-row">
+          <td colspan="5">🔧 Acción Correctora: ${reg.accion_correctora}</td>
+        </tr>`;
+        }
+      });
+    });
+    return html;
+  })() : ''}
 
   ${modo !== 'ejecutivo' ? `
       </tbody>
@@ -549,7 +397,7 @@ export async function GET(request: Request) {
 
   ${Object.keys(registrosPorCategoria).map(() => '').join('</tbody></table></div>')}
 
-  <!-- Incidencias Destacadas (Siempre visibles) -->
+  <!-- Incidencias Destacadas -->
   ${totalNOK > 0 ? `
   <div class="incidencias-section">
     <div class="incidencias-header">🚨 INCIDENCIAS DETECTADAS (${totalNOK})</div>
@@ -565,9 +413,7 @@ export async function GET(request: Request) {
       </div>`;
   }).join('') : ''}
 
-  ${totalNOK > 0 ? `
-    </div>
-  </div>` : ''}
+  ${totalNOK > 0 ? `</div></div>` : ''}
 
   <div class="footer">
     <p><strong>KOST Software</strong> - Sistema de Gestión HACCP para Hostelería</p>
@@ -576,38 +422,21 @@ export async function GET(request: Request) {
   </div>
 
   ${modo !== 'detallado' ? `
-  <!-- Controles de Impresión (Ocultos en modo Detallado) -->
   <div class="print-controls no-print">
     <h4>🖨️ Opciones de Reporte</h4>
-    <button class="mode-btn ${modo === 'ejecutivo' ? 'active' : ''}" onclick="window.location.href='?inicio=${inicio}&fin=${fin}&modo=ejecutivo'">
-      📊 Ejecutivo (1-2 páginas)
-    </button>
-    <button class="mode-btn ${modo === 'compacto' ? 'active' : ''}" onclick="window.location.href='?inicio=${inicio}&fin=${fin}&modo=compacto'">
-      📋 Compacto (Resumen + Todos los registros)
-    </button>
-    <button class="mode-btn ${modo === 'detallado' ? 'active' : ''}" onclick="window.location.href='?inicio=${inicio}&fin=${fin}&modo=detallado'">
-      📄 Detallado (Máximo detalle - ${totalRegistros} registros)
-    </button>
-    <button class="print-btn" onclick="window.print()">
-       Imprimir / Guardar PDF
-    </button>
+    <button class="mode-btn ${modo === 'ejecutivo' ? 'active' : ''}" onclick="window.location.href='?inicio=${inicio}&fin=${fin}&modo=ejecutivo'"> Ejecutivo (1-2 páginas)</button>
+    <button class="mode-btn ${modo === 'compacto' ? 'active' : ''}" onclick="window.location.href='?inicio=${inicio}&fin=${fin}&modo=compacto'">📋 Compacto (Resumen + Registros)</button>
+    <button class="mode-btn ${modo === 'detallado' ? 'active' : ''}" onclick="window.location.href='?inicio=${inicio}&fin=${fin}&modo=detallado'">📄 Detallado (Máximo detalle)</button>
+    <button class="print-btn" onclick="window.print()">📄 Imprimir / Guardar PDF</button>
   </div>` : ''}
 
   <script>
-    setTimeout(() => {
-      if (confirm('¿Deseas imprimir o guardar este reporte como PDF?')) {
-        window.print();
-      }
-    }, 800);
+    setTimeout(() => { if (confirm('¿Deseas imprimir o guardar este reporte como PDF?')) { window.print(); } }, 800);
   </script>
 </body>
 </html>`;
 
-    return new NextResponse(html, {
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8'
-      }
-    });
+    return new NextResponse(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 
   } catch (error: any) {
     console.error('❌ Error generando reporte:', error);
