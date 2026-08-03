@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Obtener registros con sus PCCs
+    // 1. Obtener registros con sus PCCs
     let query = supabase
       .from('haccp_registros')
       .select(`
@@ -37,24 +37,38 @@ export async function GET(request: Request) {
     }
 
     const { data: registros, error } = await query;
-    if (error) throw error;
+    if (error) {
+      console.error('Error al obtener registros:', error);
+      throw error;
+    }
 
-    // Obtener categorías por separado
-    const { data: categoriasData } = await supabase
+    // 2. Obtener el catálogo de categorías
+    const { data: categoriasData, error: catError } = await supabase
       .from('haccp_categorias')
       .select('id, nombre');
 
+    if (catError) {
+      console.error('Error al obtener categorías:', catError);
+    }
+
+    // Crear un mapa de ID -> Nombre (asegurando que la clave sea string para evitar fallos de tipo)
     const categoriasMap: Record<string, string> = {};
     categoriasData?.forEach(cat => {
-      categoriasMap[cat.id] = cat.nombre;
+      categoriasMap[String(cat.id)] = cat.nombre;
     });
 
-    // Organizar por categoría
+    console.log('📊 Mapa de categorías cargado:', categoriasMap); // Visible en logs de Vercel
+
+    // 3. Organizar los registros por categoría
     const registrosPorCategoria: any = {};
+    
     registros?.forEach((reg: any) => {
       const pcc = reg.haccp_pcc || {};
-      const catId = pcc.categoria_id || 'SIN_CATEGORIA';
-      const catNombre = categoriasMap[catId] || 'Sin Categoría';
+      const rawCatId = pcc.categoria_id;
+      const catId = rawCatId ? String(rawCatId) : 'SIN_CATEGORIA';
+      
+      // Buscar el nombre. Si no está en el mapa, usamos el ID formateado como fallback
+      const catNombre = categoriasMap[catId] || `Categoría ${catId}`;
       
       if (!registrosPorCategoria[catId]) {
         registrosPorCategoria[catId] = {
@@ -65,17 +79,17 @@ export async function GET(request: Request) {
       
       registrosPorCategoria[catId].items.push({
         ...reg,
-        nombre_pcc: pcc.nombre_pcc || 'Desconocido'
+        nombre_pcc: pcc.nombre_pcc || 'PCC Desconocido'
       });
     });
 
-    // Calcular estadísticas
+    // 4. Calcular estadísticas
     const totalRegistros = registros?.length || 0;
     const totalOK = registros?.filter((r: any) => r.estado === 'OK').length || 0;
     const totalNOK = registros?.filter((r: any) => r.estado === 'NO_OK').length || 0;
     const porcentajeCumplimiento = totalRegistros > 0 ? Math.round((totalOK / totalRegistros) * 100) : 0;
 
-    // Generar PDF
+    // 5. Generar el PDF
     const stream = await renderToStream(
       <ReporteHACCP
         inicio={inicio}
@@ -96,7 +110,7 @@ export async function GET(request: Request) {
     });
 
   } catch (error: any) {
-    console.error('Error generando PDF:', error);
+    console.error('❌ Error generando PDF:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
