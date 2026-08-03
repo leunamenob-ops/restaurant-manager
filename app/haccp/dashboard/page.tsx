@@ -25,6 +25,7 @@ export default function HACCPDashboard() {
   const [registrosRecientes, setRegistrosRecientes] = useState<any[]>([]);
   const [incidencias, setIncidencias] = useState<any[]>([]);
   const [categorias, setCategorias] = useState<any[]>([]);
+  const [registrosPorCategoria, setRegistrosPorCategoria] = useState<any>({});
   const [errorConexion, setErrorConexion] = useState('');
 
   useEffect(() => {
@@ -32,14 +33,26 @@ export default function HACCPDashboard() {
     const hace7Dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     setFechaInicio(hace7Dias);
     setFechaFin(hoy);
-    cargarDatos(hace7Dias, hoy);
+    cargarDatos(hace7Dias, hoy, 'todas');
   }, []);
 
-  async function cargarDatos(inicio: string, fin: string) {
+  async function cargarDatos(inicio: string, fin: string, categoria: string = 'todas') {
     setLoading(true);
     setErrorConexion('');
     try {
-      const resStats = await fetch(`/api/haccp/estadisticas?inicio=${inicio}&fin=${fin}`);
+      // Construir URL con filtros
+      let statsUrl = `/api/haccp/estadisticas?inicio=${inicio}&fin=${fin}`;
+      let registrosUrl = `/api/haccp/registros?inicio=${inicio}&fin=${fin}&limite=50`;
+      let incidenciasUrl = `/api/haccp/incidencias?inicio=${inicio}&fin=${fin}`;
+      
+      if (categoria !== 'todas') {
+        statsUrl += `&categoria=${categoria}`;
+        registrosUrl += `&categoria=${categoria}`;
+        incidenciasUrl += `&categoria=${categoria}`;
+      }
+
+      // Cargar estadísticas
+      const resStats = await fetch(statsUrl);
       const dataStats = await resStats.json();
       if (dataStats.error) throw new Error(dataStats.error);
       
@@ -51,17 +64,34 @@ export default function HACCPDashboard() {
         incidenciasHoy: dataStats.incidenciasHoy || 0
       });
 
-      const resRegistros = await fetch(`/api/haccp/registros?inicio=${inicio}&fin=${fin}&limite=10`);
+      // Cargar registros recientes
+      const resRegistros = await fetch(registrosUrl);
       const dataRegistros = await resRegistros.json();
-      setRegistrosRecientes(Array.isArray(dataRegistros) ? dataRegistros : []);
+      const registros = Array.isArray(dataRegistros) ? dataRegistros : [];
+      setRegistrosRecientes(registros);
 
-      const resIncidencias = await fetch(`/api/haccp/incidencias?inicio=${inicio}&fin=${fin}`);
+      // Organizar registros por categoría
+      const porCategoria: any = {};
+      registros.forEach((reg: any) => {
+        const catNombre = reg.categoria_nombre || 'Sin Categoría';
+        if (!porCategoria[catNombre]) {
+          porCategoria[catNombre] = [];
+        }
+        porCategoria[catNombre].push(reg);
+      });
+      setRegistrosPorCategoria(porCategoria);
+
+      // Cargar incidencias
+      const resIncidencias = await fetch(incidenciasUrl);
       const dataIncidencias = await resIncidencias.json();
       setIncidencias(Array.isArray(dataIncidencias) ? dataIncidencias : []);
 
-      const resCategorias = await fetch('/api/haccp/categorias');
-      const dataCategorias = await resCategorias.json();
-      setCategorias(Array.isArray(dataCategorias) ? dataCategorias : []);
+      // Cargar categorías (solo la primera vez)
+      if (categorias.length === 0) {
+        const resCategorias = await fetch('/api/haccp/categorias');
+        const dataCategorias = await resCategorias.json();
+        setCategorias(Array.isArray(dataCategorias) ? dataCategorias : []);
+      }
 
     } catch (error) {
       console.error('❌ Error cargando datos del dashboard:', error);
@@ -72,7 +102,7 @@ export default function HACCPDashboard() {
   }
 
   async function handleFiltrar() {
-    await cargarDatos(fechaInicio, fechaFin);
+    await cargarDatos(fechaInicio, fechaFin, categoriaFiltro);
   }
 
   async function handleExportarPDF() {
@@ -101,7 +131,7 @@ export default function HACCPDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      {/* HEADER MODERNO (Estilo KOST Software) */}
+      {/* HEADER */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row justify-between items-center py-4 gap-4">
@@ -134,7 +164,7 @@ export default function HACCPDashboard() {
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               <p className="font-medium">{errorConexion}</p>
             </div>
-            <button onClick={() => cargarDatos(fechaInicio, fechaFin)} className="text-sm font-semibold underline hover:no-underline">Reintentar</button>
+            <button onClick={() => cargarDatos(fechaInicio, fechaFin, categoriaFiltro)} className="text-sm font-semibold underline hover:no-underline">Reintentar</button>
           </div>
         )}
 
@@ -264,62 +294,87 @@ export default function HACCPDashboard() {
           </div>
         )}
 
-        {/* REGISTROS RECIENTES */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-            <svg className="w-5 h-5 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M17 16h.01" /></svg>
-            <h2 className="text-lg font-bold text-slate-900">Registros Recientes</h2>
+        {/* REGISTROS AGRUPADOS POR CATEGORÍA */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <svg className="w-5 h-5 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M17 16h.01" /></svg>
+              Registros por Categoría
+            </h2>
+            <span className="text-sm text-slate-500">{Object.keys(registrosPorCategoria).length} categorías con registros</span>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider text-xs">
-                <tr>
-                  <th className="px-6 py-3">Fecha/Hora</th>
-                  <th className="px-6 py-3">PCC</th>
-                  <th className="px-6 py-3">Valor</th>
-                  <th className="px-6 py-3">Estado</th>
-                  <th className="px-6 py-3">Usuario</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {registrosRecientes.length > 0 ? (
-                  registrosRecientes.map((reg: any, index: number) => (
-                    <tr key={reg.id_registro || index} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{new Date(reg.fecha_hora).toLocaleString('es-ES')}</td>
-                      <td className="px-6 py-4 font-medium text-slate-900">{reg.nombre_pcc}</td>
-                      <td className="px-6 py-4 text-slate-600">{reg.valor_medido || reg.temp_final || '-'} {reg.unidad || ''}</td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                          reg.estado === 'OK' 
-                            ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
-                            : 'bg-rose-100 text-rose-700 border border-rose-200'
-                        }`}>
-                          {reg.estado === 'OK' ? '✓ ' : '⚠ '}{reg.estado}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-slate-500">{reg.id_usuario}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
-                      <div className="flex flex-col items-center gap-2">
-                        <svg className="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                        <p>No hay registros en el período seleccionado.</p>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+
+          {Object.keys(registrosPorCategoria).length > 0 ? (
+            Object.entries(registrosPorCategoria).map(([catNombre, regs]: [string, any]) => {
+              const catOK = (regs as any[]).filter(r => r.estado === 'OK').length;
+              const catNOK = (regs as any[]).filter(r => r.estado === 'NO_OK').length;
+              
+              return (
+                <div key={catNombre} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-cyan-50 to-teal-50 flex items-center justify-between">
+                    <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                      <span className="w-8 h-8 rounded-lg bg-cyan-600 text-white flex items-center justify-center text-sm">📁</span>
+                      {catNombre}
+                    </h3>
+                    <div className="flex items-center gap-4 text-sm">
+                      <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">✅ {catOK} OK</span>
+                      {catNOK > 0 && (
+                        <span className="px-3 py-1 rounded-full bg-rose-100 text-rose-700 font-semibold">⚠️ {catNOK} NO_OK</span>
+                      )}
+                      <span className="text-slate-500">Total: {(regs as any[]).length}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider text-xs">
+                        <tr>
+                          <th className="px-6 py-3">Fecha/Hora</th>
+                          <th className="px-6 py-3">PCC</th>
+                          <th className="px-6 py-3">Valor</th>
+                          <th className="px-6 py-3">Estado</th>
+                          <th className="px-6 py-3">Usuario</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {(regs as any[]).map((reg: any, index: number) => (
+                          <tr key={reg.id_registro || index} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{new Date(reg.fecha_hora).toLocaleString('es-ES')}</td>
+                            <td className="px-6 py-4 font-medium text-slate-900">{reg.nombre_pcc}</td>
+                            <td className="px-6 py-4 text-slate-600">{reg.valor_medido || reg.temp_final || '-'} {reg.unidad || ''}</td>
+                            <td className="px-6 py-4">
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                reg.estado === 'OK' 
+                                  ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
+                                  : 'bg-rose-100 text-rose-700 border border-rose-200'
+                              }`}>
+                                {reg.estado === 'OK' ? '✓ ' : '⚠ '}{reg.estado}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-slate-500">{reg.id_usuario}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-12 text-center">
+              <div className="flex flex-col items-center gap-2">
+                <svg className="w-16 h-16 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                <p className="text-slate-500 text-lg">No hay registros en el período seleccionado.</p>
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </div>
   );
 }
 
-// Componente auxiliar para las tarjetas de estadísticas (Mantiene el código limpio)
+// Componente auxiliar para las tarjetas de estadísticas
 function StatCard({ title, value, icon, color }: { title: string, value: string | number, icon: React.ReactNode, color: string }) {
   const colorMap: Record<string, string> = {
     blue: 'bg-blue-50 text-blue-600 border-blue-100',
