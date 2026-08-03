@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 const CATEGORIAS = [
-  { id: 'CAT_01', nombre: 'Refrigeración', icono: '️' },
-  { id: 'CAT_02', nombre: 'Cocción', icono: '🔥' },
-  { id: 'CAT_03', nombre: 'Limpieza', icono: '🧹' },
-  { id: 'CAT_04', nombre: 'Recepción', icono: '📦' },
-  { id: 'CAT_05', nombre: 'Almacenamiento', icono: '🗄️' },
+  { id: 'CAT_01', nombre: 'Refrigeración', icono: '❄️', color: 'bg-blue-500' },
+  { id: 'CAT_02', nombre: 'Cocción', icono: '🔥', color: 'bg-orange-500' },
+  { id: 'CAT_03', nombre: 'Limpieza', icono: '🧹', color: 'bg-emerald-500' },
+  { id: 'CAT_04', nombre: 'Recepción', icono: '', color: 'bg-purple-500' },
+  { id: 'CAT_05', nombre: 'Almacenamiento', icono: '🗄️', color: 'bg-amber-500' },
 ];
 
 export default function HACCPDashboard() {
@@ -139,6 +139,21 @@ export default function HACCPDashboard() {
     window.open(url, '_blank');
   }
 
+  // Datos para gráfico de tarta cumplimiento
+  const cumplimientoOK = stats.porcentajeCumplimiento;
+  const cumplimientoNOK = 100 - cumplimientoOK;
+
+  // Simulación de datos diarios (últimos 7 días) - en producción vendría de la API
+  const datosDiarios = [
+    { dia: 'Lun', cumplimiento: 95 },
+    { dia: 'Mar', cumplimiento: 88 },
+    { dia: 'Mié', cumplimiento: 100 },
+    { dia: 'Jue', cumplimiento: 75 },
+    { dia: 'Vie', cumplimiento: 92 },
+    { dia: 'Sáb', cumplimiento: 85 },
+    { dia: 'Dom', cumplimiento: 90 },
+  ];
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -146,7 +161,7 @@ export default function HACCPDashboard() {
           <div className="w-16 h-16 bg-gradient-to-br from-cyan-600 to-teal-600 rounded-2xl flex items-center justify-center mx-auto mb-4 animate-pulse shadow-lg">
             <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
           </div>
-          <p className="text-slate-600 font-medium animate-pulse">Cargando...</p>
+          <p className="text-slate-600 font-medium animate-pulse">Cargando panel HACCP...</p>
         </div>
       </div>
     );
@@ -154,22 +169,43 @@ export default function HACCPDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
+      {/* HEADER CON BOTÓN VOLVER */}
+      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row justify-between items-center py-4 gap-4">
             <div className="flex items-center gap-4">
+              {/* Botón volver al dashboard principal */}
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200 transition text-slate-600"
+                title="Volver al Dashboard Principal"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+              </button>
               <div className="w-10 h-10 bg-gradient-to-br from-cyan-600 to-teal-600 rounded-xl flex items-center justify-center shadow-md">
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
               </div>
               <div>
                 <h1 className="text-xl font-bold text-slate-900 tracking-tight">Dashboard HACCP</h1>
-                <p className="text-sm text-slate-500">Control, seguimiento y reportes</p>
+                <p className="text-sm text-slate-500">Control, seguimiento y reportes de puntos críticos</p>
               </div>
             </div>
-            <button onClick={() => router.push('/haccp')} className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 text-sm font-medium transition-all shadow-sm flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-              Ir a Registro
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm font-medium transition-all flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+                Dashboard Principal
+              </button>
+              <button
+                onClick={() => router.push('/haccp')}
+                className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 text-sm font-medium transition-all shadow-sm flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                Ir a Registro
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -182,7 +218,99 @@ export default function HACCPDashboard() {
           </div>
         )}
 
-        {/* FILTROS CON BOTONES DE CATEGORÍA */}
+        {/* KPIs */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <KpiCard title="Total Registros" value={stats.totalRegistros} icon="" color="blue" />
+          <KpiCard title="Registros OK" value={stats.registrosOK} icon="✅" color="emerald" />
+          <KpiCard title="Incidencias" value={stats.registrosNOK} icon="⚠️" color="rose" />
+          <KpiCard title="% Cumplimiento" value={`${stats.porcentajeCumplimiento}%`} icon="📈" color={stats.porcentajeCumplimiento >= 95 ? 'emerald' : stats.porcentajeCumplimiento >= 85 ? 'amber' : 'rose'} />
+          <KpiCard title="Incidencias Hoy" value={stats.incidenciasHoy} icon="🕐" color="orange" />
+        </div>
+
+        {/* GRÁFICOS DE CUMPLIMIENTO */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Gráfico de tarta - Cumplimiento General */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <span className="w-8 h-8 rounded-lg bg-cyan-100 text-cyan-600 flex items-center justify-center">🎯</span>
+              Cumplimiento del Período
+            </h3>
+            <div className="flex items-center justify-center gap-8">
+              {/* Tarta con conic-gradient */}
+              <div className="relative">
+                <div
+                  className="w-40 h-40 rounded-full shadow-lg"
+                  style={{
+                    background: `conic-gradient(#10b981 0% ${cumplimientoOK}%, #ef4444 ${cumplimientoOK}% 100%)`
+                  }}
+                ></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-24 h-24 bg-white rounded-full flex flex-col items-center justify-center shadow-inner">
+                    <span className="text-2xl font-bold text-slate-900">{stats.porcentajeCumplimiento}%</span>
+                    <span className="text-xs text-slate-500">OK</span>
+                  </div>
+                </div>
+              </div>
+              {/* Leyenda */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-emerald-500"></div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">OK</p>
+                    <p className="text-xs text-slate-500">{stats.registrosOK} registros</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-rose-500"></div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">NO_OK</p>
+                    <p className="text-xs text-slate-500">{stats.registrosNOK} registros</p>
+                  </div>
+                </div>
+                <div className="pt-2 border-t border-slate-200">
+                  <p className="text-xs text-slate-500">Total: <span className="font-bold text-slate-900">{stats.totalRegistros}</span></p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Gráfico de barras - Cumplimiento Diario */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <span className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">📅</span>
+              Cumplimiento Diario (7 días)
+            </h3>
+            <div className="space-y-3">
+              {datosDiarios.map((d, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <span className="text-xs font-semibold text-slate-600 w-8">{d.dia}</span>
+                  <div className="flex-1 bg-slate-100 rounded-full h-6 overflow-hidden">
+                    <div
+                      className="h-full rounded-full flex items-center justify-end pr-2 transition-all duration-500"
+                      style={{
+                        width: `${d.cumplimiento}%`,
+                        background: d.cumplimiento >= 95 ? 'linear-gradient(90deg, #10b981, #34d399)' :
+                                    d.cumplimiento >= 85 ? 'linear-gradient(90deg, #f59e0b, #fbbf24)' :
+                                    'linear-gradient(90deg, #ef4444, #f87171)'
+                      }}
+                    >
+                      <span className="text-xs font-bold text-white">{d.cumplimiento}%</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-4">
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-500"></span> ≥95%</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-500"></span> 85-94%</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-rose-500"></span> &lt;85%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* FILTROS */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -195,7 +323,6 @@ export default function HACCPDashboard() {
             </button>
           </div>
 
-          {/* Fechas */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Fecha Inicio</label>
@@ -207,16 +334,14 @@ export default function HACCPDashboard() {
             </div>
           </div>
 
-          {/* 🔥 BOTONES DE CATEGORÍA (reemplaza el select) */}
+          {/* Botones de categoría */}
           <div className="mb-4">
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Categoría</label>
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => handleCategoriaClick('todas')}
                 className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                  categoriaFiltro === 'todas'
-                    ? 'bg-cyan-600 text-white shadow-md'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  categoriaFiltro === 'todas' ? 'bg-cyan-600 text-white shadow-md' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
                 📊 Todas
@@ -226,9 +351,7 @@ export default function HACCPDashboard() {
                   key={cat.id}
                   onClick={() => handleCategoriaClick(cat.id)}
                   className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                    categoriaFiltro === cat.id
-                      ? 'bg-cyan-600 text-white shadow-md'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    categoriaFiltro === cat.id ? 'bg-cyan-600 text-white shadow-md' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
                   {cat.icono} {cat.nombre}
@@ -248,7 +371,6 @@ export default function HACCPDashboard() {
             </select>
           </div>
 
-          {/* Botones de acción */}
           <div className="flex gap-2">
             <button onClick={handleFiltrar} className="flex-1 px-4 py-2.5 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-semibold transition-all flex items-center justify-center gap-2 text-sm">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -256,18 +378,9 @@ export default function HACCPDashboard() {
             </button>
             <button onClick={handleExportarPDF} className="px-4 py-2.5 bg-rose-600 text-white rounded-lg hover:bg-rose-700 font-semibold transition-all flex items-center gap-2 text-sm">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-              Reporte
+              Reporte PDF
             </button>
           </div>
-        </div>
-
-        {/* ESTADÍSTICAS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <StatCard title="Total Registros" value={stats.totalRegistros} color="blue" />
-          <StatCard title="Registros OK" value={stats.registrosOK} color="emerald" />
-          <StatCard title="Incidencias NO_OK" value={stats.registrosNOK} color="rose" />
-          <StatCard title="% Cumplimiento" value={`${stats.porcentajeCumplimiento}%`} color={stats.porcentajeCumplimiento >= 95 ? 'emerald' : stats.porcentajeCumplimiento >= 85 ? 'amber' : 'rose'} />
-          <StatCard title="Incidencias Hoy" value={stats.incidenciasHoy} color="orange" />
         </div>
 
         {/* INCIDENCIAS */}
@@ -315,14 +428,16 @@ export default function HACCPDashboard() {
             Object.entries(registrosPorCategoria).map(([catNombre, regs]: [string, any]) => {
               const catOK = (regs as any[]).filter((r: any) => r.estado === 'OK').length;
               const catNOK = (regs as any[]).filter((r: any) => r.estado === 'NO_OK').length;
+              const catTotal = (regs as any[]).length;
+              const catPorcentaje = catTotal > 0 ? Math.round((catOK / catTotal) * 100) : 0;
               return (
                 <div key={catNombre} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                   <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-cyan-50 to-teal-50 flex items-center justify-between">
-                    <h3 className="text-lg font-bold text-slate-900"> {catNombre}</h3>
+                    <h3 className="text-lg font-bold text-slate-900">📁 {catNombre}</h3>
                     <div className="flex items-center gap-3 text-sm">
                       <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">✅ {catOK}</span>
                       {catNOK > 0 && <span className="px-3 py-1 rounded-full bg-rose-100 text-rose-700 font-semibold">⚠️ {catNOK}</span>}
-                      <span className="text-slate-500">Total: {(regs as any[]).length}</span>
+                      <span className="text-slate-500">Total: {catTotal} · {catPorcentaje}% OK</span>
                     </div>
                   </div>
                   <div className="overflow-x-auto">
@@ -370,12 +485,21 @@ export default function HACCPDashboard() {
   );
 }
 
-function StatCard({ title, value, color }: { title: string, value: string | number, color: string }) {
-  const colors: any = { blue: 'text-blue-600', emerald: 'text-emerald-600', rose: 'text-rose-600', amber: 'text-amber-600', orange: 'text-orange-600' };
+function KpiCard({ title, value, icon, color }: { title: string, value: string | number, icon: string, color: string }) {
+  const colors: any = {
+    blue: 'from-blue-500 to-cyan-500',
+    emerald: 'from-emerald-500 to-teal-500',
+    rose: 'from-rose-500 to-pink-500',
+    amber: 'from-amber-500 to-orange-500',
+    orange: 'from-orange-500 to-red-500',
+  };
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{title}</p>
-      <p className={`text-3xl font-bold ${colors[color] || 'text-slate-900'}`}>{value}</p>
+    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all">
+      <div className="flex items-start justify-between mb-2">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{title}</p>
+        <span className="text-2xl">{icon}</span>
+      </div>
+      <p className={`text-3xl font-bold bg-gradient-to-r ${colors[color]} bg-clip-text text-transparent`}>{value}</p>
     </div>
   );
 }
