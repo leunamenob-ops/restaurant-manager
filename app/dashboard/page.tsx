@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-// CATEGORÍAS HARDCODEADAS - Son fijas, no necesitan API
-const CATEGORIAS = [
+// CATEGORÍAS FIJAS - No dependen de API
+const CATEGORIAS_FIJAS = [
   { id: 'CAT_01', nombre: 'Refrigeración' },
   { id: 'CAT_02', nombre: 'Cocción' },
   { id: 'CAT_03', nombre: 'Limpieza' },
@@ -86,9 +86,9 @@ export default function HACCPDashboard() {
       const dataRegistros = await resRegistros.json();
       const registros = Array.isArray(dataRegistros) ? dataRegistros : [];
 
-      // MAPEO DIRECTO: Usamos el array CATEGORIAS para convertir IDs a nombres
+      // MAPEO: Convertir CAT_01 → Refrigeración usando CATEGORIAS_FIJAS
       const catMap: any = {};
-      CATEGORIAS.forEach(c => { catMap[c.id] = c.nombre; });
+      CATEGORIAS_FIJAS.forEach(c => { catMap[c.id] = c.nombre; });
 
       const porCategoria: any = {};
       registros.forEach((reg: any) => {
@@ -208,7 +208,7 @@ export default function HACCPDashboard() {
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Categoría</label>
               <select value={categoriaFiltro} onChange={(e) => handleCategoriaChange(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 text-sm">
                 <option value="todas">Todas las categorías</option>
-                {CATEGORIAS.map((cat) => (
+                {CATEGORIAS_FIJAS.map((cat) => (
                   <option key={cat.id} value={cat.id}>{cat.nombre}</option>
                 ))}
               </select>
