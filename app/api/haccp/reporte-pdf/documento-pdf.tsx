@@ -1,10 +1,4 @@
-import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
-
-// Registrar fuente Roboto para un look más moderno y profesional
-Font.register({
-  family: 'Roboto',
-  src: 'https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxK.woff'
-});
+import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 
 interface Props {
   inicio: string;
@@ -19,7 +13,7 @@ interface Props {
 const styles = StyleSheet.create({
   page: {
     padding: 40,
-    fontFamily: 'Roboto',
+    fontFamily: 'Helvetica', // Nativa, 100% compatible y sin errores en Vercel
     backgroundColor: '#ffffff',
     color: '#334155'
   },
