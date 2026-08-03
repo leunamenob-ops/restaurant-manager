@@ -1,8 +1,8 @@
 import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
 
-// Registrar fuente personalizada si es necesario
+// Registrar fuente Roboto para un look más moderno y profesional
 Font.register({
-  family: 'Helvetica',
+  family: 'Roboto',
   src: 'https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxK.woff'
 });
 
@@ -10,7 +10,6 @@ interface Props {
   inicio: string;
   fin: string;
   registrosPorCategoria: any;
-  categorias: any[];
   totalRegistros: number;
   totalOK: number;
   totalNOK: number;
@@ -20,56 +19,62 @@ interface Props {
 const styles = StyleSheet.create({
   page: {
     padding: 40,
-    fontFamily: 'Helvetica',
-    backgroundColor: '#ffffff'
+    fontFamily: 'Roboto',
+    backgroundColor: '#ffffff',
+    color: '#334155'
   },
   header: {
     marginBottom: 30,
     textAlign: 'center',
-    borderBottom: 3,
+    borderBottomWidth: 3,
     borderBottomColor: '#0891b2',
     paddingBottom: 20
   },
   logo: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: 'bold',
     color: '#0891b2',
-    marginBottom: 8
+    marginBottom: 8,
+    letterSpacing: 1
   },
   title: {
     fontSize: 16,
     color: '#0e7490',
-    marginBottom: 8
+    marginBottom: 8,
+    fontWeight: 'bold'
   },
   subtitle: {
     fontSize: 11,
     color: '#64748b',
-    marginBottom: 3
+    marginBottom: 4
   },
   section: {
     marginBottom: 25
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#ffffff',
     backgroundColor: '#0891b2',
-    padding: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     marginBottom: 10,
-    borderRadius: 4
+    borderRadius: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5
   },
   statsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 15
+    gap: 12,
+    marginBottom: 20
   },
   statBox: {
     flex: 1,
-    minWidth: '45%',
+    minWidth: '22%',
     padding: 12,
     backgroundColor: '#f8fafc',
-    borderLeft: 4,
+    borderLeftWidth: 4,
     borderLeftColor: '#0891b2',
     borderRadius: 4
   },
@@ -77,10 +82,11 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: '#64748b',
     marginBottom: 4,
-    textTransform: 'uppercase'
+    textTransform: 'uppercase',
+    fontWeight: 'bold'
   },
   statValue: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#0f172a'
   },
@@ -89,20 +95,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
     borderBottomWidth: 2,
     borderBottomColor: '#0891b2',
-    paddingVertical: 6,
-    paddingHorizontal: 4
+    paddingVertical: 8,
+    paddingHorizontal: 6
   },
   tableRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
-    paddingVertical: 6,
-    paddingHorizontal: 4
+    paddingVertical: 8,
+    paddingHorizontal: 6
   },
   colFecha: { width: '22%', fontSize: 9 },
-  colPCC: { width: '33%', fontSize: 9 },
+  colPCC: { width: '35%', fontSize: 9 },
   colValor: { width: '15%', fontSize: 9 },
-  colEstado: { width: '15%', fontSize: 9 },
+  colEstado: { width: '13%', fontSize: 9 },
   colUsuario: { width: '15%', fontSize: 9 },
   headerText: {
     fontSize: 9,
@@ -112,33 +118,36 @@ const styles = StyleSheet.create({
   },
   accionContainer: {
     backgroundColor: '#fef2f2',
-    borderLeft: 3,
+    borderLeftWidth: 3,
     borderLeftColor: '#dc2626',
     padding: 8,
     marginTop: 4,
-    marginLeft: 4,
-    marginRight: 4,
-    marginBottom: 8
+    marginBottom: 8,
+    marginLeft: 6,
+    marginRight: 6,
+    borderRadius: 4
   },
   accionText: {
     fontSize: 9,
-    color: '#dc2626',
+    color: '#991b1b',
     fontStyle: 'italic'
   },
   incidenciasTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#ffffff',
     backgroundColor: '#dc2626',
-    padding: 8,
-    marginBottom: 10,
-    borderRadius: 4
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 15,
+    borderRadius: 4,
+    textTransform: 'uppercase'
   },
   incidenciaItem: {
     marginBottom: 12,
-    padding: 10,
+    padding: 12,
     backgroundColor: '#fef2f2',
-    borderLeft: 3,
+    borderLeftWidth: 4,
     borderLeftColor: '#dc2626',
     borderRadius: 4
   },
@@ -148,11 +157,14 @@ const styles = StyleSheet.create({
     left: 40,
     right: 40,
     textAlign: 'center',
-    borderTop: 1,
+    borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
-    paddingTop: 15,
+    paddingTop: 15
+  },
+  footerText: {
     fontSize: 8,
-    color: '#94a3b8'
+    color: '#94a3b8',
+    marginBottom: 2
   }
 });
 
@@ -160,22 +172,11 @@ const ReporteHACCP: React.FC<Props> = ({
   inicio,
   fin,
   registrosPorCategoria,
-  categorias,
   totalRegistros,
   totalOK,
   totalNOK,
   porcentajeCumplimiento
 }) => {
-  // Crear mapa de categorías ID -> Nombre
-  const categoriasMap: Record<string, string> = {};
-  if (categorias && Array.isArray(categorias)) {
-    categorias.forEach(cat => {
-      if (cat.id && cat.nombre) {
-        categoriasMap[cat.id] = cat.nombre;
-      }
-    });
-  }
-
   const formatearFecha = (fechaStr: string) => {
     const [year, month, day] = fechaStr.split('-');
     return `${day}/${month}/${year}`;
@@ -198,7 +199,7 @@ const ReporteHACCP: React.FC<Props> = ({
         {/* HEADER */}
         <View style={styles.header}>
           <Text style={styles.logo}>KOST SOFTWARE</Text>
-          <Text style={styles.title}>Reporte HACCP - Control de Puntos Críticos</Text>
+          <Text style={styles.title}>Reporte de Control de Puntos Críticos (HACCP)</Text>
           <Text style={styles.subtitle}>
             Período: {formatearFecha(inicio)} al {formatearFecha(fin)}
           </Text>
@@ -210,7 +211,7 @@ const ReporteHACCP: React.FC<Props> = ({
         {/* ESTADÍSTICAS */}
         <View style={styles.section}>
           <View style={styles.sectionTitle}>
-            <Text>RESUMEN GENERAL</Text>
+            <Text>Resumen General</Text>
           </View>
           <View style={styles.statsContainer}>
             <View style={styles.statBox}>
@@ -236,8 +237,9 @@ const ReporteHACCP: React.FC<Props> = ({
 
         {/* REGISTROS POR CATEGORÍA */}
         {Object.keys(registrosPorCategoria).map((catId) => {
-          const catNombre = categoriasMap[catId] || catId;
-          const regs = registrosPorCategoria[catId];
+          const catData = registrosPorCategoria[catId];
+          const catNombre = catData.nombre || 'Sin Categoría';
+          const regs = catData.items || [];
           
           return (
             <View key={catId} style={styles.section} break>
@@ -247,8 +249,8 @@ const ReporteHACCP: React.FC<Props> = ({
               
               {/* Encabezados de tabla */}
               <View style={styles.tableHeader}>
-                <Text style={{...styles.headerText, ...styles.colFecha}}>Fecha/Hora</Text>
-                <Text style={{...styles.headerText, ...styles.colPCC}}>PCC</Text>
+                <Text style={{...styles.headerText, ...styles.colFecha}}>Fecha / Hora</Text>
+                <Text style={{...styles.headerText, ...styles.colPCC}}>Punto de Control</Text>
                 <Text style={{...styles.headerText, ...styles.colValor}}>Valor</Text>
                 <Text style={{...styles.headerText, ...styles.colEstado}}>Estado</Text>
                 <Text style={{...styles.headerText, ...styles.colUsuario}}>Usuario</Text>
@@ -277,7 +279,7 @@ const ReporteHACCP: React.FC<Props> = ({
                   {reg.accion_correctora && (
                     <View style={styles.accionContainer}>
                       <Text style={styles.accionText}>
-                        ⚠ Acción: {reg.accion_correctora}
+                        ⚠️ Acción Correctora: {reg.accion_correctora}
                       </Text>
                     </View>
                   )}
@@ -291,26 +293,26 @@ const ReporteHACCP: React.FC<Props> = ({
         {totalNOK > 0 && (
           <View style={styles.section} break>
             <View style={styles.incidenciasTitle}>
-              <Text>INCIDENCIAS DETECTADAS</Text>
+              <Text>Incidencias Detectadas</Text>
             </View>
             
-            {Object.values(registrosPorCategoria).flat()
+            {Object.values(registrosPorCategoria).flatMap((catData: any) => catData.items)
               .filter((r: any) => r.estado === 'NO_OK')
               .map((inc: any, index: number) => {
                 const pcc = inc.nombre_pcc || 'PCC desconocido';
                 return (
                   <View key={index} style={styles.incidenciaItem}>
-                    <Text style={{fontSize: 10, fontWeight: 'bold', color: '#1e293b', marginBottom: 4}}>
+                    <Text style={{fontSize: 11, fontWeight: 'bold', color: '#1e293b', marginBottom: 4}}>
                       {index + 1}. {pcc}
                     </Text>
                     <Text style={{fontSize: 9, color: '#64748b', marginBottom: 2}}>
-                       Fecha: {formatearFechaHora(inc.fecha_hora)}
+                      📅 Fecha: {formatearFechaHora(inc.fecha_hora)}
                     </Text>
                     <Text style={{fontSize: 9, color: '#64748b', marginBottom: 2}}>
-                      📊 Valor: {inc.valor_medido || inc.temp_final || 'N/A'} {inc.unidad || ''}
+                      📊 Valor Registrado: {inc.valor_medido || inc.temp_final || 'N/A'} {inc.unidad || ''}
                     </Text>
-                    <Text style={{fontSize: 9, color: '#dc2626', fontWeight: 'semibold'}}>
-                      🔧 Acción: {inc.accion_correctora || 'No documentada'}
+                    <Text style={{fontSize: 9, color: '#dc2626', fontWeight: 'bold'}}>
+                      🔧 Acción Correctora: {inc.accion_correctora || 'No documentada'}
                     </Text>
                   </View>
                 );
@@ -320,9 +322,10 @@ const ReporteHACCP: React.FC<Props> = ({
 
         {/* FOOTER */}
         <View style={styles.footer}>
-          <Text>Reporte generado automáticamente por KOST Software</Text>
-          <Text>Sistema de Gestión HACCP para Hostelería</Text>
-          <Text style={{marginTop: 4, fontSize: 7}}>© {new Date().getFullYear()} Todos los derechos reservados</Text>
+          <Text style={styles.footerText}>________________________________________</Text>
+          <Text style={styles.footerText}>Reporte generado automáticamente por KOST Software</Text>
+          <Text style={styles.footerText}>Sistema de Gestión HACCP para Hostelería</Text>
+          <Text style={{...styles.footerText, marginTop: 4, fontSize: 7}}>© {new Date().getFullYear()} Todos los derechos reservados</Text>
         </View>
       </Page>
     </Document>
