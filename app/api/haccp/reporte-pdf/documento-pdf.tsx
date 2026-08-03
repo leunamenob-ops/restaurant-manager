@@ -38,10 +38,17 @@ const ReporteHACCP: React.FC<Props> = ({
   totalNOK,
   porcentajeCumplimiento
 }) => {
-  const categoriasMap: any = {};
-  categorias.forEach(cat => {
-    categoriasMap[cat.id] = cat.nombre;
-  });
+  // Crear mapa de categorías ID -> Nombre
+  const categoriasMap: Record<string, string> = {};
+  if (categorias && Array.isArray(categorias)) {
+    categorias.forEach(cat => {
+      if (cat.id && cat.nombre) {
+        categoriasMap[cat.id] = cat.nombre;
+      }
+    });
+  }
+
+  console.log('📊 Categorías en PDF:', categoriasMap); // Debug
 
   const formatearFecha = (fechaStr: string) => {
     const [year, month, day] = fechaStr.split('-');
@@ -87,6 +94,7 @@ const ReporteHACCP: React.FC<Props> = ({
 
         {/* REGISTROS POR CATEGORÍA */}
         {Object.keys(registrosPorCategoria).map((catId) => {
+          // Usar el nombre de la categoría si existe, si no usar el ID
           const catNombre = categoriasMap[catId] || catId;
           const regs = registrosPorCategoria[catId];
           
@@ -173,6 +181,4 @@ const ReporteHACCP: React.FC<Props> = ({
   );
 };
 
-export default ReporteHACCP; 
-
-
+export default ReporteHACCP;
