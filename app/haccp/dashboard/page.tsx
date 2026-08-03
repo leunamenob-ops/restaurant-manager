@@ -28,29 +28,20 @@ export default function HACCPDashboard() {
   const [errorConexion, setErrorConexion] = useState('');
 
   useEffect(() => {
-    // Establecer fechas por defecto (últimos 7 días)
     const hoy = new Date().toISOString().split('T')[0];
     const hace7Dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     setFechaInicio(hace7Dias);
     setFechaFin(hoy);
-    
     cargarDatos(hace7Dias, hoy);
   }, []);
 
   async function cargarDatos(inicio: string, fin: string) {
     setLoading(true);
     setErrorConexion('');
-    
     try {
-      console.log('🔍 Cargando datos HACCP desde:', inicio, 'hasta:', fin);
-      
-      // Cargar estadísticas
       const resStats = await fetch(`/api/haccp/estadisticas?inicio=${inicio}&fin=${fin}`);
       const dataStats = await resStats.json();
-      
-      if (dataStats.error) {
-        throw new Error(dataStats.error);
-      }
+      if (dataStats.error) throw new Error(dataStats.error);
       
       setStats({
         totalRegistros: dataStats.totalRegistros || 0,
@@ -60,17 +51,14 @@ export default function HACCPDashboard() {
         incidenciasHoy: dataStats.incidenciasHoy || 0
       });
 
-      // Cargar registros recientes
       const resRegistros = await fetch(`/api/haccp/registros?inicio=${inicio}&fin=${fin}&limite=10`);
       const dataRegistros = await resRegistros.json();
       setRegistrosRecientes(Array.isArray(dataRegistros) ? dataRegistros : []);
 
-      // Cargar incidencias NO_OK
       const resIncidencias = await fetch(`/api/haccp/incidencias?inicio=${inicio}&fin=${fin}`);
       const dataIncidencias = await resIncidencias.json();
       setIncidencias(Array.isArray(dataIncidencias) ? dataIncidencias : []);
 
-      // Cargar categorías para el filtro
       const resCategorias = await fetch('/api/haccp/categorias');
       const dataCategorias = await resCategorias.json();
       setCategorias(Array.isArray(dataCategorias) ? dataCategorias : []);
@@ -90,10 +78,7 @@ export default function HACCPDashboard() {
   async function handleExportarPDF() {
     try {
       const catParam = categoriaFiltro === 'todas' ? '' : `&categoria=${categoriaFiltro}`;
-      // Apunta a la ruta que genera un HTML profesional listo para imprimir/guardar como PDF
       const url = `/api/haccp/reporte-pdf?inicio=${fechaInicio}&fin=${fechaFin}${catParam}`;
-      
-      // Abrir en nueva pestaña
       window.open(url, '_blank');
     } catch (error) {
       console.error('Error exportando reporte:', error);
@@ -103,81 +88,121 @@ export default function HACCPDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-cyan-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 text-lg">Cargando dashboard HACCP...</p>
+          <div className="w-16 h-16 bg-gradient-to-br from-cyan-600 to-teal-600 rounded-2xl flex items-center justify-center mx-auto mb-4 animate-pulse shadow-lg">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+          </div>
+          <p className="text-slate-600 font-medium animate-pulse">Cargando panel de control HACCP...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-cyan-50">
-      {/* Header */}
-      <header className="bg-gradient-to-r from-cyan-600 to-teal-600 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold flex items-center gap-3">
-                🛡️ Dashboard HACCP
-              </h1>
-              <p className="text-cyan-100 mt-1">Control, seguimiento y reportes de puntos críticos</p>
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+      {/* HEADER MODERNO (Estilo KOST Software) */}
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col sm:flex-row justify-between items-center py-4 gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-gradient-to-br from-cyan-600 to-teal-600 rounded-xl flex items-center justify-center shadow-md">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-slate-900 tracking-tight">Dashboard HACCP</h1>
+                <p className="text-sm text-slate-500">Control, seguimiento y reportes de puntos críticos</p>
+              </div>
             </div>
+            
             <button
               onClick={() => router.push('/haccp')}
-              className="px-6 py-3 bg-white/20 rounded-lg hover:bg-white/30 transition font-semibold flex items-center gap-2"
+              className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 text-sm font-medium transition-all shadow-sm hover:shadow-md flex items-center gap-2"
             >
-              <span>📝</span> Ir a Registro
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+              Ir a Registro
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-6 space-y-6">
-        {/* Mensaje de error de conexión */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Mensaje de error */}
         {errorConexion && (
-          <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
-            <p className="font-semibold">⚠️ {errorConexion}</p>
-            <button 
-              onClick={() => cargarDatos(fechaInicio, fechaFin)}
-              className="mt-2 text-sm underline hover:no-underline"
-            >
-              Reintentar
-            </button>
+          <div className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-xl flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <p className="font-medium">{errorConexion}</p>
+            </div>
+            <button onClick={() => cargarDatos(fechaInicio, fechaFin)} className="text-sm font-semibold underline hover:no-underline">Reintentar</button>
           </div>
         )}
 
-        {/* Filtros */}
-        <div className="bg-white rounded-xl shadow-md p-6 border border-slate-100">
-          <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <span>📅</span> Filtros de Búsqueda
+        {/* TARJETAS DE ESTADÍSTICAS */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <StatCard 
+            title="Total Registros" 
+            value={stats.totalRegistros} 
+            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>}
+            color="blue"
+          />
+          <StatCard 
+            title="Registros OK" 
+            value={stats.registrosOK} 
+            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+            color="emerald"
+          />
+          <StatCard 
+            title="Incidencias NO_OK" 
+            value={stats.registrosNOK} 
+            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+            color="rose"
+          />
+          <StatCard 
+            title="% Cumplimiento" 
+            value={`${stats.porcentajeCumplimiento}%`} 
+            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>}
+            color={stats.porcentajeCumplimiento >= 95 ? 'emerald' : stats.porcentajeCumplimiento >= 85 ? 'amber' : 'rose'}
+          />
+          <StatCard 
+            title="Incidencias Hoy" 
+            value={stats.incidenciasHoy} 
+            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+            color="orange"
+          />
+        </div>
+
+        {/* FILTROS */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+          <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+            Filtros de Búsqueda
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Fecha Inicio:</label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Fecha Inicio</label>
               <input
                 type="date"
                 value={fechaInicio}
                 onChange={(e) => setFechaInicio(e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all text-sm"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Fecha Fin:</label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Fecha Fin</label>
               <input
                 type="date"
                 value={fechaFin}
                 onChange={(e) => setFechaFin(e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all text-sm"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Categoría:</label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Categoría</label>
               <select
                 value={categoriaFiltro}
                 onChange={(e) => setCategoriaFiltro(e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 bg-white"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all text-sm"
               >
                 <option value="todas">Todas las categorías</option>
                 {Array.isArray(categorias) && categorias.map((cat: any) => (
@@ -188,78 +213,49 @@ export default function HACCPDashboard() {
             <div className="flex items-end gap-2">
               <button
                 onClick={handleFiltrar}
-                className="flex-1 px-6 py-3 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-semibold transition shadow-sm flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2.5 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-semibold transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2 text-sm"
               >
-                <span>🔍</span> Filtrar
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                Filtrar
               </button>
               <button
                 onClick={handleExportarPDF}
-                className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition shadow-sm flex items-center gap-2"
+                className="px-4 py-2.5 bg-rose-600 text-white rounded-lg hover:bg-rose-700 font-semibold transition-all shadow-sm hover:shadow-md flex items-center gap-2 text-sm"
                 title="Generar reporte para imprimir/guardar como PDF"
               >
-                <span>📄</span> Reporte
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                Reporte
               </button>
             </div>
           </div>
         </div>
 
-        {/* Estadísticas */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500">
-            <p className="text-gray-600 text-sm font-medium mb-1">Total Registros</p>
-            <p className="text-3xl font-bold text-blue-600">{stats.totalRegistros}</p>
-          </div>
-          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-green-500">
-            <p className="text-gray-600 text-sm font-medium mb-1">Registros OK</p>
-            <p className="text-3xl font-bold text-green-600">{stats.registrosOK}</p>
-          </div>
-          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-red-500">
-            <p className="text-gray-600 text-sm font-medium mb-1">Incidencias NO_OK</p>
-            <p className="text-3xl font-bold text-red-600">{stats.registrosNOK}</p>
-          </div>
-          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-purple-500">
-            <p className="text-gray-600 text-sm font-medium mb-1">% Cumplimiento</p>
-            <p className={`text-3xl font-bold ${stats.porcentajeCumplimiento >= 95 ? 'text-green-600' : stats.porcentajeCumplimiento >= 85 ? 'text-yellow-600' : 'text-red-600'}`}>
-              {stats.porcentajeCumplimiento}%
-            </p>
-          </div>
-          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-orange-500">
-            <p className="text-gray-600 text-sm font-medium mb-1">Incidencias Hoy</p>
-            <p className="text-3xl font-bold text-orange-600">{stats.incidenciasHoy}</p>
-          </div>
-        </div>
-
-        {/* Incidencias Críticas */}
+        {/* INCIDENCIAS CRÍTICAS */}
         {incidencias.length > 0 && (
-          <div className="bg-white rounded-xl shadow-md p-6 border border-red-100">
-            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <span className="text-red-600">⚠️</span> Incidencias Detectadas ({incidencias.length})
-            </h2>
+          <div className="bg-white rounded-2xl border border-rose-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-rose-100 bg-rose-50/50 flex items-center gap-2">
+              <svg className="w-5 h-5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+              <h2 className="text-lg font-bold text-rose-900">Incidencias Detectadas <span className="text-rose-600 font-normal">({incidencias.length})</span></h2>
+            </div>
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-red-50">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider text-xs">
                   <tr>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-red-800">Fecha/Hora</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-red-800">PCC</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-red-800">Valor</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-red-800">Acción Correctora</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-red-800">Usuario</th>
+                    <th className="px-6 py-3">Fecha/Hora</th>
+                    <th className="px-6 py-3">PCC</th>
+                    <th className="px-6 py-3">Valor</th>
+                    <th className="px-6 py-3">Acción Correctora</th>
+                    <th className="px-6 py-3">Usuario</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-slate-100">
                   {incidencias.map((inc: any, index: number) => (
-                    <tr key={inc.id_registro || index} className="hover:bg-red-50 transition">
-                      <td className="px-4 py-3 text-sm text-gray-900">
-                        {new Date(inc.fecha_hora).toLocaleString('es-ES')}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{inc.nombre_pcc}</td>
-                      <td className="px-4 py-3 text-sm text-red-600 font-semibold">
-                        {inc.valor_medido || inc.temp_final || '-'} {inc.unidad || ''}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-700 max-w-xs truncate" title={inc.accion_correctora}>
-                        {inc.accion_correctora || 'No documentada'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{inc.id_usuario}</td>
+                    <tr key={inc.id_registro || index} className="hover:bg-rose-50/30 transition-colors">
+                      <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{new Date(inc.fecha_hora).toLocaleString('es-ES')}</td>
+                      <td className="px-6 py-4 font-medium text-slate-900">{inc.nombre_pcc}</td>
+                      <td className="px-6 py-4 font-semibold text-rose-600">{inc.valor_medido || inc.temp_final || '-'} {inc.unidad || ''}</td>
+                      <td className="px-6 py-4 text-slate-600 max-w-xs truncate" title={inc.accion_correctora}>{inc.accion_correctora || 'No documentada'}</td>
+                      <td className="px-6 py-4 text-slate-500">{inc.id_usuario}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -268,49 +264,49 @@ export default function HACCPDashboard() {
           </div>
         )}
 
-        {/* Registros Recientes */}
-        <div className="bg-white rounded-xl shadow-md p-6 border border-slate-100">
-          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <span>📋</span> Registros Recientes
-          </h2>
+        {/* REGISTROS RECIENTES */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+            <svg className="w-5 h-5 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M17 16h.01" /></svg>
+            <h2 className="text-lg font-bold text-slate-900">Registros Recientes</h2>
+          </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider text-xs">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Fecha/Hora</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">PCC</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Valor</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Estado</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Usuario</th>
+                  <th className="px-6 py-3">Fecha/Hora</th>
+                  <th className="px-6 py-3">PCC</th>
+                  <th className="px-6 py-3">Valor</th>
+                  <th className="px-6 py-3">Estado</th>
+                  <th className="px-6 py-3">Usuario</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-slate-100">
                 {registrosRecientes.length > 0 ? (
                   registrosRecientes.map((reg: any, index: number) => (
-                    <tr key={reg.id_registro || index} className="hover:bg-gray-50 transition">
-                      <td className="px-4 py-3 text-sm text-gray-900">
-                        {new Date(reg.fecha_hora).toLocaleString('es-ES')}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{reg.nombre_pcc}</td>
-                      <td className="px-4 py-3 text-sm text-gray-700">
-                        {reg.valor_medido || reg.temp_final || '-'} {reg.unidad || ''}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    <tr key={reg.id_registro || index} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{new Date(reg.fecha_hora).toLocaleString('es-ES')}</td>
+                      <td className="px-6 py-4 font-medium text-slate-900">{reg.nombre_pcc}</td>
+                      <td className="px-6 py-4 text-slate-600">{reg.valor_medido || reg.temp_final || '-'} {reg.unidad || ''}</td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
                           reg.estado === 'OK' 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-red-100 text-red-800'
+                            ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
+                            : 'bg-rose-100 text-rose-700 border border-rose-200'
                         }`}>
-                          {reg.estado}
+                          {reg.estado === 'OK' ? '✓ ' : '⚠ '}{reg.estado}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{reg.id_usuario}</td>
+                      <td className="px-6 py-4 text-slate-500">{reg.id_usuario}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                      No hay registros en el período seleccionado.
+                    <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                      <div className="flex flex-col items-center gap-2">
+                        <svg className="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        <p>No hay registros en el período seleccionado.</p>
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -319,6 +315,39 @@ export default function HACCPDashboard() {
           </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+// Componente auxiliar para las tarjetas de estadísticas (Mantiene el código limpio)
+function StatCard({ title, value, icon, color }: { title: string, value: string | number, icon: React.ReactNode, color: string }) {
+  const colorMap: Record<string, string> = {
+    blue: 'bg-blue-50 text-blue-600 border-blue-100',
+    emerald: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+    rose: 'bg-rose-50 text-rose-600 border-rose-100',
+    amber: 'bg-amber-50 text-amber-600 border-amber-100',
+    orange: 'bg-orange-50 text-orange-600 border-orange-100',
+  };
+
+  const textColorMap: Record<string, string> = {
+    blue: 'text-blue-700',
+    emerald: 'text-emerald-700',
+    rose: 'text-rose-700',
+    amber: 'text-amber-700',
+    orange: 'text-orange-700',
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all duration-300">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{title}</p>
+          <p className={`text-3xl font-bold ${textColorMap[color] || 'text-slate-900'}`}>{value}</p>
+        </div>
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${colorMap[color]}`}>
+          {icon}
+        </div>
+      </div>
     </div>
   );
 }
