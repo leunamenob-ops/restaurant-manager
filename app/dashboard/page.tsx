@@ -21,8 +21,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // Definición de módulos - Facturas reemplaza Análisis de Costes (posición 8)
-  // Análisis de Costes + Informes combinados en posición 9
+  // Definición de módulos
   const todosLosModulos: Modulo[] = [
     { 
       id: 1, 
@@ -60,9 +59,9 @@ export default function DashboardPage() {
     { 
       id: 4, 
       nombre: 'HACCP', 
-      descripcion: 'Control de temperaturas, trazabilidad y checklists APPCC.', 
+      descripcion: 'Dashboard de control, registro de temperaturas, incidencias y reportes PDF.', 
       icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>, 
-      ruta: '/haccp', 
+      ruta: '/haccp/dashboard', // ✅ CAMBIO CLAVE: Apunta al nuevo Dashboard
       color: 'from-purple-50 to-white', 
       border: 'border-purple-200',
       iconBg: 'bg-purple-500',
@@ -139,7 +138,7 @@ export default function DashboardPage() {
       setPermisos(JSON.parse(permisosData));
     }
     setLoading(false);
-  }, []);
+  }, [router]);
 
   function logout() {
     sessionStorage.removeItem('usuario');
@@ -161,8 +160,12 @@ export default function DashboardPage() {
     );
   }
 
+  // Filtra los módulos según los permisos del usuario
   const modulosDisponibles = todosLosModulos.filter(m => {
-    const permiso = permisos[m.ruta.substring(1)];
+    // Nota: Si tu sistema de permisos usa la clave 'haccp' en lugar de 'haccp/dashboard', 
+    // puedes ajustar esta lógica. Por defecto, busca la ruta exacta sin la barra inicial.
+    const rutaLimpia = m.ruta.substring(1); 
+    const permiso = permisos[rutaLimpia] || permisos['haccp']; // Fallback a 'haccp' por si acaso
     return permiso?.puede_ver || usuario.rol === 'ADMIN';
   });
 
