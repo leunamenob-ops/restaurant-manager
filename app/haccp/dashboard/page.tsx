@@ -45,19 +45,98 @@ export default function HACCPDashboard() {
     iniciar();
   }, []);
 
+    // 🔥 Cargar categorías - VERSIÓN DEBUG
   async function cargarCategorias() {
     try {
-      const res = await fetch('/api/haccp/categorias');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      console.log('🔄 [DASHBOARD] Intentando cargar categorías...');
+      
+      const res = await fetch('/api/haccp/categorias', {
+        cache: 'no-store' // Forzar recarga
+      });
+      
+      console.log('📡 [DASHBOARD] Status:', res.status);
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('❌ [DASHBOARD] Error HTTP:', res.status, errorText);
+        throw new Error(`HTTP ${res.status}: ${errorText}`);
+      }
+      
       const data = await res.json();
-      if (Array.isArray(data)) {
+      console.log('✅ [DASHBOARD] Categorías recibidas:', data);
+      console.log('📊 [DASHBOARD] Cantidad:', Array.isArray(data) ? data.length : 'NO ES ARRAY');
+      
+      if (Array.isArray(data) && data.length > 0) {
         setCategorias(data);
+        console.log('✅ [DASHBOARD] Categorías guardadas en estado');
+      } else {
+        console.error('❌ [DASHBOARD] Los datos no son un array o están vacíos:', data);
+        setCategorias([]);
       }
     } catch (error) {
-      console.error('❌ Error cargando categorías:', error);
+      console.error('❌ [DASHBOARD] ERROR FATAL cargando categorías:', error);
       setCategorias([]);
     }
   }
+
+  // 🔥 Cargar PCCs - VERSIÓN DEBUG
+  async function cargarPCCs(categoriaId: string) {
+    try {
+      let url = '/api/haccp/pcc';
+      if (categoriaId && categoriaId !== 'todas') {
+        url += `?categoria=${categoriaId}`;
+      }
+      
+      console.log('🔄 [DASHBOARD] Cargando PCCs desde:', url);
+      const res = await fetch(url, { cache: 'no-store' });
+      
+      if (!res.ok) {
+        console.error('❌ [DASHBOARD] Error HTTP al cargar PCCs:', res.status);
+        return;
+      }
+      
+      const data = await res.json();
+      console.log('✅ [DASHBOARD] PCCs cargados:', data);
+      console.log('📊 [DASHBOARD] Cantidad PCCs:', Array.isArray(data) ? data.length : 0);
+      
+      if (Array.isArray(data)) {
+        setPccs(data);
+      } else {
+        setPccs([]);
+      }
+      
+      setPccFiltro('todas');
+    } catch (error) {
+      console.error('❌ [DASHBOARD] Error cargando PCCs:', error);
+      setPccs([]);
+    }
+  }
+
+  // 🔥 useEffect corregido - CARGA SECUENCIAL
+  useEffect(() => {
+    const hoy = new Date().toISOString().split('T')[0];
+    const hace7Dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    setFechaInicio(hace7Dias);
+    setFechaFin(hoy);
+    
+    console.log('🚀 [DASHBOARD] Inicializando...');
+    
+    // Carga secuencial para evitar condiciones de carrera
+    const iniciar = async () => {
+      console.log('1️⃣ Cargando categorías...');
+      await cargarCategorias();
+      
+      console.log('2️ Cargando PCCs...');
+      await cargarPCCs('todas');
+      
+      console.log('3️⃣ Cargando datos...');
+      await cargarDatos(hace7Dias, hoy, 'todas', 'todas');
+      
+      console.log('✅ [DASHBOARD] Inicialización completada');
+    };
+    
+    iniciar();
+  }, []);
 
   async function cargarPCCs(categoriaId: string) {
     try {
