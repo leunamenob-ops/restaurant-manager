@@ -30,36 +30,28 @@ export default function HACCPDashboard() {
   const [registrosPorCategoria, setRegistrosPorCategoria] = useState<any>({});
   const [errorConexion, setErrorConexion] = useState('');
 
+  // 🔥 Inicialización secuencial para evitar condiciones de carrera
   useEffect(() => {
     const hoy = new Date().toISOString().split('T')[0];
     const hace7Dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     setFechaInicio(hace7Dias);
     setFechaFin(hoy);
     
-    // Cargar datos iniciales
-    cargarCategorias();
-    cargarDatos(hace7Dias, hoy, 'todas', 'todas');
+    const iniciar = async () => {
+      await cargarCategorias();
+      await cargarPCCs('todas');
+      await cargarDatos(hace7Dias, hoy, 'todas', 'todas');
+    };
+    iniciar();
   }, []);
 
-  // 🔥 Cargar categorías desde la API
   async function cargarCategorias() {
     try {
-      console.log(' Cargando categorías...');
       const res = await fetch('/api/haccp/categorias');
-      
-      if (!res.ok) {
-        console.error('Error HTTP al cargar categorías:', res.status);
-        return;
-      }
-      
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      console.log('✅ Categorías cargadas:', data);
-      
       if (Array.isArray(data)) {
         setCategorias(data);
-      } else {
-        console.error('Las categorías no son un array:', data);
-        setCategorias([]);
       }
     } catch (error) {
       console.error('❌ Error cargando categorías:', error);
@@ -67,7 +59,6 @@ export default function HACCPDashboard() {
     }
   }
 
-  // 🔥 Cargar PCCs (filtrados por categoría si se especifica)
   async function cargarPCCs(categoriaId: string) {
     try {
       let url = '/api/haccp/pcc';
@@ -75,15 +66,12 @@ export default function HACCPDashboard() {
         url += `?categoria=${categoriaId}`;
       }
       
-      console.log(' Cargando PCCs desde:', url);
       const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       
-      console.log('✅ PCCs cargados:', data);
       setPccs(Array.isArray(data) ? data : []);
-      
-      // Resetear filtro PCC cuando cambia la categoría
-      setPccFiltro('todas');
+      setPccFiltro('todas'); // Resetear PCC al cambiar de categoría
     } catch (error) {
       console.error('❌ Error cargando PCCs:', error);
       setPccs([]);
@@ -95,7 +83,6 @@ export default function HACCPDashboard() {
     setErrorConexion('');
     
     try {
-      // Construir URLs con todos los filtros
       let urlStats = `/api/haccp/estadisticas?inicio=${inicio}&fin=${fin}`;
       let urlRegistros = `/api/haccp/registros?inicio=${inicio}&fin=${fin}&limite=100`;
       let urlIncidencias = `/api/haccp/incidencias?inicio=${inicio}&fin=${fin}`;
@@ -112,31 +99,34 @@ export default function HACCPDashboard() {
         urlIncidencias += `&id_pcc=${pcc}`;
       }
 
-      console.log(' Cargando datos con filtros:', { inicio, fin, categoria, pcc });
-
-      // Estadísticas
+      // 1. Estadísticas
       const resStats = await fetch(urlStats);
       const dataStats = await resStats.json();
-      if (!dataStats.error) {
-        setStats(dataStats);
-      }
+      if (!dataStats.error) setStats(dataStats);
 
-      // Registros
+      // 2. Registros
       const resRegistros = await fetch(urlRegistros);
       const dataRegistros = await resRegistros.json();
       const registros = Array.isArray(dataRegistros) ? dataRegistros : [];
       setRegistrosRecientes(registros);
 
-      // Agrupar por categoría
+      // 🔥 3. Agrupar por categoría (MAPEO SEGURO)
       const porCategoria: any = {};
+      const catMap: any = {};
+      // Creamos un diccionario ID -> Nombre usando las categorías que ya cargamos
+      categorias.forEach((c: any) => { catMap[c.id] = c.nombre; });
+
       registros.forEach((reg: any) => {
-        let catNombre = reg.categoria_nombre || 'Sin Categoría';
+        const catId = reg.haccp_pcc?.categoria_id || reg.categoria_id;
+        // Prioridad: 1. Mapa local, 2. Campo de la BD, 3. Fallback
+        let catNombre = catMap[catId] || reg.categoria_nombre || 'Sin Categoría';
+        
         if (!porCategoria[catNombre]) porCategoria[catNombre] = [];
         porCategoria[catNombre].push(reg);
       });
       setRegistrosPorCategoria(porCategoria);
 
-      // Incidencias
+      // 4. Incidencias
       const resIncidencias = await fetch(urlIncidencias);
       const dataIncidencias = await resIncidencias.json();
       setIncidencias(Array.isArray(dataIncidencias) ? dataIncidencias : []);
@@ -150,21 +140,17 @@ export default function HACCPDashboard() {
   }
 
   async function handleFiltrar() {
-    console.log(' Filtros aplicados:', { fechaInicio, fechaFin, categoriaFiltro, pccFiltro });
     await cargarDatos(fechaInicio, fechaFin, categoriaFiltro, pccFiltro);
   }
 
   async function handleCategoriaChange(valor: string) {
-    console.log(' Categoría seleccionada:', valor);
     setCategoriaFiltro(valor);
-    await cargarPCCs(valor); // Cargar PCCs de esa categoría
-    await cargarDatos(fechaInicio, fechaFin, valor, pccFiltro);
+    setPccFiltro('todas'); // 🔥 Resetear PCC inmediatamente para evitar filtros huérfanos
+    await cargarPCCs(valor); 
+    await cargarDatos(fechaInicio, fechaFin, valor, 'todas');
   }
 
-  // 🔥 NUEVO: Función para limpiar todos los filtros
   async function handleLimpiarFiltros() {
-    console.log(' Limpiando filtros...');
-    
     const hoy = new Date().toISOString().split('T')[0];
     const hace7Dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     
@@ -173,10 +159,7 @@ export default function HACCPDashboard() {
     setCategoriaFiltro('todas');
     setPccFiltro('todas');
     
-    // Recargar PCCs (todos)
     await cargarPCCs('todas');
-    
-    // Recargar datos con filtros por defecto
     await cargarDatos(hace7Dias, hoy, 'todas', 'todas');
   }
 
@@ -228,7 +211,6 @@ export default function HACCPDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* Mensaje de error */}
         {errorConexion && (
           <div className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-xl flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -246,12 +228,9 @@ export default function HACCPDashboard() {
               <svg className="w-5 h-5 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
               Filtros de Búsqueda
             </h2>
-            
-            {/* 🔥 BOTÓN LIMPIAR FILTROS */}
             <button
               onClick={handleLimpiarFiltros}
               className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-all flex items-center gap-2"
-              title="Restablecer todos los filtros"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
               Limpiar Filtros
@@ -295,7 +274,8 @@ export default function HACCPDashboard() {
               <select
                 value={pccFiltro}
                 onChange={(e) => setPccFiltro(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all text-sm"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all text-sm disabled:opacity-50"
+                disabled={categoriaFiltro === 'todas'}
               >
                 <option value="todas">Todos los PCCs</option>
                 {pccs.map((pcc: any) => (
@@ -316,7 +296,6 @@ export default function HACCPDashboard() {
             <button
               onClick={handleExportarPDF}
               className="px-4 py-2.5 bg-rose-600 text-white rounded-lg hover:bg-rose-700 font-semibold transition-all shadow-sm hover:shadow-md flex items-center gap-2 text-sm"
-              title="Generar reporte para imprimir/guardar como PDF"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
               Reporte
@@ -326,36 +305,11 @@ export default function HACCPDashboard() {
 
         {/* TARJETAS DE ESTADÍSTICAS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <StatCard 
-            title="Total Registros" 
-            value={stats.totalRegistros} 
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>}
-            color="blue"
-          />
-          <StatCard 
-            title="Registros OK" 
-            value={stats.registrosOK} 
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-            color="emerald"
-          />
-          <StatCard 
-            title="Incidencias NO_OK" 
-            value={stats.registrosNOK} 
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-            color="rose"
-          />
-          <StatCard 
-            title="% Cumplimiento" 
-            value={`${stats.porcentajeCumplimiento}%`} 
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>}
-            color={stats.porcentajeCumplimiento >= 95 ? 'emerald' : stats.porcentajeCumplimiento >= 85 ? 'amber' : 'rose'}
-          />
-          <StatCard 
-            title="Incidencias Hoy" 
-            value={stats.incidenciasHoy} 
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-            color="orange"
-          />
+          <StatCard title="Total Registros" value={stats.totalRegistros} icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>} color="blue" />
+          <StatCard title="Registros OK" value={stats.registrosOK} icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} color="emerald" />
+          <StatCard title="Incidencias NO_OK" value={stats.registrosNOK} icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} color="rose" />
+          <StatCard title="% Cumplimiento" value={`${stats.porcentajeCumplimiento}%`} icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} color={stats.porcentajeCumplimiento >= 95 ? 'emerald' : stats.porcentajeCumplimiento >= 85 ? 'amber' : 'rose'} />
+          <StatCard title="Incidencias Hoy" value={stats.incidenciasHoy} icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} color="orange" />
         </div>
 
         {/* INCIDENCIAS CRÍTICAS */}
@@ -382,7 +336,7 @@ export default function HACCPDashboard() {
                       <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{new Date(inc.fecha_hora).toLocaleString('es-ES')}</td>
                       <td className="px-6 py-4 font-medium text-slate-900">{inc.nombre_pcc}</td>
                       <td className="px-6 py-4 font-semibold text-rose-600">{inc.valor_medido || inc.temp_final || '-'} {inc.unidad || ''}</td>
-                      <td className="px-6 py-4 text-slate-600 max-w-xs truncate" title={inc.accion_correctora}>{inc.accion_correctora || 'No documentada'}</td>
+                      <td className="px-6 py-4 text-slate-600 max-w-xs truncate">{inc.accion_correctora || 'No documentada'}</td>
                       <td className="px-6 py-4 text-slate-500">{inc.id_usuario}</td>
                     </tr>
                   ))}
@@ -404,8 +358,8 @@ export default function HACCPDashboard() {
 
           {Object.keys(registrosPorCategoria).length > 0 ? (
             Object.entries(registrosPorCategoria).map(([catNombre, regs]: [string, any]) => {
-              const catOK = (regs as any[]).filter(r => r.estado === 'OK').length;
-              const catNOK = (regs as any[]).filter(r => r.estado === 'NO_OK').length;
+              const catOK = (regs as any[]).filter((r: any) => r.estado === 'OK').length;
+              const catNOK = (regs as any[]).filter((r: any) => r.estado === 'NO_OK').length;
               
               return (
                 <div key={catNombre} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
