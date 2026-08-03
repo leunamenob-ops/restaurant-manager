@@ -3,6 +3,15 @@ import { createClient } from '@supabase/supabase-js';
 import { renderToStream } from '@react-pdf/renderer';
 import ReporteHACCP from './documento-pdf';
 
+// 🛡️ FALLBACK DE SEGURIDAD: Si la BD de producción aún no tiene los nombres, esto lo arregla automáticamente
+const CATEGORIAS_FALLBACK: Record<string, string> = {
+  'CAT_01': 'Refrigeración',
+  'CAT_02': 'Cocción',
+  'CAT_03': 'Limpieza',
+  'CAT_04': 'Recepción',
+  'CAT_05': 'Almacenamiento',
+};
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -19,13 +28,14 @@ export async function GET(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    // 🔥 CONSULTA DIRECTA: Obtiene el nombre de la categoría sin mapeos manuales
+    // 🔥 CONSULTA: Obtiene nombre_pcc, categoria_id y categoria_nombre
     let query = supabase
       .from('haccp_registros')
       .select(`
         *,
         haccp_pcc (
           nombre_pcc,
+          categoria_id,
           categoria_nombre
         )
       `)
@@ -34,21 +44,31 @@ export async function GET(request: Request) {
       .order('fecha_hora', { ascending: false });
 
     if (categoria && categoria !== 'todas') {
-      // Si el frontend filtra, lo hace por el nombre o ID según tu lógica, 
-      // pero aquí simplificamos obteniendo todo y filtrando en JS si es necesario,
-      // o usando el campo correcto si tu frontend pasa el ID.
+      query = query.eq('haccp_pcc.categoria_id', categoria);
     }
 
     const { data: registros, error } = await query;
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Error Supabase:', error);
+      throw error;
+    }
 
-    // Organizar por categoría usando DIRECTAMENTE el nombre
+    // 🔍 DEBUG: Descomenta esto temporalmente para ver en los logs de Vercel qué devuelve la BD
+    // console.log('📊 Primer registro crudo:', registros?.[0]?.haccp_pcc);
+
+    // Organizar por categoría
     const registrosPorCategoria: any = {};
     
     registros?.forEach((reg: any) => {
       const pcc = reg.haccp_pcc || {};
-      // Usamos el nombre directo. Si está vacío, fallback seguro.
-      const catNombre = pcc.categoria_nombre || 'Sin Categoría';
+      
+      // 1. Intentamos usar categoria_nombre de la BD
+      let catNombre = pcc.categoria_nombre;
+      
+      // 2. Si está vacío, es null, o sigue siendo el ID (ej: "CAT_01"), usamos el fallback
+      if (!catNombre || catNombre.startsWith('CAT_')) {
+        catNombre = CATEGORIAS_FALLBACK[pcc.categoria_id] || pcc.categoria_id || 'Sin Categoría';
+      }
       
       if (!registrosPorCategoria[catNombre]) {
         registrosPorCategoria[catNombre] = {
