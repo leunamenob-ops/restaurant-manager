@@ -6,7 +6,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const inicio = searchParams.get('inicio');
     const fin = searchParams.get('fin');
-    const modo = searchParams.get('modo') || 'compacto'; // 'ejecutivo', 'compacto', 'detallado'
+    const modo = searchParams.get('modo') || 'ejecutivo'; // 'ejecutivo', 'compacto', 'detallado'
 
     if (!inicio || !fin) {
       return NextResponse.json({ error: 'Fechas requeridas' }, { status: 400 });
@@ -30,7 +30,6 @@ export async function GET(request: Request) {
 
     if (error) throw error;
 
-    // Fallback para categorías
     const CATEGORIAS_FALLBACK: Record<string, string> = {
       'CAT_01': 'Refrigeración',
       'CAT_02': 'Cocción',
@@ -48,7 +47,7 @@ export async function GET(request: Request) {
       }
       
       if (!registrosPorCategoria[catNombre]) {
-        registrosPorCategoria[catNombre] = { items: [], ok: 0, nok: 0, incidencias: [] };
+        registrosPorCategoria[catNombre] = { items: [], ok: 0, nok: 0 };
       }
       
       registrosPorCategoria[catNombre].items.push({
@@ -60,7 +59,6 @@ export async function GET(request: Request) {
         registrosPorCategoria[catNombre].ok++;
       } else {
         registrosPorCategoria[catNombre].nok++;
-        registrosPorCategoria[catNombre].incidencias.push(reg);
       }
     });
 
@@ -69,7 +67,6 @@ export async function GET(request: Request) {
     const totalNOK = registros?.filter((r: any) => r.estado === 'NO_OK').length || 0;
     const porcentajeCumplimiento = totalRegistros > 0 ? Math.round((totalOK / totalRegistros) * 100) : 0;
 
-    // Calcular días del período
     const fechaInicio = new Date(inicio);
     const fechaFin = new Date(fin);
     const dias = Math.ceil((fechaFin.getTime() - fechaInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
@@ -87,73 +84,70 @@ export async function GET(request: Request) {
       });
     };
 
-    // Generar HTML optimizado
+    // Generar HTML según el modo
     let html = `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Reporte HACCP ${inicio} - ${fin}</title>
+  <title>Reporte HACCP ${modo === 'detallado' ? 'Detallado' : modo === 'compacto' ? 'Compacto' : 'Ejecutivo'} ${inicio} - ${fin}</title>
   <style>
     * { box-sizing: border-box; }
     body { 
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
       margin: 0; 
-      padding: 30px; 
+      padding: ${modo === 'detallado' ? '20px' : '30px'}; 
       color: #1e293b;
       background: #ffffff;
-      line-height: 1.5;
-      font-size: 11px;
+      line-height: ${modo === 'detallado' ? '1.4' : '1.5'};
+      font-size: ${modo === 'detallado' ? '10px' : '11px'};
     }
     
     .header { 
       text-align: center; 
-      padding: 25px 20px;
+      padding: ${modo === 'detallado' ? '15px' : '25px'} ${modo === 'detallado' ? '10px' : '20px'};
       background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
       color: white;
-      border-radius: 8px;
-      margin-bottom: 25px;
+      border-radius: ${modo === 'detallado' ? '4px' : '8px'};
+      margin-bottom: ${modo === 'detallado' ? '15px' : '25px'};
     }
     .header h1 { 
       margin: 0; 
-      font-size: 28px; 
+      font-size: ${modo === 'detallado' ? '20px' : '28px'}; 
       font-weight: 700;
     }
     .header h2 { 
-      margin: 8px 0; 
-      font-size: 16px;
+      margin: ${modo === 'detallado' ? '5px' : '8px'} 0; 
+      font-size: ${modo === 'detallado' ? '12px' : '16px'};
       font-weight: 400;
-      opacity: 0.9;
     }
     .header p { 
-      margin: 5px 0; 
-      font-size: 13px;
-      opacity: 0.85;
+      margin: ${modo === 'detallado' ? '3px' : '5px'} 0; 
+      font-size: ${modo === 'detallado' ? '10px' : '13px'};
     }
     
-    /* KPIs en grid compacto */
     .kpi-grid { 
       display: grid; 
       grid-template-columns: repeat(5, 1fr); 
-      gap: 12px; 
-      margin-bottom: 25px; 
+      gap: ${modo === 'detallado' ? '8px' : '12px'}; 
+      margin-bottom: ${modo === 'detallado' ? '15px' : '25px'}; 
     }
     .kpi-card { 
       background: #f8fafc;
-      padding: 15px;
-      border-radius: 8px;
+      padding: ${modo === 'detallado' ? '10px' : '15px'};
+      border-radius: ${modo === 'detallado' ? '4px' : '8px'};
       border-left: 3px solid #0891b2;
     }
     .kpi-card.ok { border-left-color: #16a34a; }
     .kpi-card.nok { border-left-color: #dc2626; }
     .kpi-label { 
-      font-size: 10px; 
+      font-size: ${modo === 'detallado' ? '8px' : '10px'}; 
       color: #64748b; 
       text-transform: uppercase;
       font-weight: 600;
-      margin-bottom: 5px;
+      margin-bottom: ${modo === 'detallado' ? '3px' : '5px'};
     }
     .kpi-value { 
-      font-size: 28px; 
+      font-size: ${modo === 'detallado' ? '20px' : '28px'}; 
       font-weight: 700; 
       color: #0f172a;
       margin: 0;
@@ -161,58 +155,59 @@ export async function GET(request: Request) {
     .kpi-card.ok .kpi-value { color: #16a34a; }
     .kpi-card.nok .kpi-value { color: #dc2626; }
     .kpi-sub {
-      font-size: 9px;
+      font-size: ${modo === 'detallado' ? '8px' : '9px'};
       color: #94a3b8;
-      margin-top: 3px;
+      margin-top: ${modo === 'detallado' ? '2px' : '3px'};
     }
     
-    /* Resumen por categoría - tabla compacta */
+    ${modo !== 'detallado' ? `
     .resumen-categorias {
-      margin-bottom: 25px;
+      margin-bottom: ${modo === 'compacto' ? '15px' : '25px'};
       background: white;
-      border-radius: 8px;
+      border-radius: ${modo === 'compacto' ? '4px' : '8px'};
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
       overflow: hidden;
+      ${modo === 'detallado' ? 'display: none;' : ''}
     }
     .resumen-header {
       background: #f1f5f9;
-      padding: 10px 15px;
+      padding: ${modo === 'compacto' ? '8px' : '10px'} ${modo === 'compacto' ? '12px' : '15px'};
       font-weight: 700;
-      font-size: 12px;
+      font-size: ${modo === 'compacto' ? '11px' : '12px'};
       color: #475569;
       text-transform: uppercase;
     }
     .resumen-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 11px;
+      font-size: ${modo === 'compacto' ? '10px' : '11px'};
     }
     .resumen-table th {
       background: #f8fafc;
-      padding: 8px 12px;
+      padding: ${modo === 'compacto' ? '6px' : '8px'} ${modo === 'compacto' ? '8px' : '12px'};
       text-align: left;
-      font-size: 10px;
+      font-size: ${modo === 'compacto' ? '9px' : '10px'};
       color: #64748b;
       text-transform: uppercase;
       border-bottom: 1px solid #e2e8f0;
     }
     .resumen-table td {
-      padding: 8px 12px;
+      padding: ${modo === 'compacto' ? '6px' : '8px'} ${modo === 'compacto' ? '8px' : '12px'};
       border-bottom: 1px solid #f1f5f9;
     }
     .resumen-table tr:hover { background: #f8fafc; }
+    ` : ''}
     
     .badge {
       display: inline-block;
-      padding: 2px 8px;
+      padding: ${modo === 'detallado' ? '2px 6px' : '2px 8px'};
       border-radius: 12px;
-      font-size: 10px;
+      font-size: ${modo === 'detallado' ? '8px' : '10px'};
       font-weight: 700;
     }
     .badge-ok { background: #dcfce7; color: #16a34a; }
     .badge-nok { background: #fee2e2; color: #dc2626; }
     
-    /* Barra de progreso mini */
     .progress-mini {
       width: 60px;
       height: 6px;
@@ -230,65 +225,122 @@ export async function GET(request: Request) {
     .progress-mini-bar.warning { background: #eab308; }
     .progress-mini-bar.danger { background: #dc2626; }
     
-    /* Incidencias - solo estas se detallan */
+    /* Tabla detallada de registros */
+    .registros-section {
+      margin-bottom: 20px;
+      page-break-inside: avoid;
+      ${modo === 'ejecutivo' ? 'display: none;' : ''}
+    }
+    .cat-header {
+      background: ${modo === 'detallado' ? '#f1f5f9' : 'linear-gradient(135deg, #0891b2 0%, #0e7490 100%)'};
+      color: ${modo === 'detallado' ? '#1e293b' : 'white'};
+      padding: ${modo === 'detallado' ? '8px 12px' : '12px 18px'};
+      font-size: ${modo === 'detallado' ? '11px' : '14px'};
+      font-weight: 700;
+      border-radius: ${modo === 'detallado' ? '4px 4px 0 0' : '8px 8px 0 0'};
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .cat-stats {
+      display: flex;
+      gap: 10px;
+      font-size: ${modo === 'detallado' ? '10px' : '12px'};
+    }
+    .cat-stat {
+      background: ${modo === 'detallado' ? '#e2e8f0' : 'rgba(255,255,255,0.2)'};
+      padding: 3px 8px;
+      border-radius: 12px;
+    }
+    
+    .tabla-registros {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: ${modo === 'detallado' ? '9px' : '11px'};
+      background: white;
+    }
+    .tabla-registros th {
+      background: #f8fafc;
+      padding: ${modo === 'detallado' ? '6px' : '10px'} ${modo === 'detallado' ? '8px' : '12px'};
+      text-align: left;
+      font-size: ${modo === 'detallado' ? '8px' : '10px'};
+      color: #64748b;
+      text-transform: uppercase;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    .tabla-registros td {
+      padding: ${modo === 'detallado' ? '6px' : '10px'} ${modo === 'detallado' ? '8px' : '12px'};
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .tabla-registros tr:hover { background: #f8fafc; }
+    
+    .accion-box {
+      background: #fef2f2;
+      border-left: 3px solid #dc2626;
+      padding: ${modo === 'detallado' ? '4px 8px' : '8px 12px'};
+      margin: ${modo === 'detallado' ? '4px' : '8px'} 0;
+      border-radius: 4px;
+      font-size: ${modo === 'detallado' ? '9px' : '11px'};
+      color: #991b1b;
+      font-style: italic;
+    }
+    
     .incidencias-section {
-      margin-top: 25px;
+      margin-top: ${modo === 'detallado' ? '20px' : '25px'};
       page-break-inside: avoid;
     }
     .incidencias-header {
       background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
       color: white;
-      padding: 12px 18px;
-      border-radius: 8px 8px 0 0;
-      font-size: 14px;
+      padding: ${modo === 'detallado' ? '8px 15px' : '12px 18px'};
+      border-radius: ${modo === 'detallado' ? '4px' : '8px 8px 0 0'};
+      font-size: ${modo === 'detallado' ? '12px' : '14px'};
       font-weight: 700;
     }
     .incidencia-grid {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-      padding: 15px;
+      grid-template-columns: ${modo === 'detallado' ? '1fr' : 'repeat(2, 1fr)'};
+      gap: ${modo === 'detallado' ? '8px' : '10px'};
+      padding: ${modo === 'detallado' ? '10px' : '15px'};
       background: #fef2f2;
-      border-radius: 0 0 8px 8px;
+      border-radius: ${modo === 'detallado' ? '0 0 4px 4px' : '0 0 8px 8px'};
     }
     .incidencia-card {
       background: white;
-      padding: 10px 12px;
-      border-radius: 6px;
+      padding: ${modo === 'detallado' ? '8px' : '10px 12px'};
+      border-radius: ${modo === 'detallado' ? '4px' : '6px'};
       border-left: 3px solid #dc2626;
       box-shadow: 0 1px 3px rgba(220, 38, 38, 0.1);
     }
     .incidencia-title {
-      font-size: 12px;
+      font-size: ${modo === 'detallado' ? '10px' : '12px'};
       font-weight: 700;
       color: #1e293b;
-      margin-bottom: 5px;
+      margin-bottom: ${modo === 'detallado' ? '3px' : '5px'};
     }
     .incidencia-meta {
-      font-size: 10px;
+      font-size: ${modo === 'detallado' ? '8px' : '10px'};
       color: #64748b;
       margin: 2px 0;
     }
     .incidencia-action {
-      font-size: 10px;
+      font-size: ${modo === 'detallado' ? '8px' : '10px'};
       color: #dc2626;
       font-weight: 600;
-      margin-top: 5px;
-      padding-top: 5px;
+      margin-top: ${modo === 'detallado' ? '4px' : '5px'};
+      padding-top: ${modo === 'detallado' ? '3px' : '5px'};
       border-top: 1px solid #fee2e2;
     }
     
-    /* Footer */
-    .footer { 
-      margin-top: 40px; 
-      text-align: center; 
-      color: #94a3b8; 
-      font-size: 10px;
-      padding-top: 20px;
+    .footer {
+      margin-top: ${modo === 'detallado' ? '20px' : '40px'};
+      text-align: center;
+      color: #94a3b8;
+      font-size: ${modo === 'detallado' ? '9px' : '10px'};
+      padding-top: ${modo === 'detallado' ? '10px' : '20px'};
       border-top: 1px solid #e2e8f0;
     }
     
-    /* Controles de impresión */
     .print-controls {
       position: fixed;
       bottom: 20px;
@@ -298,6 +350,7 @@ export async function GET(request: Request) {
       border-radius: 12px;
       box-shadow: 0 8px 25px rgba(0,0,0,0.15);
       z-index: 1000;
+      ${modo === 'detallado' ? 'display: none;' : ''}
     }
     .print-controls h4 {
       margin: 0 0 10px 0;
@@ -318,8 +371,8 @@ export async function GET(request: Request) {
       transition: all 0.2s;
     }
     .mode-btn:hover { background: #e2e8f0; }
-    .mode-btn.active { 
-      background: #0891b2; 
+    .mode-btn.active {
+      background: #0891b2;
       color: white;
       border-color: #0891b2;
     }
@@ -336,12 +389,11 @@ export async function GET(request: Request) {
       margin-top: 10px;
     }
     
-    @media print { 
-      body { margin: 15px; padding: 15px; font-size: 10px; }
+    @media print {
+      body { margin: ${modo === 'detallado' ? '10px' : '15px'}; padding: ${modo === 'detallado' ? '10px' : '15px'}; }
       .no-print { display: none !important; }
       .kpi-card { box-shadow: none; border: 1px solid #e2e8f0; }
-      .resumen-categorias { box-shadow: none; border: 1px solid #e2e8f0; }
-      .incidencia-grid { grid-template-columns: 1fr; }
+      ${modo !== 'detallado' ? '.resumen-categorias { box-shadow: none; border: 1px solid #e2e8f0; }' : ''}
       @page { margin: 1cm; }
     }
     
@@ -351,12 +403,12 @@ export async function GET(request: Request) {
 <body>
   <div class="header">
     <h1>🛡️ KOST SOFTWARE</h1>
-    <h2>Reporte Ejecutivo HACCP</h2>
+    <h2>Reporte ${modo === 'detallado' ? 'Detallado' : modo === 'compacto' ? 'Compacto' : 'Ejecutivo'} HACCP</h2>
     <p>📅 Período: ${formatearFecha(inicio)} al ${formatearFecha(fin)} (${dias} días)</p>
     <p>📊 Promedio diario: ${promedioDiario} registros</p>
   </div>
 
-  <!-- KPIs Principales -->
+  <!-- KPIs Principales (Siempre visibles) -->
   <div class="kpi-grid">
     <div class="kpi-card">
       <div class="kpi-label">📊 Total Registros</div>
@@ -387,7 +439,8 @@ export async function GET(request: Request) {
     </div>
   </div>
 
-  <!-- Resumen por Categoría (TABLA COMPACTA) -->
+  ${modo !== 'detallado' ? `
+  <!-- Resumen por Categoría (Solo en Ejecutivo y Compacto) -->
   <div class="resumen-categorias">
     <div class="resumen-header">📊 Resumen por Categoría</div>
     <table class="resumen-table">
@@ -401,18 +454,18 @@ export async function GET(request: Request) {
           <th>Estado</th>
         </tr>
       </thead>
-      <tbody>`;
+      <tbody>` : ''}
 
-    Object.keys(registrosPorCategoria).forEach(catNombre => {
+    ${modo !== 'detallado' ? Object.keys(registrosPorCategoria).map(catNombre => {
       const catData = registrosPorCategoria[catNombre];
       const catTotal = catData.items.length;
       const catOK = catData.ok;
       const catNOK = catData.nok;
       const catCumplimiento = catTotal > 0 ? Math.round((catOK/catTotal)*100) : 0;
-      const estadoClass = catCumplimiento >= 95 ? 'badge-ok' : catCumplimiento >= 85 ? 'badge-nok' : 'badge-nok';
+      const estadoClass = catCumplimiento >= 95 ? 'badge-ok' : 'badge-nok';
       const progressClass = catCumplimiento >= 95 ? '' : catCumplimiento >= 85 ? 'warning' : 'danger';
 
-      html += `
+      return `
         <tr>
           <td style="font-weight: 600;"> ${catNombre}</td>
           <td>${catTotal}</td>
@@ -426,60 +479,119 @@ export async function GET(request: Request) {
           </td>
           <td><span class="badge ${estadoClass}">${catCumplimiento >= 95 ? 'OK' : 'REV'}</span></td>
         </tr>`;
-    });
+    }).join('') : ''}
 
-    html += `
+    ${modo !== 'detallado' ? `
       </tbody>
     </table>
-  </div>
+  </div>` : ''}
 
-  <!-- SOLO INCIDENCIAS DETALLADAS (No todos los registros OK) -->`;
+  ${modo !== 'ejecutivo' ? `
+  <!-- TODOS los registros (Solo en Compacto y Detallado) -->` : ''}
 
-    if (totalNOK > 0) {
-      html += `
+  ${modo !== 'ejecutivo' ? Object.keys(registrosPorCategoria).map(catNombre => {
+    const catData = registrosPorCategoria[catNombre];
+    const regs = catData.items;
+    const catTotal = regs.length;
+    const catOK = catData.ok;
+    const catNOK = catData.nok;
+
+    return `
+  <div class="registros-section">
+    <div class="cat-header">
+      <span>📁 ${catNombre}</span>
+      <div class="cat-stats">
+        <span class="cat-stat"> ${catTotal}</span>
+        <span class="cat-stat" style="background: rgba(22, 163, 74, 0.3); color: #16a34a;">✅ ${catOK}</span>
+        ${catNOK > 0 ? `<span class="cat-stat" style="background: rgba(220, 38, 38, 0.3); color: #dc2626;">⚠️ ${catNOK}</span>` : ''}
+      </div>
+    </div>
+    <table class="tabla-registros">
+      <thead>
+        <tr>
+          <th style="width: 22%">🕐 Fecha/Hora</th>
+          <th style="width: 35%">📍 Punto de Control</th>
+          <th style="width: 15%">📏 Valor</th>
+          <th style="width: 13%">✓ Estado</th>
+          <th style="width: 15%"> Usuario</th>
+        </tr>
+      </thead>
+      <tbody>`;
+  }).join('') : ''}
+
+  ${modo !== 'ejecutivo' ? registros?.map((reg: any) => {
+    let catNombre = reg.categoria_nombre;
+    if (!catNombre || catNombre.startsWith('CAT_')) {
+      catNombre = CATEGORIAS_FALLBACK[catNombre] || catNombre || 'Sin Categoría';
+    }
+    const badgeClass = reg.estado === 'OK' ? 'badge-ok' : 'badge-nok';
+    
+    return `
+        <tr>
+          <td>${formatearFechaHora(reg.fecha_hora)}</td>
+          <td style="font-weight: 600;">${reg.haccp_pcc?.nombre_pcc || 'Desconocido'}</td>
+          <td>${reg.valor_medido || reg.temp_final || '-'} ${reg.unidad || ''}</td>
+          <td><span class="badge ${badgeClass}">${reg.estado}</span></td>
+          <td>${reg.id_usuario}</td>
+        </tr>
+        ${reg.accion_correctora ? `
+        <tr>
+          <td colspan="5">
+            <div class="accion-box">Acción Correctora: ${reg.accion_correctora}</div>
+          </td>
+        </tr>` : ''}`;
+  }).join('') : ''}
+
+  ${modo !== 'ejecutivo' ? `
+      </tbody>
+    </table>
+  </div>` : ''}
+
+  ${Object.keys(registrosPorCategoria).map(() => '').join('</tbody></table></div>')}
+
+  <!-- Incidencias Destacadas (Siempre visibles) -->
+  ${totalNOK > 0 ? `
   <div class="incidencias-section">
     <div class="incidencias-header">🚨 INCIDENCIAS DETECTADAS (${totalNOK})</div>
-    <div class="incidencia-grid">`;
+    <div class="incidencia-grid">` : ''}
 
-      const incidencias = registros?.filter((r: any) => r.estado === 'NO_OK') || [];
-      incidencias.forEach((inc: any, index: number) => {
-        html += `
+  ${totalNOK > 0 ? registros?.filter((r: any) => r.estado === 'NO_OK').map((inc: any, index: number) => {
+    return `
       <div class="incidencia-card">
         <div class="incidencia-title">${index + 1}. ${inc.haccp_pcc?.nombre_pcc || 'PCC'}</div>
         <div class="incidencia-meta">📅 ${formatearFechaHora(inc.fecha_hora)}</div>
         <div class="incidencia-meta">📏 Valor: ${inc.valor_medido || inc.temp_final || 'N/A'} ${inc.unidad || ''}</div>
         <div class="incidencia-action">🔧 ${inc.accion_correctora || 'Sin acción documentada'}</div>
       </div>`;
-      });
+  }).join('') : ''}
 
-      html += `
+  ${totalNOK > 0 ? `
     </div>
-  </div>`;
-    }
+  </div>` : ''}
 
-    html += `
   <div class="footer">
     <p><strong>KOST Software</strong> - Sistema de Gestión HACCP para Hostelería</p>
     <p style="margin-top: 5px;">© ${new Date().getFullYear()} | Reporte generado automáticamente</p>
     <p style="margin-top: 5px; font-size: 9px;">Total: ${totalRegistros} registros | ${totalOK} OK | ${totalNOK} NO_OK | ${porcentajeCumplimiento}% cumplimiento</p>
   </div>
 
-  <!-- Controles de Impresión -->
+  ${modo !== 'detallado' ? `
+  <!-- Controles de Impresión (Ocultos en modo Detallado) -->
   <div class="print-controls no-print">
     <h4>🖨️ Opciones de Reporte</h4>
-    <button class="mode-btn active" onclick="window.location.href='?inicio=${inicio}&fin=${fin}&modo=ejecutivo'">
+    <button class="mode-btn ${modo === 'ejecutivo' ? 'active' : ''}" onclick="window.location.href='?inicio=${inicio}&fin=${fin}&modo=ejecutivo'">
       📊 Ejecutivo (1-2 páginas)
     </button>
-    <button class="mode-btn" onclick="window.location.href='?inicio=${inicio}&fin=${fin}&modo=compacto'">
-      📋 Compacto (Resumen + Incidencias)
+    <button class="mode-btn ${modo === 'compacto' ? 'active' : ''}" onclick="window.location.href='?inicio=${inicio}&fin=${fin}&modo=compacto'">
+      📋 Compacto (Resumen + Todos los registros)
     </button>
-    <button class="mode-btn" onclick="window.location.href='?inicio=${inicio}&fin=${fin}&modo=detallado'">
-      📄 Detallado (Todos los registros)
+    <button class="mode-btn ${modo === 'detallado' ? 'active' : ''}" onclick="window.location.href='?inicio=${inicio}&fin=${fin}&modo=detallado'">
+      📄 Detallado (Máximo detalle - ${totalRegistros} registros)
     </button>
     <button class="print-btn" onclick="window.print()">
-      📄 Imprimir / Guardar PDF
+       Imprimir / Guardar PDF
     </button>
-  </div>
+  </div>` : ''}
 
   <script>
     setTimeout(() => {
