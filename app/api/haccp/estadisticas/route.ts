@@ -6,82 +6,58 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const inicio = searchParams.get('inicio');
     const fin = searchParams.get('fin');
+    const categoria = searchParams.get('categoria');
+    const id_pcc = searchParams.get('id_pcc');
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // 1. Total registros
-    let queryTotal = supabase
-      .from('haccp_registros')
-      .select('*', { count: 'exact', head: true });
-
-    if (inicio && fin) {
-      // Añadir hora completa al rango
-      queryTotal = queryTotal
-        .gte('fecha_hora', `${inicio}T00:00:00`)
-        .lte('fecha_hora', `${fin}T23:59:59`);
+    if (!inicio || !fin) {
+      return NextResponse.json({ error: 'Fechas requeridas' }, { status: 400 });
     }
 
-    const { count: totalRegistros } = await queryTotal;
-    const total = totalRegistros || 0;
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
 
-    // 2. Registros OK
-    let queryOK = supabase
+    let query = supabase
       .from('haccp_registros')
-      .select('*', { count: 'exact', head: true })
-      .eq('estado', 'OK');
+      .select('estado, fecha_hora, haccp_pcc(categoria_id)')
+      .gte('fecha_hora', `${inicio}T00:00:00`)
+      .lte('fecha_hora', `${fin}T23:59:59`);
 
-    if (inicio && fin) {
-      queryOK = queryOK
-        .gte('fecha_hora', `${inicio}T00:00:00`)
-        .lte('fecha_hora', `${fin}T23:59:59`);
+    if (categoria && categoria !== 'todas') {
+      query = query.eq('haccp_pcc.categoria_id', categoria);
     }
 
-    const { count: registrosOK } = await queryOK;
-    const ok = registrosOK || 0;
-
-    // 3. Registros NO_OK
-    let queryNOK = supabase
-      .from('haccp_registros')
-      .select('*', { count: 'exact', head: true })
-      .eq('estado', 'NO_OK');
-
-    if (inicio && fin) {
-      queryNOK = queryNOK
-        .gte('fecha_hora', `${inicio}T00:00:00`)
-        .lte('fecha_hora', `${fin}T23:59:59`);
+    if (id_pcc && id_pcc !== 'todas') {
+      query = query.eq('id_pcc', id_pcc);
     }
 
-    const { count: registrosNOK } = await queryNOK;
-    const nok = registrosNOK || 0;
+    const { data, error } = await query;
 
-    // 4. Incidencias hoy
+    if (error) throw error;
+
+    const totalRegistros = data?.length || 0;
+    const registrosOK = data?.filter(r => r.estado === 'OK').length || 0;
+    const registrosNOK = data?.filter(r => r.estado === 'NO_OK').length || 0;
+    const porcentajeCumplimiento = totalRegistros > 0 ? Math.round((registrosOK / totalRegistros) * 100) : 0;
+
+    // Calcular incidencias de HOY (independientemente del filtro de fecha, o dentro del rango si se prefiere)
+    // Aquí lo calculamos dentro del rango seleccionado para coherencia, pero si quieres "hoy" real:
     const hoy = new Date().toISOString().split('T')[0];
-    const { count: incidenciasHoy } = await supabase
-      .from('haccp_registros')
-      .select('*', { count: 'exact', head: true })
-      .eq('estado', 'NO_OK')
-      .gte('fecha_hora', `${hoy}T00:00:00`)
-      .lte('fecha_hora', `${hoy}T23:59:59`);
-
-    const hoyNok = incidenciasHoy || 0;
-
-    // 5. Calcular porcentaje
-    const porcentajeCumplimiento = total > 0
-      ? Math.round((ok / total) * 100)
-      : 0;
+    const incidenciasHoy = data?.filter(r => 
+      r.estado === 'NO_OK' && r.fecha_hora.startsWith(hoy)
+    ).length || 0;
 
     return NextResponse.json({
-      totalRegistros: total,
-      registrosOK: ok,
-      registrosNOK: nok,
+      totalRegistros,
+      registrosOK,
+      registrosNOK,
       porcentajeCumplimiento,
-      incidenciasHoy: hoyNok
+      incidenciasHoy
     });
 
   } catch (error: any) {
-    console.error('Error en estadísticas:', error);
+    console.error('❌ Error obteniendo estadísticas:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
