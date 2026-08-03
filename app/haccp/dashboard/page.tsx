@@ -7,13 +7,11 @@ export default function HACCPDashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   
-  // Filtros
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState('todas');
   const [pccFiltro, setPccFiltro] = useState('todas');
   
-  // Estadísticas
   const [stats, setStats] = useState({
     totalRegistros: 0,
     registrosOK: 0,
@@ -22,7 +20,6 @@ export default function HACCPDashboard() {
     incidenciasHoy: 0
   });
 
-  // Datos
   const [registrosRecientes, setRegistrosRecientes] = useState<any[]>([]);
   const [incidencias, setIncidencias] = useState<any[]>([]);
   const [categorias, setCategorias] = useState<any[]>([]);
@@ -30,7 +27,7 @@ export default function HACCPDashboard() {
   const [registrosPorCategoria, setRegistrosPorCategoria] = useState<any>({});
   const [errorConexion, setErrorConexion] = useState('');
 
-  // 🔥 Inicialización secuencial para evitar condiciones de carrera
+  // 🔥 Inicialización secuencial
   useEffect(() => {
     const hoy = new Date().toISOString().split('T')[0];
     const hace7Dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -45,41 +42,22 @@ export default function HACCPDashboard() {
     iniciar();
   }, []);
 
-    // 🔥 Cargar categorías - VERSIÓN DEBUG
+  // 🔥 Cargar categorías
   async function cargarCategorias() {
     try {
-      console.log('🔄 [DASHBOARD] Intentando cargar categorías...');
-      
-      const res = await fetch('/api/haccp/categorias', {
-        cache: 'no-store' // Forzar recarga
-      });
-      
-      console.log('📡 [DASHBOARD] Status:', res.status);
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error('❌ [DASHBOARD] Error HTTP:', res.status, errorText);
-        throw new Error(`HTTP ${res.status}: ${errorText}`);
-      }
-      
+      const res = await fetch('/api/haccp/categorias', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      console.log('✅ [DASHBOARD] Categorías recibidas:', data);
-      console.log('📊 [DASHBOARD] Cantidad:', Array.isArray(data) ? data.length : 'NO ES ARRAY');
-      
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setCategorias(data);
-        console.log('✅ [DASHBOARD] Categorías guardadas en estado');
-      } else {
-        console.error('❌ [DASHBOARD] Los datos no son un array o están vacíos:', data);
-        setCategorias([]);
       }
     } catch (error) {
-      console.error('❌ [DASHBOARD] ERROR FATAL cargando categorías:', error);
+      console.error('Error cargando categorías:', error);
       setCategorias([]);
     }
   }
 
-  // 🔥 Cargar PCCs - VERSIÓN DEBUG
+  // 🔥 Cargar PCCs
   async function cargarPCCs(categoriaId: string) {
     try {
       let url = '/api/haccp/pcc';
@@ -87,76 +65,19 @@ export default function HACCPDashboard() {
         url += `?categoria=${categoriaId}`;
       }
       
-      console.log('🔄 [DASHBOARD] Cargando PCCs desde:', url);
       const res = await fetch(url, { cache: 'no-store' });
-      
-      if (!res.ok) {
-        console.error('❌ [DASHBOARD] Error HTTP al cargar PCCs:', res.status);
-        return;
-      }
-      
-      const data = await res.json();
-      console.log('✅ [DASHBOARD] PCCs cargados:', data);
-      console.log('📊 [DASHBOARD] Cantidad PCCs:', Array.isArray(data) ? data.length : 0);
-      
-      if (Array.isArray(data)) {
-        setPccs(data);
-      } else {
-        setPccs([]);
-      }
-      
-      setPccFiltro('todas');
-    } catch (error) {
-      console.error('❌ [DASHBOARD] Error cargando PCCs:', error);
-      setPccs([]);
-    }
-  }
-
-  // 🔥 useEffect corregido - CARGA SECUENCIAL
-  useEffect(() => {
-    const hoy = new Date().toISOString().split('T')[0];
-    const hace7Dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    setFechaInicio(hace7Dias);
-    setFechaFin(hoy);
-    
-    console.log('🚀 [DASHBOARD] Inicializando...');
-    
-    // Carga secuencial para evitar condiciones de carrera
-    const iniciar = async () => {
-      console.log('1️⃣ Cargando categorías...');
-      await cargarCategorias();
-      
-      console.log('2️ Cargando PCCs...');
-      await cargarPCCs('todas');
-      
-      console.log('3️⃣ Cargando datos...');
-      await cargarDatos(hace7Dias, hoy, 'todas', 'todas');
-      
-      console.log('✅ [DASHBOARD] Inicialización completada');
-    };
-    
-    iniciar();
-  }, []);
-
-  async function cargarPCCs(categoriaId: string) {
-    try {
-      let url = '/api/haccp/pcc';
-      if (categoriaId && categoriaId !== 'todas') {
-        url += `?categoria=${categoriaId}`;
-      }
-      
-      const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       
       setPccs(Array.isArray(data) ? data : []);
-      setPccFiltro('todas'); // Resetear PCC al cambiar de categoría
+      setPccFiltro('todas');
     } catch (error) {
-      console.error('❌ Error cargando PCCs:', error);
+      console.error('Error cargando PCCs:', error);
       setPccs([]);
     }
   }
 
+  // 🔥 Cargar datos (registros, stats, incidencias)
   async function cargarDatos(inicio: string, fin: string, categoria: string = 'todas', pcc: string = 'todas') {
     setLoading(true);
     setErrorConexion('');
@@ -178,26 +99,22 @@ export default function HACCPDashboard() {
         urlIncidencias += `&id_pcc=${pcc}`;
       }
 
-      // 1. Estadísticas
       const resStats = await fetch(urlStats);
       const dataStats = await resStats.json();
       if (!dataStats.error) setStats(dataStats);
 
-      // 2. Registros
       const resRegistros = await fetch(urlRegistros);
       const dataRegistros = await resRegistros.json();
       const registros = Array.isArray(dataRegistros) ? dataRegistros : [];
       setRegistrosRecientes(registros);
 
-      // 🔥 3. Agrupar por categoría (MAPEO SEGURO)
+      // 🔥 Mapeo seguro de categorías usando el diccionario cargado
       const porCategoria: any = {};
       const catMap: any = {};
-      // Creamos un diccionario ID -> Nombre usando las categorías que ya cargamos
       categorias.forEach((c: any) => { catMap[c.id] = c.nombre; });
 
       registros.forEach((reg: any) => {
         const catId = reg.haccp_pcc?.categoria_id || reg.categoria_id;
-        // Prioridad: 1. Mapa local, 2. Campo de la BD, 3. Fallback
         let catNombre = catMap[catId] || reg.categoria_nombre || 'Sin Categoría';
         
         if (!porCategoria[catNombre]) porCategoria[catNombre] = [];
@@ -205,14 +122,13 @@ export default function HACCPDashboard() {
       });
       setRegistrosPorCategoria(porCategoria);
 
-      // 4. Incidencias
       const resIncidencias = await fetch(urlIncidencias);
       const dataIncidencias = await resIncidencias.json();
       setIncidencias(Array.isArray(dataIncidencias) ? dataIncidencias : []);
 
     } catch (error) {
-      console.error('❌ Error cargando datos:', error);
-      setErrorConexion('Error al cargar datos. Verifica la conexión.');
+      console.error('Error cargando datos:', error);
+      setErrorConexion('Error al cargar datos.');
     } finally {
       setLoading(false);
     }
@@ -224,8 +140,8 @@ export default function HACCPDashboard() {
 
   async function handleCategoriaChange(valor: string) {
     setCategoriaFiltro(valor);
-    setPccFiltro('todas'); // 🔥 Resetear PCC inmediatamente para evitar filtros huérfanos
-    await cargarPCCs(valor); 
+    setPccFiltro('todas');
+    await cargarPCCs(valor);
     await cargarDatos(fechaInicio, fechaFin, valor, 'todas');
   }
 
@@ -264,7 +180,6 @@ export default function HACCPDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      {/* HEADER */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row justify-between items-center py-4 gap-4">
@@ -277,7 +192,6 @@ export default function HACCPDashboard() {
                 <p className="text-sm text-slate-500">Control, seguimiento y reportes de puntos críticos</p>
               </div>
             </div>
-            
             <button
               onClick={() => router.push('/haccp')}
               className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 text-sm font-medium transition-all shadow-sm hover:shadow-md flex items-center gap-2"
@@ -353,7 +267,7 @@ export default function HACCPDashboard() {
               <select
                 value={pccFiltro}
                 onChange={(e) => setPccFiltro(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all text-sm disabled:opacity-50"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all text-sm"
                 disabled={categoriaFiltro === 'todas'}
               >
                 <option value="todas">Todos los PCCs</option>
@@ -382,7 +296,7 @@ export default function HACCPDashboard() {
           </div>
         </div>
 
-        {/* TARJETAS DE ESTADÍSTICAS */}
+        {/* ESTADÍSTICAS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <StatCard title="Total Registros" value={stats.totalRegistros} icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>} color="blue" />
           <StatCard title="Registros OK" value={stats.registrosOK} icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} color="emerald" />
@@ -391,7 +305,7 @@ export default function HACCPDashboard() {
           <StatCard title="Incidencias Hoy" value={stats.incidenciasHoy} icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} color="orange" />
         </div>
 
-        {/* INCIDENCIAS CRÍTICAS */}
+        {/* INCIDENCIAS */}
         {incidencias.length > 0 && (
           <div className="bg-white rounded-2xl border border-rose-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-rose-100 bg-rose-50/50 flex items-center gap-2">
@@ -425,7 +339,7 @@ export default function HACCPDashboard() {
           </div>
         )}
 
-        {/* REGISTROS AGRUPADOS POR CATEGORÍA */}
+        {/* REGISTROS POR CATEGORÍA */}
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -508,7 +422,6 @@ export default function HACCPDashboard() {
   );
 }
 
-// Componente auxiliar para las tarjetas de estadísticas
 function StatCard({ title, value, icon, color }: { title: string, value: string | number, icon: React.ReactNode, color: string }) {
   const colorMap: Record<string, string> = {
     blue: 'bg-blue-50 text-blue-600 border-blue-100',
