@@ -10,11 +10,13 @@ export default function HACCPDashboard() {
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState('todas');
+  const [pccFiltro, setPccFiltro] = useState('todas');
   
   const [stats, setStats] = useState({ totalRegistros: 0, registrosOK: 0, registrosNOK: 0, porcentajeCumplimiento: 0, incidenciasHoy: 0 });
   const [registrosRecientes, setRegistrosRecientes] = useState<any[]>([]);
   const [incidencias, setIncidencias] = useState<any[]>([]);
   const [categorias, setCategorias] = useState<any[]>([]);
+  const [pccs, setPccs] = useState<any[]>([]);
   const [registrosPorCategoria, setRegistrosPorCategoria] = useState<any>({});
   const [errorConexion, setErrorConexion] = useState('');
 
@@ -23,8 +25,9 @@ export default function HACCPDashboard() {
     const hace7Dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     setFechaInicio(hace7Dias);
     setFechaFin(hoy);
-    cargarCategorias(); // Cargar categorías al inicio
-    cargarDatos(hace7Dias, hoy, 'todas');
+    cargarCategorias();
+    cargarPCCs('todas');
+    cargarDatos(hace7Dias, hoy, 'todas', 'todas');
   }, []);
 
   async function cargarCategorias() {
@@ -37,61 +40,85 @@ export default function HACCPDashboard() {
     }
   }
 
-  async function cargarDatos(inicio: string, fin: string, categoria: string = 'todas') {
+  async function cargarPCCs(categoriaId: string) {
+    try {
+      let url = '/api/haccp/pcc';
+      if (categoriaId && categoriaId !== 'todas') {
+        url += `?categoria=${categoriaId}`;
+      }
+      
+      const res = await fetch(url);
+      const data = await res.json();
+      setPccs(Array.isArray(data) ? data : []);
+      setPccFiltro('todas');
+    } catch (error) {
+      console.error('Error cargando PCCs:', error);
+    }
+  }
+
+  async function cargarDatos(inicio: string, fin: string, categoria: string = 'todas', pcc: string = 'todas') {
     setLoading(true);
     setErrorConexion('');
     try {
+      let urlStats = `/api/haccp/estadisticas?inicio=${inicio}&fin=${fin}`;
       let urlRegistros = `/api/haccp/registros?inicio=${inicio}&fin=${fin}&limite=100`;
       let urlIncidencias = `/api/haccp/incidencias?inicio=${inicio}&fin=${fin}`;
       
       if (categoria !== 'todas') {
+        urlStats += `&categoria=${categoria}`;
         urlRegistros += `&categoria=${categoria}`;
         urlIncidencias += `&categoria=${categoria}`;
       }
+      
+      if (pcc !== 'todas') {
+        urlStats += `&id_pcc=${pcc}`;
+        urlRegistros += `&id_pcc=${pcc}`;
+        urlIncidencias += `&id_pcc=${pcc}`;
+      }
 
-      // 1. Estadísticas
-      let urlStats = `/api/haccp/estadisticas?inicio=${inicio}&fin=${fin}`;
-      if (categoria !== 'todas') urlStats += `&categoria=${categoria}`;
       const resStats = await fetch(urlStats);
       const dataStats = await resStats.json();
       if (!dataStats.error) setStats(dataStats);
 
-      // 2. Registros
       const resRegistros = await fetch(urlRegistros);
       const dataRegistros = await resRegistros.json();
       const registros = Array.isArray(dataRegistros) ? dataRegistros : [];
       setRegistrosRecientes(registros);
 
-      // Agrupar por categoría (usando el nombre si existe, o fallback)
       const porCategoria: any = {};
       registros.forEach((reg: any) => {
-        // Intenta usar categoria_nombre, si no, usa un fallback basado en el ID del PCC si estuviera disponible
         let catNombre = reg.categoria_nombre || 'Sin Categoría';
         if (!porCategoria[catNombre]) porCategoria[catNombre] = [];
         porCategoria[catNombre].push(reg);
       });
       setRegistrosPorCategoria(porCategoria);
 
-      // 3. Incidencias
       const resIncidencias = await fetch(urlIncidencias);
       const dataIncidencias = await resIncidencias.json();
       setIncidencias(Array.isArray(dataIncidencias) ? dataIncidencias : []);
 
     } catch (error) {
       console.error('❌ Error cargando datos:', error);
-      setErrorConexion('Error al cargar datos. Verifica la conexión.');
+      setErrorConexion('Error al cargar datos.');
     } finally {
       setLoading(false);
     }
   }
 
   async function handleFiltrar() {
-    await cargarDatos(fechaInicio, fechaFin, categoriaFiltro);
+    await cargarDatos(fechaInicio, fechaFin, categoriaFiltro, pccFiltro);
+  }
+
+  async function handleCategoriaChange(valor: string) {
+    setCategoriaFiltro(valor);
+    await cargarPCCs(valor);
+    await cargarDatos(fechaInicio, fechaFin, valor, pccFiltro);
   }
 
   async function handleExportarPDF() {
-    const catParam = categoriaFiltro === 'todas' ? '' : `&categoria=${categoriaFiltro}`;
-    const url = `/api/haccp/reporte-pdf?inicio=${fechaInicio}&fin=${fechaFin}${catParam}`;
+    let url = `/api/haccp/reporte-pdf?inicio=${fechaInicio}&fin=${fechaFin}`;
+    if (categoriaFiltro !== 'todas') url += `&categoria=${categoriaFiltro}`;
+    if (pccFiltro !== 'todas') url += `&id_pcc=${pccFiltro}`;
     window.open(url, '_blank');
   }
 
@@ -102,7 +129,7 @@ export default function HACCPDashboard() {
           <div className="w-16 h-16 bg-gradient-to-br from-cyan-600 to-teal-600 rounded-2xl flex items-center justify-center mx-auto mb-4 animate-pulse shadow-lg">
             <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
           </div>
-          <p className="text-slate-600 font-medium animate-pulse">Cargando panel...</p>
+          <p className="text-slate-600 font-medium animate-pulse">Cargando...</p>
         </div>
       </div>
     );
@@ -134,12 +161,16 @@ export default function HACCPDashboard() {
         {errorConexion && (
           <div className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-xl flex items-center justify-between">
             <p className="font-medium">{errorConexion}</p>
-            <button onClick={() => cargarDatos(fechaInicio, fechaFin, categoriaFiltro)} className="text-sm font-semibold underline">Reintentar</button>
+            <button onClick={handleFiltrar} className="text-sm font-semibold underline">Reintentar</button>
           </div>
         )}
 
-        {/* FILTROS */}
+        {/* FILTROS - 3 NIVELES */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+          <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+            Filtros de Búsqueda
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Fecha Inicio</label>
@@ -151,17 +182,40 @@ export default function HACCPDashboard() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Categoría</label>
-              <select value={categoriaFiltro} onChange={(e) => setCategoriaFiltro(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 text-sm">
+              <select 
+                value={categoriaFiltro} 
+                onChange={(e) => handleCategoriaChange(e.target.value)} 
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 text-sm"
+              >
                 <option value="todas">Todas las categorías</option>
                 {categorias.map((cat: any) => (
                   <option key={cat.id} value={cat.id}>{cat.nombre}</option>
                 ))}
               </select>
             </div>
-            <div className="flex items-end gap-2">
-              <button onClick={handleFiltrar} className="flex-1 px-4 py-2.5 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-semibold transition-all text-sm">Filtrar</button>
-              <button onClick={handleExportarPDF} className="px-4 py-2.5 bg-rose-600 text-white rounded-lg hover:bg-rose-700 font-semibold transition-all text-sm">📄 Reporte</button>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Punto de Control (PCC)</label>
+              <select 
+                value={pccFiltro} 
+                onChange={(e) => setPccFiltro(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 text-sm"
+              >
+                <option value="todas">Todos los PCCs</option>
+                {pccs.map((pcc: any) => (
+                  <option key={pcc.id_pcc} value={pcc.id_pcc}>{pcc.nombre_pcc}</option>
+                ))}
+              </select>
             </div>
+          </div>
+          <div className="mt-4 flex gap-2">
+            <button onClick={handleFiltrar} className="flex-1 px-4 py-2.5 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-semibold transition-all text-sm flex items-center justify-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              Filtrar
+            </button>
+            <button onClick={handleExportarPDF} className="px-4 py-2.5 bg-rose-600 text-white rounded-lg hover:bg-rose-700 font-semibold transition-all text-sm flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              Reporte
+            </button>
           </div>
         </div>
 
@@ -173,7 +227,41 @@ export default function HACCPDashboard() {
           <StatCard title="% Cumplimiento" value={`${stats.porcentajeCumplimiento}%`} color={stats.porcentajeCumplimiento >= 95 ? 'emerald' : 'amber'} />
         </div>
 
-        {/* REGISTROS AGRUPADOS POR CATEGORÍA */}
+        {/* INCIDENCIAS */}
+        {incidencias.length > 0 && (
+          <div className="bg-white rounded-2xl border border-rose-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-rose-100 bg-rose-50/50 flex items-center gap-2">
+              <svg className="w-5 h-5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+              <h2 className="text-lg font-bold text-rose-900">Incidencias Detectadas <span className="text-rose-600 font-normal">({incidencias.length})</span></h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider text-xs">
+                  <tr>
+                    <th className="px-6 py-3">Fecha/Hora</th>
+                    <th className="px-6 py-3">PCC</th>
+                    <th className="px-6 py-3">Valor</th>
+                    <th className="px-6 py-3">Acción Correctora</th>
+                    <th className="px-6 py-3">Usuario</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {incidencias.map((inc: any, index: number) => (
+                    <tr key={inc.id_registro || index} className="hover:bg-rose-50/30 transition-colors">
+                      <td className="px-6 py-4 text-slate-600 whitespace-nowrap">{new Date(inc.fecha_hora).toLocaleString('es-ES')}</td>
+                      <td className="px-6 py-4 font-medium text-slate-900">{inc.nombre_pcc}</td>
+                      <td className="px-6 py-4 font-semibold text-rose-600">{inc.valor_medido || inc.temp_final || '-'} {inc.unidad || ''}</td>
+                      <td className="px-6 py-4 text-slate-600 max-w-xs truncate">{inc.accion_correctora || 'No documentada'}</td>
+                      <td className="px-6 py-4 text-slate-500">{inc.id_usuario}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* REGISTROS POR CATEGORÍA */}
         <div className="space-y-6">
           {Object.keys(registrosPorCategoria).length > 0 ? (
             Object.entries(registrosPorCategoria).map(([catNombre, regs]: [string, any]) => {
@@ -186,13 +274,19 @@ export default function HACCPDashboard() {
                     <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">📁 {catNombre}</h3>
                     <div className="flex items-center gap-3 text-sm">
                       <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">✅ {catOK}</span>
-                      {catNOK > 0 && <span className="px-3 py-1 rounded-full bg-rose-100 text-rose-700 font-semibold">⚠️ {catNOK}</span>}
+                      {catNOK > 0 && <span className="px-3 py-1 rounded-full bg-rose-100 text-rose-700 font-semibold">️ {catNOK}</span>}
                     </div>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
                       <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider text-xs">
-                        <tr><th className="px-6 py-3">Fecha/Hora</th><th className="px-6 py-3">PCC</th><th className="px-6 py-3">Valor</th><th className="px-6 py-3">Estado</th><th className="px-6 py-3">Usuario</th></tr>
+                        <tr>
+                          <th className="px-6 py-3">Fecha/Hora</th>
+                          <th className="px-6 py-3">PCC</th>
+                          <th className="px-6 py-3">Valor</th>
+                          <th className="px-6 py-3">Estado</th>
+                          <th className="px-6 py-3">Usuario</th>
+                        </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {(regs as any[]).map((reg: any, index: number) => (
