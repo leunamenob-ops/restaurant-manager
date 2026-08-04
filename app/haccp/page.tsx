@@ -13,6 +13,7 @@ interface Categoria {
   iconBg: string;
   totalPCCs: number;
   pccsCompletadosHoy: number;
+  // porcentajeCompletado se calcula, no viene de la BD
 }
 
 const CATEGORIAS_DATA = [
@@ -76,7 +77,7 @@ export default function HACCPHome() {
     try {
       const hoy = new Date().toISOString().split('T')[0];
       
-      // Obtener categorías con conteo de PCCs
+      // Obtener categorías
       const resCategorias = await fetch('/api/haccp/categorias');
       const dataCategorias = await resCategorias.json();
 
@@ -84,35 +85,31 @@ export default function HACCPHome() {
       const resRegistros = await fetch(`/api/haccp/registros?inicio=${hoy}&fin=${hoy}`);
       const registrosHoy = await resRegistros.json();
 
-      // Calcular estadísticas por categoría
-      const categoriasConStats = dataCategorias.map((cat: any) => {
-        const pccsCompletados = new Set(
-          registrosHoy
-            .filter((r: any) => r.haccp_pcc?.categoria_id === cat.id)
-            .map((r: any) => r.id_pcc)
-        ).size;
-
-        return {
-          ...cat,
-          totalPCCs: 0, // Se calculará en el siguiente paso
-          pccsCompletadosHoy: pccsCompletados
-        };
-      });
-
-      // Obtener total de PCCs por categoría
+      // Obtener todos los PCCs
       const resPCCs = await fetch('/api/haccp/pcc');
       const allPCCs = await resPCCs.json();
 
-      const categoriasFinales = categoriasConStats.map((cat: any) => {
-        const totalPCCs = allPCCs.filter((pcc: any) => pcc.categoria_id === cat.id).length;
+      // Calcular estadísticas por categoría
+      const categoriasConStats = CATEGORIAS_DATA.map((catBase) => {
+        const totalPCCs = allPCCs.filter((pcc: any) => pcc.categoria_id === catBase.id).length;
+        
+        const pccsCompletados = new Set(
+          registrosHoy
+            .filter((r: any) => r.haccp_pcc?.categoria_id === catBase.id)
+            .map((r: any) => r.id_pcc)
+        ).size;
+
+        const porcentajeCompletado = totalPCCs > 0 ? Math.round((pccsCompletados / totalPCCs) * 100) : 0;
+
         return {
-          ...cat,
+          ...catBase,
           totalPCCs,
-          porcentajeCompletado: totalPCCs > 0 ? Math.round((cat.pccsCompletadosHoy / totalPCCs) * 100) : 0
+          pccsCompletadosHoy: pccsCompletados,
+          porcentajeCompletado
         };
       });
 
-      setCategorias(categoriasFinales);
+      setCategorias(categoriasConStats);
     } catch (error) {
       console.error('Error cargando categorías:', error);
     } finally {
@@ -143,7 +140,7 @@ export default function HACCPHome() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
-                onClick={() => window.history.back()}
+                onClick={() => router.push('/dashboard')}
                 className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
