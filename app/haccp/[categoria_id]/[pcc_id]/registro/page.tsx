@@ -283,7 +283,7 @@ export default function RegistroRapidoPage() {
                     ? 'border-rose-300 bg-rose-50 text-rose-700' 
                     : 'border-slate-200 bg-slate-50 text-slate-900'
                 }`}
-                placeholder={`Ej: ${pcc.limite_min !== null ? (pcc.limite_min + pcc.limite_max) / 2 : '3.5'}`}
+                placeholder={`Ej: ${pcc.limite_min !== null && pcc.limite_max !== null ? (pcc.limite_min + pcc.limite_max) / 2 : '3.5'}`}
                 required
               />
               {estaFueraDeRango && (
