@@ -87,23 +87,19 @@ export default function RegistroRapidoPage() {
 
   const requiereAccionCorrectora = estaFueraDeRango || cumpleSiNo === 'NO';
 
-  // 🔥 Validación antes de enviar
-  function validarFormulario(): boolean {
-    if (esNumerico && valorMedido === '') {
-      setMensaje('❌ Debes introducir un valor numérico');
-      return false;
-    }
-    if (esCualitativo && !cumpleSiNo) {
-      setMensaje('❌ Debes seleccionar SÍ o NO');
-      return false;
-    }
-    if (requiereAccionCorrectora && !accionCorrectora.trim()) {
-      setMensaje('❌ La acción correctora es obligatoria');
-      return false;
-    }
-    return true;
-  }
-
+  <div>
+  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">
+    URL de Foto <span className="text-rose-500">*</span>
+  </label>
+  <input
+    type="text"
+    value={fotoEvidencia}
+    onChange={(e) => { setFotoEvidencia(e.target.value); setMensaje(''); }}
+    className="w-full p-3 border border-slate-200 rounded-lg"
+    placeholder="https://..."
+    required={requiereAccionCorrectora}
+  />
+</div>
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!pcc) return;
