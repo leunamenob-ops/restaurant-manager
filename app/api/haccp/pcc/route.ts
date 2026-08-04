@@ -13,14 +13,15 @@ export async function GET(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
+    // 🔥 IMPORTANTE: Seleccionar TODAS las columnas necesarias
     let query = supabase
       .from('haccp_pcc')
-      .select('id_pcc, nombre_pcc, categoria_id')
+      .select('id_pcc, nombre_pcc, categoria_id, tipo_control, limite_min, limite_max, unidad, frecuencia, descripcion, categoria_nombre')
       .order('nombre_pcc');
 
     // Si se especifica categoría, filtrar
     if (categoria && categoria !== 'todas') {
-      console.log(' Filtrando por categoría:', categoria);
+      console.log('🔍 Filtrando por categoría:', categoria);
       query = query.eq('categoria_id', categoria);
     }
 
@@ -32,6 +33,7 @@ export async function GET(request: Request) {
     }
 
     console.log('✅ PCCs encontrados:', data?.length || 0);
+    console.log('📋 Primer PCC:', data?.[0]);
 
     return NextResponse.json(data || []);
 
