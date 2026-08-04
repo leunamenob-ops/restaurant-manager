@@ -18,7 +18,6 @@ export async function GET(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    // 🔥 CONSULTA ACTUALIZADA CON foto_evidencia Y haccp_categorias
     let query = supabase
       .from('haccp_registros')
       .select(`
@@ -56,19 +55,24 @@ export async function GET(request: Request) {
 
     if (error) throw error;
 
-    // 🔥 APLANAR DATOS PARA EL FRONTEND (extrayendo correctamente el nombre de la categoría)
-    const incidenciasAplanadas = data?.map(inc => ({
-      id_registro: inc.id_registro,
-      id_pcc: inc.id_pcc,
-      nombre_pcc: inc.haccp_pcc?.nombre_pcc || 'Desconocido',
-      categoria_nombre: inc.haccp_pcc?.haccp_categorias?.nombre || 'Sin Categoría',
-      valor_medido: inc.valor_medido,
-      unidad: inc.unidad,
-      accion_correctora: inc.accion_correctora,
-      foto_evidencia: inc.foto_evidencia,
-      fecha_hora: inc.fecha_hora,
-      id_usuario: inc.id_usuario
-    })) || [];
+    // 🔥 APLANAR DATOS CORRECTAMENTE (haccp_pcc viene como array)
+    const incidenciasAplanadas = data?.map((inc: any) => {
+      // haccp_pcc viene como array, tomamos el primer elemento
+      const pcc = Array.isArray(inc.haccp_pcc) ? inc.haccp_pcc[0] : inc.haccp_pcc;
+      
+      return {
+        id_registro: inc.id_registro,
+        id_pcc: inc.id_pcc,
+        nombre_pcc: pcc?.nombre_pcc || 'Desconocido',
+        categoria_nombre: pcc?.haccp_categorias?.[0]?.nombre || 'Sin Categoría',
+        valor_medido: inc.valor_medido,
+        unidad: inc.unidad,
+        accion_correctora: inc.accion_correctora,
+        foto_evidencia: inc.foto_evidencia,
+        fecha_hora: inc.fecha_hora,
+        id_usuario: inc.id_usuario
+      };
+    }) || [];
 
     return NextResponse.json(incidenciasAplanadas);
 
