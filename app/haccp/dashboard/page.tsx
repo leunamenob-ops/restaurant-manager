@@ -7,33 +7,39 @@ import { useRouter } from 'next/navigation';
 const CATEGORIAS = [
   { 
     id: 'CAT_01', 
-    nombre: 'Refrigeración', 
+    nombre: 'Refrigeración y Equipos de Frío', 
     icono: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
     color: 'text-cyan-600 bg-cyan-50 border-cyan-200'
   },
   { 
     id: 'CAT_02', 
-    nombre: 'Cocción', 
+    nombre: 'Cocción y Procesos', 
     icono: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" /></svg>,
     color: 'text-orange-600 bg-orange-50 border-orange-200'
   },
   { 
     id: 'CAT_03', 
-    nombre: 'Limpieza', 
+    nombre: 'Limpieza y Desinfección', 
     icono: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>,
     color: 'text-emerald-600 bg-emerald-50 border-emerald-200'
   },
   { 
     id: 'CAT_04', 
-    nombre: 'Recepción', 
+    nombre: 'Recepción de Mercancías', 
     icono: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
     color: 'text-purple-600 bg-purple-50 border-purple-200'
   },
   { 
     id: 'CAT_05', 
-    nombre: 'Almacenamiento', 
+    nombre: 'Almacenamiento y FIFO', 
     icono: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>,
     color: 'text-amber-600 bg-amber-50 border-amber-200'
+  },
+  { 
+    id: 'CAT_06', 
+    nombre: 'Buffet y Exposición', 
+    icono: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>,
+    color: 'text-pink-600 bg-pink-50 border-pink-200'
   },
 ];
 
@@ -193,7 +199,7 @@ export default function HACCPDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50/50 font-sans text-slate-900 selection:bg-cyan-100 selection:text-cyan-900">
-      {/* HEADER */}
+      {/* HEADER CORREGIDO CON BOTÓN INCIDENCIAS */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row justify-between items-center py-4 gap-4">
@@ -214,6 +220,16 @@ export default function HACCPDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* 🔥 NUEVO: Botón Ver Incidencias */}
+              <button
+                onClick={() => router.push('/haccp/incidencias')}
+                className="px-4 py-2 text-sm font-medium text-rose-600 bg-rose-50 rounded-lg hover:bg-rose-100 transition-all flex items-center gap-2 border border-rose-200"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                Ver Incidencias
+              </button>
               <button
                 onClick={() => router.push('/dashboard')}
                 className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 flex items-center gap-2 shadow-sm"
