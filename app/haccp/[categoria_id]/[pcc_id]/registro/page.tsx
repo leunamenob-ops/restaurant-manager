@@ -12,13 +12,15 @@ interface PCC {
   limite_min: number | null;
   limite_max: number | null;
   unidad: string;
+  descripcion: string;
+  categoria_nombre: string;
 }
 
 const CATEGORIAS_INFO: Record<string, { nombre: string; icono: string; color: string; bg: string }> = {
   'CAT_01': { nombre: 'Refrigeración y Equipos de Frío', icono: '❄️', color: 'text-cyan-600', bg: 'bg-cyan-500' },
   'CAT_02': { nombre: 'Cocción y Procesos', icono: '🔥', color: 'text-orange-600', bg: 'bg-orange-500' },
   'CAT_03': { nombre: 'Limpieza y Desinfección', icono: '🧹', color: 'text-emerald-600', bg: 'bg-emerald-500' },
-  'CAT_04': { nombre: 'Recepción de Mercancías', icono: '', color: 'text-purple-600', bg: 'bg-purple-500' },
+  'CAT_04': { nombre: 'Recepción de Mercancías', icono: '📦', color: 'text-purple-600', bg: 'bg-purple-500' },
   'CAT_05': { nombre: 'Almacenamiento y FIFO', icono: '🗄️', color: 'text-amber-600', bg: 'bg-amber-500' },
   'CAT_06': { nombre: 'Buffet y Exposición', icono: '🍽️', color: 'text-pink-600', bg: 'bg-pink-500' },
 };
@@ -41,14 +43,14 @@ export default function RegistroRapidoPage() {
   const catInfo = CATEGORIAS_INFO[categoriaId] || { nombre: 'Categoría', icono: '', color: 'text-slate-600', bg: 'bg-slate-500' };
 
   useEffect(() => {
-    console.log(' Cargando PCC:', { categoriaId, pccId });
     cargarPCC();
   }, [pccId, categoriaId]);
 
   async function cargarPCC() {
     setLoading(true);
+    setMensaje('');
     try {
-      console.log('📡 Fetching PCCs for categoria:', categoriaId);
+      console.log('📡 Fetching PCC for categoria:', categoriaId, 'pccId:', pccId);
       const res = await fetch(`/api/haccp/pcc?categoria=${categoriaId}`);
       
       if (!res.ok) {
@@ -56,10 +58,11 @@ export default function RegistroRapidoPage() {
       }
       
       const allPCCs = await res.json();
-      console.log('✅ PCCs recibidos:', allPCCs);
+      console.log('✅ PCCs recibidos:', allPCCs.length);
+      console.log(' Primer PCC:', allPCCs[0]);
       
       const pccEncontrado = allPCCs.find((p: any) => p.id_pcc === pccId);
-      console.log('🎯 PCC encontrado:', pccEncontrado);
+      console.log(' PCC encontrado:', pccEncontrado);
       
       if (pccEncontrado) {
         setPcc(pccEncontrado);
@@ -74,46 +77,52 @@ export default function RegistroRapidoPage() {
     }
   }
 
-  const estaFueraDeRango = pcc && pcc.tipo_control === 'NUMERICO' && valorMedido !== '' 
-    ? (parseFloat(valorMedido) < (pcc.limite_min || -Infinity) || parseFloat(valorMedido) > (pcc.limite_max || Infinity))
+  const esNumerico = pcc?.tipo_control === 'NUMERICO';
+  const esCualitativo = pcc?.tipo_control === 'CUALITATIVO';
+  const esProceso = pcc?.tipo_control === 'PROCESO';
+
+  const estaFueraDeRango = esNumerico && valorMedido !== '' 
+    ? (parseFloat(valorMedido) < (pcc!.limite_min || -Infinity) || parseFloat(valorMedido) > (pcc!.limite_max || Infinity))
     : false;
 
   const requiereAccionCorrectora = estaFueraDeRango || cumpleSiNo === 'NO';
 
+  // 🔥 Validación antes de enviar
+  function validarFormulario(): boolean {
+    if (esNumerico && valorMedido === '') {
+      setMensaje('❌ Debes introducir un valor numérico');
+      return false;
+    }
+    if (esCualitativo && !cumpleSiNo) {
+      setMensaje('❌ Debes seleccionar SÍ o NO');
+      return false;
+    }
+    if (requiereAccionCorrectora && !accionCorrectora.trim()) {
+      setMensaje('❌ La acción correctora es obligatoria');
+      return false;
+    }
+    return true;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!pcc) {
-      setMensaje('❌ No hay un PCC seleccionado');
-      return;
-    }
+    if (!pcc) return;
+
+    if (!validarFormulario()) return;
 
     setGuardando(true);
     setMensaje('');
 
-    // Obtener usuario de session storage
     const usuarioData = sessionStorage.getItem('usuario');
-    console.log('👤 Usuario en session:', usuarioData);
-    
     let user;
     try {
       user = usuarioData ? JSON.parse(usuarioData) : null;
     } catch (e) {
-      console.error('Error parsing usuario:', e);
       user = null;
     }
 
-    // Usar ID de usuario válido - fallback a 'B0003' si no existe
-    const userId = user?.id_usuario || user?.id || 'B0003';
+    const userId = user?.id_usuario || 'B0003';
     const hotelId = sessionStorage.getItem('hotel_id') || '00000000-0000-0000-0000-000000000001';
-
-    console.log('📝 Datos a guardar:', {
-      id_pcc: pcc.id_pcc,
-      id_usuario: userId,
-      hotel_id: hotelId,
-      valor_medido: (pcc.tipo_control === 'NUMERICO' || pcc.tipo_control === 'PROCESO') && valorMedido !== '' ? parseFloat(valorMedido) : null,
-      cumple_si_no: requiereAccionCorrectora ? 'NO' : 'SÍ',
-      accion_correctora: requiereAccionCorrectora ? accionCorrectora : null,
-    });
 
     const estado = requiereAccionCorrectora ? 'NO_OK' : 'OK';
 
@@ -121,7 +130,7 @@ export default function RegistroRapidoPage() {
       id_pcc: pcc.id_pcc,
       id_usuario: userId,
       hotel_id: hotelId,
-      valor_medido: (pcc.tipo_control === 'NUMERICO' || pcc.tipo_control === 'PROCESO') && valorMedido !== '' ? parseFloat(valorMedido) : null,
+      valor_medido: esNumerico && valorMedido !== '' ? parseFloat(valorMedido) : null,
       unidad: pcc.unidad || null,
       cumple_si_no: requiereAccionCorrectora ? 'NO' : 'SÍ',
       accion_correctora: requiereAccionCorrectora ? accionCorrectora : null,
@@ -130,8 +139,9 @@ export default function RegistroRapidoPage() {
       notificado: estado === 'NO_OK'
     };
 
+    console.log('🚀 Enviando registro:', registro);
+
     try {
-      console.log('🚀 Enviando registro...');
       const res = await fetch('/api/haccp/registrar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -148,7 +158,7 @@ export default function RegistroRapidoPage() {
           router.push(`/haccp/${categoriaId}`);
         }, 2000);
       } else {
-        setMensaje(`❌ Error: ${data.error}${data.details ? ' (' + data.details + ')' : ''}`);
+        setMensaje(`❌ Error: ${data.error}${data.details ? ' - ' + data.details : ''}`);
       }
     } catch (error: any) {
       console.error('❌ Error al guardar:', error);
@@ -182,7 +192,7 @@ export default function RegistroRapidoPage() {
             onClick={() => router.push(`/haccp/${categoriaId}`)}
             className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
           >
-            Volver a {catInfo.nombre}
+            Volver
           </button>
         </div>
       </div>
@@ -228,15 +238,16 @@ export default function RegistroRapidoPage() {
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
           
-          {/* Debug info - mostrar datos del PCC */}
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs font-mono">
-            <p className="text-slate-500 mb-2">DEBUG - Datos del PCC:</p>
-            <pre className="text-slate-700 overflow-auto">
+          {/* DEBUG - Mostrar datos completos del PCC */}
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <p className="text-xs text-slate-500 mb-2 font-semibold">DEBUG - Datos del PCC:</p>
+            <pre className="text-xs text-slate-700 overflow-auto font-mono">
               {JSON.stringify(pcc, null, 2)}
             </pre>
           </div>
 
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Info del PCC */}
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Tipo de control</p>
               <p className="text-sm font-semibold text-slate-900">{pcc.tipo_control || 'No definido'}</p>
@@ -253,7 +264,8 @@ export default function RegistroRapidoPage() {
             </div>
           </div>
 
-          {(pcc.tipo_control === 'NUMERICO' || pcc.tipo_control === 'PROCESO') && (
+          {/* Campo para Valor Numérico */}
+          {esNumerico && (
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
                 Valor medido {pcc.unidad && `(${pcc.unidad})`} *
@@ -262,57 +274,131 @@ export default function RegistroRapidoPage() {
                 type="number"
                 step="0.1"
                 value={valorMedido}
-                onChange={(e) => setValorMedido(e.target.value)}
+                onChange={(e) => {
+                  setValorMedido(e.target.value);
+                  setMensaje('');
+                }}
                 className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all text-lg font-semibold ${
                   estaFueraDeRango 
                     ? 'border-rose-300 bg-rose-50 text-rose-700' 
                     : 'border-slate-200 bg-slate-50 text-slate-900'
                 }`}
-                placeholder="Ej: 3.5"
+                placeholder={`Ej: ${pcc.limite_min !== null ? (pcc.limite_min + pcc.limite_max) / 2 : '3.5'}`}
                 required
               />
               {estaFueraDeRango && (
-                <p className="text-rose-600 text-sm mt-2 font-medium">
-                  ¡Valor fuera de rango! ({pcc.limite_min} - {pcc.limite_max})
+                <p className="text-rose-600 text-sm mt-2 font-medium flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                  ¡Valor fuera de rango! ({pcc.limite_min} - {pcc.limite_max} {pcc.unidad})
                 </p>
+              )}
+              {pcc.limite_min !== null && pcc.limite_max !== null && (
+                <p className="text-xs text-slate-500 mt-1">Rango aceptable: {pcc.limite_min} - {pcc.limite_max} {pcc.unidad}</p>
               )}
             </div>
           )}
 
-          {pcc.tipo_control === 'CUALITATIVO' && (
+          {/* Campo para Control Cualitativo */}
+          {esCualitativo && (
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
                 ¿Cumple con el estándar? *
               </label>
               <div className="grid grid-cols-2 gap-4">
-                <label className={`flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer ${
-                  cumpleSiNo === 'SÍ' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'
+                <label className={`flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${
+                  cumpleSiNo === 'SÍ' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 hover:border-emerald-300'
                 }`}>
-                  <input type="radio" name="cumple" value="SÍ" checked={cumpleSiNo === 'SÍ'} onChange={() => setCumpleSiNo('SÍ')} className="w-5 h-5" />
-                  <span className="font-semibold">SÍ, cumple</span>
+                  <input 
+                    type="radio" 
+                    name="cumple" 
+                    value="SÍ" 
+                    checked={cumpleSiNo === 'SÍ'} 
+                    onChange={() => { setCumpleSiNo('SÍ'); setMensaje(''); }}
+                    className="w-5 h-5 text-emerald-600"
+                  />
+                  <span className={`font-semibold ${cumpleSiNo === 'SÍ' ? 'text-emerald-800' : 'text-slate-700'}`}>SÍ, cumple</span>
                 </label>
-                <label className={`flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer ${
-                  cumpleSiNo === 'NO' ? 'border-rose-500 bg-rose-50' : 'border-slate-200'
+                <label className={`flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${
+                  cumpleSiNo === 'NO' ? 'border-rose-500 bg-rose-50' : 'border-slate-200 hover:border-rose-300'
                 }`}>
-                  <input type="radio" name="cumple" value="NO" checked={cumpleSiNo === 'NO'} onChange={() => setCumpleSiNo('NO')} className="w-5 h-5" />
-                  <span className="font-semibold">NO, no cumple</span>
+                  <input 
+                    type="radio" 
+                    name="cumple" 
+                    value="NO" 
+                    checked={cumpleSiNo === 'NO'} 
+                    onChange={() => { setCumpleSiNo('NO'); setMensaje(''); }}
+                    className="w-5 h-5 text-rose-600"
+                  />
+                  <span className={`font-semibold ${cumpleSiNo === 'NO' ? 'text-rose-800' : 'text-slate-700'}`}>NO, no cumple</span>
                 </label>
               </div>
             </div>
           )}
 
+          {/* Campo para Proceso */}
+          {esProceso && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                  ¿Se ha realizado el proceso correctamente? *
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <label className={`flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer ${
+                    cumpleSiNo === 'SÍ' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'
+                  }`}>
+                    <input type="radio" name="cumple" value="SÍ" checked={cumpleSiNo === 'SÍ'} onChange={() => { setCumpleSiNo('SÍ'); setMensaje(''); }} className="w-5 h-5" />
+                    <span className="font-semibold">SÍ, correcto</span>
+                  </label>
+                  <label className={`flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer ${
+                    cumpleSiNo === 'NO' ? 'border-rose-500 bg-rose-50' : 'border-slate-200'
+                  }`}>
+                    <input type="radio" name="cumple" value="NO" checked={cumpleSiNo === 'NO'} onChange={() => { setCumpleSiNo('NO'); setMensaje(''); }} className="w-5 h-5" />
+                    <span className="font-semibold">NO, incorrecto</span>
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Descripción del proceso *
+                </label>
+                <textarea
+                  value={valorMedido}
+                  onChange={(e) => { setValorMedido(e.target.value); setMensaje(''); }}
+                  className="w-full p-3 border border-slate-200 rounded-lg"
+                  rows={3}
+                  placeholder="Describe cómo se ha realizado el proceso..."
+                  required
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Campos de Incidencia */}
           {requiereAccionCorrectora && (
             <div className="p-5 bg-rose-50 border border-rose-200 rounded-xl space-y-4">
-              <h3 className="font-bold text-rose-800">⚠️ Incidencia Detectada</h3>
+              <h3 className="font-bold text-rose-800 flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                Incidencia Detectada
+              </h3>
               <div>
                 <label className="block text-xs font-semibold text-rose-700 uppercase mb-1.5">Acción Correctora *</label>
                 <textarea
                   value={accionCorrectora}
-                  onChange={(e) => setAccionCorrectora(e.target.value)}
+                  onChange={(e) => { setAccionCorrectora(e.target.value); setMensaje(''); }}
                   className="w-full p-3 border border-rose-300 rounded-lg"
                   rows={3}
-                  placeholder="Describe la acción correctora..."
+                  placeholder="Describe la acción correctora aplicada..."
                   required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">URL de Foto (Opcional)</label>
+                <input
+                  type="text"
+                  value={fotoEvidencia}
+                  onChange={(e) => setFotoEvidencia(e.target.value)}
+                  className="w-full p-3 border border-slate-200 rounded-lg"
+                  placeholder="https://..."
                 />
               </div>
             </div>
