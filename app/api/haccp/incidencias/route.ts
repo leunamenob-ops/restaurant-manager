@@ -18,6 +18,7 @@ export async function GET(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
+    // 🔥 CONSULTA ACTUALIZADA CON foto_evidencia Y haccp_categorias
     let query = supabase
       .from('haccp_registros')
       .select(`
@@ -29,7 +30,6 @@ export async function GET(request: Request) {
         foto_evidencia,
         fecha_hora,
         id_usuario,
-        estado,
         haccp_pcc (
           nombre_pcc,
           categoria_id,
@@ -54,44 +54,26 @@ export async function GET(request: Request) {
 
     const { data, error } = await query;
 
-    if (error) {
-      console.error('Error en Supabase:', error);
-      throw error;
-    }
+    if (error) throw error;
 
-    // 🔥 APLANAR DATOS CORRECTAMENTE
-    const incidenciasAplanadas = (data || []).map((inc: any) => {
-      // haccp_pcc viene como array de una sola posición
-      const pccArray = inc.haccp_pcc;
-      const pcc = Array.isArray(pccArray) && pccArray.length > 0 ? pccArray[0] : pccArray;
-      
-      // haccp_categorias también viene como array
-      const catArray = pcc?.haccp_categorias;
-      const categoria = Array.isArray(catArray) && catArray.length > 0 ? catArray[0] : catArray;
-      
-      return {
-        id_registro: inc.id_registro,
-        id_pcc: inc.id_pcc,
-        nombre_pcc: pcc?.nombre_pcc || 'Desconocido',
-        categoria_nombre: categoria?.nombre || 'Sin Categoría',
-        valor_medido: inc.valor_medido,
-        unidad: inc.unidad,
-        accion_correctora: inc.accion_correctora,
-        foto_evidencia: inc.foto_evidencia,
-        fecha_hora: inc.fecha_hora,
-        id_usuario: inc.id_usuario,
-        estado: inc.estado
-      };
-    });
+    // 🔥 APLANAR DATOS PARA EL FRONTEND (extrayendo correctamente el nombre de la categoría)
+    const incidenciasAplanadas = data?.map(inc => ({
+      id_registro: inc.id_registro,
+      id_pcc: inc.id_pcc,
+      nombre_pcc: inc.haccp_pcc?.nombre_pcc || 'Desconocido',
+      categoria_nombre: inc.haccp_pcc?.haccp_categorias?.nombre || 'Sin Categoría',
+      valor_medido: inc.valor_medido,
+      unidad: inc.unidad,
+      accion_correctora: inc.accion_correctora,
+      foto_evidencia: inc.foto_evidencia,
+      fecha_hora: inc.fecha_hora,
+      id_usuario: inc.id_usuario
+    })) || [];
 
-    console.log('✅ Incidencias encontradas:', incidenciasAplanadas.length);
     return NextResponse.json(incidenciasAplanadas);
 
   } catch (error: any) {
     console.error('❌ Error obteniendo incidencias:', error);
-    return NextResponse.json({ 
-      error: error.message,
-      details: error.hint || error.details 
-    }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
