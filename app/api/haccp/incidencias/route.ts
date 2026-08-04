@@ -18,13 +18,24 @@ export async function GET(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
+    // 🔥 CONSULTA ACTUALIZADA CON foto_evidencia Y haccp_categorias
     let query = supabase
       .from('haccp_registros')
       .select(`
-        *,
+        id_registro,
+        id_pcc,
+        valor_medido,
+        unidad,
+        accion_correctora,
+        foto_evidencia,
+        fecha_hora,
+        id_usuario,
         haccp_pcc (
           nombre_pcc,
-          categoria_id
+          categoria_id,
+          haccp_categorias (
+            nombre
+          )
         )
       `)
       .eq('estado', 'NO_OK')
@@ -45,11 +56,18 @@ export async function GET(request: Request) {
 
     if (error) throw error;
 
-    // Aplanar datos para el frontend
+    // 🔥 APLANAR DATOS PARA EL FRONTEND (extrayendo correctamente el nombre de la categoría)
     const incidenciasAplanadas = data?.map(inc => ({
-      ...inc,
-      nombre_pcc: inc.haccp_pcc?.nombre_pcc || inc.nombre_pcc || 'Desconocido',
-      categoria_nombre: inc.categoria_nombre || 'Sin Categoría'
+      id_registro: inc.id_registro,
+      id_pcc: inc.id_pcc,
+      nombre_pcc: inc.haccp_pcc?.nombre_pcc || 'Desconocido',
+      categoria_nombre: inc.haccp_pcc?.haccp_categorias?.nombre || 'Sin Categoría',
+      valor_medido: inc.valor_medido,
+      unidad: inc.unidad,
+      accion_correctora: inc.accion_correctora,
+      foto_evidencia: inc.foto_evidencia,
+      fecha_hora: inc.fecha_hora,
+      id_usuario: inc.id_usuario
     })) || [];
 
     return NextResponse.json(incidenciasAplanadas);
