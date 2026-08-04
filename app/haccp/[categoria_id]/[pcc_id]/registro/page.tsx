@@ -22,7 +22,7 @@ const CATEGORIAS_INFO: Record<string, { nombre: string; icono: string; color: st
   'CAT_03': { nombre: 'Limpieza y Desinfección', icono: '🧹', color: 'text-emerald-600', bg: 'bg-emerald-500' },
   'CAT_04': { nombre: 'Recepción de Mercancías', icono: '📦', color: 'text-purple-600', bg: 'bg-purple-500' },
   'CAT_05': { nombre: 'Almacenamiento y FIFO', icono: '🗄️', color: 'text-amber-600', bg: 'bg-amber-500' },
-  'CAT_06': { nombre: 'Buffet y Exposición', icono: '🍽️', color: 'text-pink-600', bg: 'bg-pink-500' },
+  'CAT_06': { nombre: 'Buffet y Exposición', icono: '️', color: 'text-pink-600', bg: 'bg-pink-500' },
 };
 
 export default function RegistroRapidoPage() {
@@ -50,7 +50,6 @@ export default function RegistroRapidoPage() {
     setLoading(true);
     setMensaje('');
     try {
-      console.log('📡 Fetching PCC for categoria:', categoriaId, 'pccId:', pccId);
       const res = await fetch(`/api/haccp/pcc?categoria=${categoriaId}`);
       
       if (!res.ok) {
@@ -58,11 +57,7 @@ export default function RegistroRapidoPage() {
       }
       
       const allPCCs = await res.json();
-      console.log('✅ PCCs recibidos:', allPCCs.length);
-      console.log(' Primer PCC:', allPCCs[0]);
-      
       const pccEncontrado = allPCCs.find((p: any) => p.id_pcc === pccId);
-      console.log(' PCC encontrado:', pccEncontrado);
       
       if (pccEncontrado) {
         setPcc(pccEncontrado);
@@ -70,8 +65,8 @@ export default function RegistroRapidoPage() {
         setMensaje(`❌ No se encontró el PCC ${pccId}`);
       }
     } catch (error) {
-      console.error('❌ Error cargando PCC:', error);
-      setMensaje('❌ Error al cargar los datos del PCC: ' + (error as Error).message);
+      console.error('Error cargando PCC:', error);
+      setMensaje('❌ Error al cargar los datos del PCC');
     } finally {
       setLoading(false);
     }
@@ -87,19 +82,27 @@ export default function RegistroRapidoPage() {
 
   const requiereAccionCorrectora = estaFueraDeRango || cumpleSiNo === 'NO';
 
-  <div>
-  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">
-    URL de Foto <span className="text-rose-500">*</span>
-  </label>
-  <input
-    type="text"
-    value={fotoEvidencia}
-    onChange={(e) => { setFotoEvidencia(e.target.value); setMensaje(''); }}
-    className="w-full p-3 border border-slate-200 rounded-lg"
-    placeholder="https://..."
-    required={requiereAccionCorrectora}
-  />
-</div>
+  // ✅ FUNCIÓN DE VALIDACIÓN AÑADIDA
+  function validarFormulario(): boolean {
+    if (esNumerico && valorMedido === '') {
+      setMensaje('❌ Debes introducir un valor numérico');
+      return false;
+    }
+    if (esCualitativo && !cumpleSiNo) {
+      setMensaje('❌ Debes seleccionar SÍ o NO');
+      return false;
+    }
+    if (requiereAccionCorrectora && !accionCorrectora.trim()) {
+      setMensaje('❌ La acción correctora es obligatoria');
+      return false;
+    }
+    if (requiereAccionCorrectora && !fotoEvidencia.trim()) {
+      setMensaje('❌ La foto de evidencia es obligatoria en incidencias');
+      return false;
+    }
+    return true;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!pcc) return;
@@ -135,8 +138,6 @@ export default function RegistroRapidoPage() {
       notificado: estado === 'NO_OK'
     };
 
-    console.log('🚀 Enviando registro:', registro);
-
     try {
       const res = await fetch('/api/haccp/registrar', {
         method: 'POST',
@@ -144,9 +145,7 @@ export default function RegistroRapidoPage() {
         body: JSON.stringify(registro),
       });
       
-      console.log('📡 Response status:', res.status);
       const data = await res.json();
-      console.log('📦 Response data:', data);
       
       if (data.success) {
         setMensaje(data.mensaje || '✅ Registro guardado correctamente');
@@ -157,8 +156,8 @@ export default function RegistroRapidoPage() {
         setMensaje(`❌ Error: ${data.error}${data.details ? ' - ' + data.details : ''}`);
       }
     } catch (error: any) {
-      console.error('❌ Error al guardar:', error);
-      setMensaje('❌ Error de conexión al guardar: ' + error.message);
+      console.error('Error al guardar:', error);
+      setMensaje('❌ Error de conexión al guardar');
     } finally {
       setGuardando(false);
     }
@@ -234,15 +233,7 @@ export default function RegistroRapidoPage() {
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
           
-          {/* DEBUG - Mostrar datos completos del PCC */}
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <p className="text-xs text-slate-500 mb-2 font-semibold">DEBUG - Datos del PCC:</p>
-            <pre className="text-xs text-slate-700 overflow-auto font-mono">
-              {JSON.stringify(pcc, null, 2)}
-            </pre>
-          </div>
-
-          {/* Info del PCC */}
+          {/* Info del PCC - SIN DEBUG */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Tipo de control</p>
@@ -388,14 +379,18 @@ export default function RegistroRapidoPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">URL de Foto (Opcional)</label>
+                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">
+                  URL de Foto <span className="text-rose-500">*</span>
+                </label>
                 <input
                   type="text"
                   value={fotoEvidencia}
-                  onChange={(e) => setFotoEvidencia(e.target.value)}
+                  onChange={(e) => { setFotoEvidencia(e.target.value); setMensaje(''); }}
                   className="w-full p-3 border border-slate-200 rounded-lg"
                   placeholder="https://..."
+                  required
                 />
+                <p className="text-xs text-rose-600 mt-1">Obligatorio en caso de incidencia</p>
               </div>
             </div>
           )}
