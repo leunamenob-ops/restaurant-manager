@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { createClient } from '@supabase/supabase-js';
 
 interface PCC {
   id_pcc: string;
@@ -22,7 +23,7 @@ const CATEGORIAS_INFO: Record<string, { nombre: string; icono: string; color: st
   'CAT_03': { nombre: 'Limpieza y Desinfección', icono: '🧹', color: 'text-emerald-600', bg: 'bg-emerald-500' },
   'CAT_04': { nombre: 'Recepción de Mercancías', icono: '📦', color: 'text-purple-600', bg: 'bg-purple-500' },
   'CAT_05': { nombre: 'Almacenamiento y FIFO', icono: '🗄️', color: 'text-amber-600', bg: 'bg-amber-500' },
-  'CAT_06': { nombre: 'Buffet y Exposición', icono: '️', color: 'text-pink-600', bg: 'bg-pink-500' },
+  'CAT_06': { nombre: 'Buffet y Exposición', icono: '🍽️', color: 'text-pink-600', bg: 'bg-pink-500' },
 };
 
 export default function RegistroRapidoPage() {
@@ -35,12 +36,20 @@ export default function RegistroRapidoPage() {
   const [valorMedido, setValorMedido] = useState<string>('');
   const [cumpleSiNo, setCumpleSiNo] = useState<string>('SÍ');
   const [accionCorrectora, setAccionCorrectora] = useState<string>('');
-  const [fotoEvidencia, setFotoEvidencia] = useState<string>('');
+  const [fotoFile, setFotoFile] = useState<File | null>(null);
+  const [fotoURL, setFotoURL] = useState<string>('');
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState('');
 
   const catInfo = CATEGORIAS_INFO[categoriaId] || { nombre: 'Categoría', icono: '', color: 'text-slate-600', bg: 'bg-slate-500' };
+
+  // Inicializar Supabase
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   useEffect(() => {
     cargarPCC();
@@ -51,10 +60,7 @@ export default function RegistroRapidoPage() {
     setMensaje('');
     try {
       const res = await fetch(`/api/haccp/pcc?categoria=${categoriaId}`);
-      
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       
       const allPCCs = await res.json();
       const pccEncontrado = allPCCs.find((p: any) => p.id_pcc === pccId);
@@ -82,7 +88,34 @@ export default function RegistroRapidoPage() {
 
   const requiereAccionCorrectora = estaFueraDeRango || cumpleSiNo === 'NO';
 
-  // ✅ FUNCIÓN DE VALIDACIÓN AÑADIDA
+  // 🔥 Función para subir foto a Supabase Storage
+  async function subirFotoAStorage(file: File): Promise<string> {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${pccId}_${Date.now()}.${fileExt}`;
+    const filePath = `${fileName}`;
+
+    const { error: uploadError } = await supabase
+      .storage
+      .from('haccp-fotos')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error('Error subiendo foto:', uploadError);
+      throw uploadError;
+    }
+
+    // Obtener URL pública
+    const { data } = supabase
+      .storage
+      .from('haccp-fotos')
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  }
+
   function validarFormulario(): boolean {
     if (esNumerico && valorMedido === '') {
       setMensaje('❌ Debes introducir un valor numérico');
@@ -96,8 +129,8 @@ export default function RegistroRapidoPage() {
       setMensaje('❌ La acción correctora es obligatoria');
       return false;
     }
-    if (requiereAccionCorrectora && !fotoEvidencia.trim()) {
-      setMensaje('❌ La foto de evidencia es obligatoria en incidencias');
+    if (requiereAccionCorrectora && !fotoFile && !fotoURL) {
+      setMensaje('❌ Debes subir una foto de evidencia');
       return false;
     }
     return true;
@@ -112,33 +145,35 @@ export default function RegistroRapidoPage() {
     setGuardando(true);
     setMensaje('');
 
-    const usuarioData = sessionStorage.getItem('usuario');
-    let user;
     try {
-      user = usuarioData ? JSON.parse(usuarioData) : null;
-    } catch (e) {
-      user = null;
-    }
+      // Subir foto si existe
+      let fotoFinalURL = fotoURL;
+      if (fotoFile) {
+        setMensaje('📸 Subiendo foto...');
+        fotoFinalURL = await subirFotoAStorage(fotoFile);
+        setMensaje('✅ Foto subida. Guardando registro...');
+      }
 
-    const userId = user?.id_usuario || 'B0003';
-    const hotelId = sessionStorage.getItem('hotel_id') || '00000000-0000-0000-0000-000000000001';
+      const usuarioData = sessionStorage.getItem('usuario');
+      const user = usuarioData ? JSON.parse(usuarioData) : null;
+      const userId = user?.id_usuario || 'B0003';
+      const hotelId = sessionStorage.getItem('hotel_id') || '00000000-0000-0000-0000-000000000001';
 
-    const estado = requiereAccionCorrectora ? 'NO_OK' : 'OK';
+      const estado = requiereAccionCorrectora ? 'NO_OK' : 'OK';
 
-    const registro = {
-      id_pcc: pcc.id_pcc,
-      id_usuario: userId,
-      hotel_id: hotelId,
-      valor_medido: esNumerico && valorMedido !== '' ? parseFloat(valorMedido) : null,
-      unidad: pcc.unidad || null,
-      cumple_si_no: requiereAccionCorrectora ? 'NO' : 'SÍ',
-      accion_correctora: requiereAccionCorrectora ? accionCorrectora : null,
-      foto_evidencia: requiereAccionCorrectora ? fotoEvidencia : null,
-      estado,
-      notificado: estado === 'NO_OK'
-    };
+      const registro = {
+        id_pcc: pcc.id_pcc,
+        id_usuario: userId,
+        hotel_id: hotelId,
+        valor_medido: esNumerico && valorMedido !== '' ? parseFloat(valorMedido) : null,
+        unidad: pcc.unidad || null,
+        cumple_si_no: requiereAccionCorrectora ? 'NO' : 'SÍ',
+        accion_correctora: requiereAccionCorrectora ? accionCorrectora : null,
+        foto_evidencia: requiereAccionCorrectora ? fotoFinalURL : null,
+        estado,
+        notificado: estado === 'NO_OK'
+      };
 
-    try {
       const res = await fetch('/api/haccp/registrar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -153,11 +188,11 @@ export default function RegistroRapidoPage() {
           router.push(`/haccp/${categoriaId}`);
         }, 2000);
       } else {
-        setMensaje(`❌ Error: ${data.error}${data.details ? ' - ' + data.details : ''}`);
+        setMensaje(`❌ Error: ${data.error}`);
       }
     } catch (error: any) {
-      console.error('Error al guardar:', error);
-      setMensaje('❌ Error de conexión al guardar');
+      console.error('Error:', error);
+      setMensaje('❌ Error: ' + error.message);
     } finally {
       setGuardando(false);
     }
@@ -183,10 +218,7 @@ export default function RegistroRapidoPage() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center p-8">
           <p className="text-slate-600 mb-4">{mensaje || 'PCC no encontrado'}</p>
-          <button 
-            onClick={() => router.push(`/haccp/${categoriaId}`)}
-            className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
-          >
+          <button onClick={() => router.push(`/haccp/${categoriaId}`)} className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700">
             Volver
           </button>
         </div>
@@ -199,10 +231,7 @@ export default function RegistroRapidoPage() {
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.push(`/haccp/${categoriaId}`)}
-              className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all"
-            >
+            <button onClick={() => router.push(`/haccp/${categoriaId}`)} className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
@@ -225,6 +254,7 @@ export default function RegistroRapidoPage() {
         {mensaje && (
           <div className={`mb-6 p-4 rounded-xl flex items-center gap-3 shadow-sm border ${
             mensaje.includes('✅') ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+            mensaje.includes('📸') ? 'bg-blue-50 text-blue-800 border-blue-200' :
             'bg-rose-50 text-rose-800 border-rose-200'
           }`}>
             <p className="font-medium text-sm">{mensaje}</p>
@@ -233,7 +263,7 @@ export default function RegistroRapidoPage() {
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
           
-          {/* Info del PCC - SIN DEBUG */}
+          {/* Info del PCC */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Tipo de control</p>
@@ -261,26 +291,15 @@ export default function RegistroRapidoPage() {
                 type="number"
                 step="0.1"
                 value={valorMedido}
-                onChange={(e) => {
-                  setValorMedido(e.target.value);
-                  setMensaje('');
-                }}
+                onChange={(e) => { setValorMedido(e.target.value); setMensaje(''); }}
                 className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all text-lg font-semibold ${
-                  estaFueraDeRango 
-                    ? 'border-rose-300 bg-rose-50 text-rose-700' 
-                    : 'border-slate-200 bg-slate-50 text-slate-900'
+                  estaFueraDeRango ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-slate-200 bg-slate-50 text-slate-900'
                 }`}
                 placeholder={`Ej: ${pcc.limite_min !== null && pcc.limite_max !== null ? (pcc.limite_min + pcc.limite_max) / 2 : '3.5'}`}
                 required
               />
               {estaFueraDeRango && (
-                <p className="text-rose-600 text-sm mt-2 font-medium flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                  ¡Valor fuera de rango! ({pcc.limite_min} - {pcc.limite_max} {pcc.unidad})
-                </p>
-              )}
-              {pcc.limite_min !== null && pcc.limite_max !== null && (
-                <p className="text-xs text-slate-500 mt-1">Rango aceptable: {pcc.limite_min} - {pcc.limite_max} {pcc.unidad}</p>
+                <p className="text-rose-600 text-sm mt-2 font-medium">¡Valor fuera de rango! ({pcc.limite_min} - {pcc.limite_max} {pcc.unidad})</p>
               )}
             </div>
           )}
@@ -295,67 +314,15 @@ export default function RegistroRapidoPage() {
                 <label className={`flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${
                   cumpleSiNo === 'SÍ' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 hover:border-emerald-300'
                 }`}>
-                  <input 
-                    type="radio" 
-                    name="cumple" 
-                    value="SÍ" 
-                    checked={cumpleSiNo === 'SÍ'} 
-                    onChange={() => { setCumpleSiNo('SÍ'); setMensaje(''); }}
-                    className="w-5 h-5 text-emerald-600"
-                  />
+                  <input type="radio" name="cumple" value="SÍ" checked={cumpleSiNo === 'SÍ'} onChange={() => { setCumpleSiNo('SÍ'); setMensaje(''); }} className="w-5 h-5 text-emerald-600" />
                   <span className={`font-semibold ${cumpleSiNo === 'SÍ' ? 'text-emerald-800' : 'text-slate-700'}`}>SÍ, cumple</span>
                 </label>
                 <label className={`flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${
                   cumpleSiNo === 'NO' ? 'border-rose-500 bg-rose-50' : 'border-slate-200 hover:border-rose-300'
                 }`}>
-                  <input 
-                    type="radio" 
-                    name="cumple" 
-                    value="NO" 
-                    checked={cumpleSiNo === 'NO'} 
-                    onChange={() => { setCumpleSiNo('NO'); setMensaje(''); }}
-                    className="w-5 h-5 text-rose-600"
-                  />
+                  <input type="radio" name="cumple" value="NO" checked={cumpleSiNo === 'NO'} onChange={() => { setCumpleSiNo('NO'); setMensaje(''); }} className="w-5 h-5 text-rose-600" />
                   <span className={`font-semibold ${cumpleSiNo === 'NO' ? 'text-rose-800' : 'text-slate-700'}`}>NO, no cumple</span>
                 </label>
-              </div>
-            </div>
-          )}
-
-          {/* Campo para Proceso */}
-          {esProceso && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-                  ¿Se ha realizado el proceso correctamente? *
-                </label>
-                <div className="grid grid-cols-2 gap-4">
-                  <label className={`flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer ${
-                    cumpleSiNo === 'SÍ' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200'
-                  }`}>
-                    <input type="radio" name="cumple" value="SÍ" checked={cumpleSiNo === 'SÍ'} onChange={() => { setCumpleSiNo('SÍ'); setMensaje(''); }} className="w-5 h-5" />
-                    <span className="font-semibold">SÍ, correcto</span>
-                  </label>
-                  <label className={`flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer ${
-                    cumpleSiNo === 'NO' ? 'border-rose-500 bg-rose-50' : 'border-slate-200'
-                  }`}>
-                    <input type="radio" name="cumple" value="NO" checked={cumpleSiNo === 'NO'} onChange={() => { setCumpleSiNo('NO'); setMensaje(''); }} className="w-5 h-5" />
-                    <span className="font-semibold">NO, incorrecto</span>
-                  </label>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Descripción del proceso *
-                </label>
-                <textarea
-                  value={valorMedido}
-                  onChange={(e) => { setValorMedido(e.target.value); setMensaje(''); }}
-                  className="w-full p-3 border border-slate-200 rounded-lg"
-                  rows={3}
-                  placeholder="Describe cómo se ha realizado el proceso..."
-                  required
-                />
               </div>
             </div>
           )}
@@ -364,9 +331,12 @@ export default function RegistroRapidoPage() {
           {requiereAccionCorrectora && (
             <div className="p-5 bg-rose-50 border border-rose-200 rounded-xl space-y-4">
               <h3 className="font-bold text-rose-800 flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
                 Incidencia Detectada
               </h3>
+              
               <div>
                 <label className="block text-xs font-semibold text-rose-700 uppercase mb-1.5">Acción Correctora *</label>
                 <textarea
@@ -378,29 +348,85 @@ export default function RegistroRapidoPage() {
                   required
                 />
               </div>
+
+              {/* 🔥 SUBIDA DE FOTO REAL */}
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">
-                  URL de Foto <span className="text-rose-500">*</span>
+                <label className="block text-xs font-semibold text-rose-700 uppercase mb-1.5">
+                  Foto de Evidencia *
                 </label>
+                
+                {/* Input file oculto */}
                 <input
-                  type="text"
-                  value={fotoEvidencia}
-                  onChange={(e) => { setFotoEvidencia(e.target.value); setMensaje(''); }}
-                  className="w-full p-3 border border-slate-200 rounded-lg"
-                  placeholder="https://..."
+                  type="file"
+                  id="fotoInput"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setFotoFile(file);
+                      setMensaje('');
+                    }
+                  }}
+                  className="hidden"
                   required
                 />
-                <p className="text-xs text-rose-600 mt-1">Obligatorio en caso de incidencia</p>
+
+                {/* Botón para seleccionar foto */}
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('fotoInput')?.click()}
+                    className="w-full p-4 border-2 border-dashed border-rose-300 rounded-xl bg-white hover:border-rose-500 hover:bg-rose-50 transition-all flex items-center justify-center gap-3"
+                  >
+                    <svg className="w-6 h-6 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <div className="text-left">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {fotoFile ? 'Cambiar foto' : 'Subir foto'}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {fotoFile ? fotoFile.name : 'Toca para tomar o seleccionar una foto'}
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Vista previa si hay foto */}
+                  {fotoFile && (
+                    <div className="relative">
+                      <img 
+                        src={URL.createObjectURL(fotoFile)} 
+                        alt="Vista previa" 
+                        className="w-full h-48 object-cover rounded-lg border border-rose-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFotoFile(null)}
+                        className="absolute top-2 right-2 p-2 bg-rose-500 text-white rounded-full hover:bg-rose-600"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-xs text-rose-600 mt-2">
+                  * Obligatoria en caso de incidencia. Máx. 10MB
+                </p>
               </div>
             </div>
           )}
 
           <button
             type="submit"
-            disabled={guardando}
+            disabled={guardando || subiendoFoto}
             className="w-full py-3.5 bg-gradient-to-r from-cyan-600 to-teal-600 text-white rounded-xl font-bold hover:from-cyan-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
           >
-            {guardando ? 'Guardando...' : '✓ Guardar Control'}
+            {guardando ? 'Guardando...' : subiendoFoto ? 'Subiendo foto...' : '✓ Guardar Control'}
           </button>
         </form>
       </main>
