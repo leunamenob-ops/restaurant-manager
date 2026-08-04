@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-// Usamos 'any' temporalmente para evitar errores de TypeScript
 interface CategoriaData {
   id: string;
   nombre: string;
@@ -14,14 +13,14 @@ interface CategoriaData {
   iconBg: string;
   totalPCCs?: number;
   pccsCompletadosHoy?: number;
-  [key: string]: any; // Permite propiedades adicionales
+  [key: string]: any;
 }
 
 const CATEGORIAS_BASE: CategoriaData[] = [
   { 
     id: 'CAT_01', 
-    nombre: 'Refrigeración', 
-    descripcion: 'Control de temperaturas de cámaras y equipos de frío',
+    nombre: 'Refrigeración y Equipos de Frío', 
+    descripcion: 'Control de temperaturas en neveras, cámaras y equipos de frío',
     icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
     color: 'from-cyan-50 to-white',
     border: 'border-cyan-200',
@@ -29,8 +28,8 @@ const CATEGORIAS_BASE: CategoriaData[] = [
   },
   { 
     id: 'CAT_02', 
-    nombre: 'Cocción', 
-    descripcion: 'Control de temperaturas de cocción y productos cocinados',
+    nombre: 'Cocción y Procesos', 
+    descripcion: 'Control de cocción, recalentado, descongelación, enfriamiento y desinfección',
     icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" /></svg>,
     color: 'from-orange-50 to-white',
     border: 'border-orange-200',
@@ -38,8 +37,8 @@ const CATEGORIAS_BASE: CategoriaData[] = [
   },
   { 
     id: 'CAT_03', 
-    nombre: 'Limpieza', 
-    descripcion: 'Control de limpieza y desinfección de superficies y equipos',
+    nombre: 'Limpieza y Desinfección', 
+    descripcion: 'Control de limpieza de superficies, equipos y utensilios',
     icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>,
     color: 'from-emerald-50 to-white',
     border: 'border-emerald-200',
@@ -47,8 +46,8 @@ const CATEGORIAS_BASE: CategoriaData[] = [
   },
   { 
     id: 'CAT_04', 
-    nombre: 'Recepción', 
-    descripcion: 'Control de recepción de mercancías y productos',
+    nombre: 'Recepción de Mercancías', 
+    descripcion: 'Control de recepción de productos y temperaturas de transporte',
     icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
     color: 'from-purple-50 to-white',
     border: 'border-purple-200',
@@ -56,12 +55,21 @@ const CATEGORIAS_BASE: CategoriaData[] = [
   },
   { 
     id: 'CAT_05', 
-    nombre: 'Almacenamiento', 
-    descripcion: 'Control de almacenamiento y FIFO',
+    nombre: 'Almacenamiento y FIFO', 
+    descripcion: 'Control de almacenamiento, rotación, basuras y plagas',
     icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>,
     color: 'from-amber-50 to-white',
     border: 'border-amber-200',
     iconBg: 'bg-amber-500'
+  },
+  { 
+    id: 'CAT_06', 
+    nombre: 'Buffet y Exposición', 
+    descripcion: 'Control de temperaturas de buffet caliente y frío',
+    icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>,
+    color: 'from-pink-50 to-white',
+    border: 'border-pink-200',
+    iconBg: 'bg-pink-500'
   },
 ];
 
@@ -78,15 +86,12 @@ export default function HACCPHome() {
     try {
       const hoy = new Date().toISOString().split('T')[0];
       
-      // Obtener registros de hoy
       const resRegistros = await fetch(`/api/haccp/registros?inicio=${hoy}&fin=${hoy}`);
       const registrosHoy = await resRegistros.json();
 
-      // Obtener todos los PCCs
       const resPCCs = await fetch('/api/haccp/pcc');
       const allPCCs = await resPCCs.json();
 
-      // Calcular estadísticas por categoría
       const categoriasConStats = CATEGORIAS_BASE.map((catBase) => {
         const totalPCCs = allPCCs.filter((pcc: any) => pcc.categoria_id === catBase.id).length;
         
@@ -131,7 +136,6 @@ export default function HACCPHome() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
@@ -159,7 +163,6 @@ export default function HACCPHome() {
         </div>
       </header>
 
-      {/* Contenido */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {categorias.map((categoria) => {
@@ -172,7 +175,6 @@ export default function HACCPHome() {
                 onClick={() => router.push(`/haccp/${categoria.id}`)}
                 className={`group relative p-6 bg-gradient-to-br ${categoria.color} rounded-2xl border ${categoria.border} hover:shadow-xl transition-all duration-300 hover:-translate-y-1 text-left overflow-hidden`}
               >
-                {/* Indicador de completado */}
                 {estaCompleto && (
                   <div className="absolute top-4 right-4 w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg">
                     <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -194,7 +196,6 @@ export default function HACCPHome() {
                     {categoria.descripcion}
                   </p>
 
-                  {/* Barra de progreso */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-slate-600 font-medium">
