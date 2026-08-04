@@ -29,6 +29,7 @@ export async function GET(request: Request) {
         foto_evidencia,
         fecha_hora,
         id_usuario,
+        estado,
         haccp_pcc (
           nombre_pcc,
           categoria_id,
@@ -53,31 +54,44 @@ export async function GET(request: Request) {
 
     const { data, error } = await query;
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error en Supabase:', error);
+      throw error;
+    }
 
-    // 🔥 APLANAR DATOS CORRECTAMENTE (haccp_pcc viene como array)
-    const incidenciasAplanadas = data?.map((inc: any) => {
-      // haccp_pcc viene como array, tomamos el primer elemento
-      const pcc = Array.isArray(inc.haccp_pcc) ? inc.haccp_pcc[0] : inc.haccp_pcc;
+    // 🔥 APLANAR DATOS CORRECTAMENTE
+    const incidenciasAplanadas = (data || []).map((inc: any) => {
+      // haccp_pcc viene como array de una sola posición
+      const pccArray = inc.haccp_pcc;
+      const pcc = Array.isArray(pccArray) && pccArray.length > 0 ? pccArray[0] : pccArray;
+      
+      // haccp_categorias también viene como array
+      const catArray = pcc?.haccp_categorias;
+      const categoria = Array.isArray(catArray) && catArray.length > 0 ? catArray[0] : catArray;
       
       return {
         id_registro: inc.id_registro,
         id_pcc: inc.id_pcc,
         nombre_pcc: pcc?.nombre_pcc || 'Desconocido',
-        categoria_nombre: pcc?.haccp_categorias?.[0]?.nombre || 'Sin Categoría',
+        categoria_nombre: categoria?.nombre || 'Sin Categoría',
         valor_medido: inc.valor_medido,
         unidad: inc.unidad,
         accion_correctora: inc.accion_correctora,
         foto_evidencia: inc.foto_evidencia,
         fecha_hora: inc.fecha_hora,
-        id_usuario: inc.id_usuario
+        id_usuario: inc.id_usuario,
+        estado: inc.estado
       };
-    }) || [];
+    });
 
+    console.log('✅ Incidencias encontradas:', incidenciasAplanadas.length);
     return NextResponse.json(incidenciasAplanadas);
 
   } catch (error: any) {
     console.error('❌ Error obteniendo incidencias:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ 
+      error: error.message,
+      details: error.hint || error.details 
+    }, { status: 500 });
   }
 }
