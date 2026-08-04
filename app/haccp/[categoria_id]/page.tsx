@@ -19,11 +19,12 @@ interface PCC {
 }
 
 const CATEGORIAS_INFO: Record<string, { nombre: string; icono: string; color: string; bg: string }> = {
-  'CAT_01': { nombre: 'Refrigeración', icono: '❄️', color: 'text-cyan-600', bg: 'bg-cyan-500' },
-  'CAT_02': { nombre: 'Cocción', icono: '🔥', color: 'text-orange-600', bg: 'bg-orange-500' },
-  'CAT_03': { nombre: 'Limpieza', icono: '🧹', color: 'text-emerald-600', bg: 'bg-emerald-500' },
-  'CAT_04': { nombre: 'Recepción', icono: '📦', color: 'text-purple-600', bg: 'bg-purple-500' },
-  'CAT_05': { nombre: 'Almacenamiento', icono: '️', color: 'text-amber-600', bg: 'bg-amber-500' },
+  'CAT_01': { nombre: 'Refrigeración y Equipos de Frío', icono: '❄️', color: 'text-cyan-600', bg: 'bg-cyan-500' },
+  'CAT_02': { nombre: 'Cocción y Procesos', icono: '🔥', color: 'text-orange-600', bg: 'bg-orange-500' },
+  'CAT_03': { nombre: 'Limpieza y Desinfección', icono: '🧹', color: 'text-emerald-600', bg: 'bg-emerald-500' },
+  'CAT_04': { nombre: 'Recepción de Mercancías', icono: '📦', color: 'text-purple-600', bg: 'bg-purple-500' },
+  'CAT_05': { nombre: 'Almacenamiento y FIFO', icono: '🗄️', color: 'text-amber-600', bg: 'bg-amber-500' },
+  'CAT_06': { nombre: 'Buffet y Exposición', icono: '🍽️', color: 'text-pink-600', bg: 'bg-pink-500' },
 };
 
 export default function CategoriaPCCsPage() {
@@ -45,15 +46,12 @@ export default function CategoriaPCCsPage() {
     try {
       const hoy = new Date().toISOString().split('T')[0];
       
-      // 1. Obtener PCCs de esta categoría
       const resPCCs = await fetch(`/api/haccp/pcc?categoria=${categoriaId}`);
       const dataPCCs = await resPCCs.json();
 
-      // 2. Obtener registros de hoy
       const resRegistros = await fetch(`/api/haccp/registros?inicio=${hoy}&fin=${hoy}`);
       const registrosHoy = await resRegistros.json();
 
-      // 3. Marcar PCCs completados hoy
       const pccsConEstado: PCC[] = dataPCCs.map((pcc: any) => {
         const registroHoy = registrosHoy?.find((r: any) => r.id_pcc === pcc.id_pcc);
         return {
@@ -90,7 +88,6 @@ export default function CategoriaPCCsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
@@ -114,7 +111,6 @@ export default function CategoriaPCCsPage() {
               </div>
             </div>
             
-            {/* Progreso circular */}
             <div className="flex items-center gap-3">
               <div className="hidden sm:block text-right">
                 <p className="text-xs text-slate-500 font-medium">Progreso</p>
@@ -149,7 +145,6 @@ export default function CategoriaPCCsPage() {
         </div>
       </header>
 
-      {/* Resumen rápido */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
@@ -167,7 +162,6 @@ export default function CategoriaPCCsPage() {
         </div>
       </div>
 
-      {/* Lista de PCCs */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {pccs.map((pcc) => (
@@ -180,7 +174,6 @@ export default function CategoriaPCCsPage() {
                   : 'border-slate-200 hover:border-cyan-300'
               }`}
             >
-              {/* Check de completado */}
               {pcc.estaCompletado && (
                 <div className="absolute top-3 right-3 w-7 h-7 bg-emerald-500 rounded-full flex items-center justify-center shadow-md">
                   <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -222,7 +215,6 @@ export default function CategoriaPCCsPage() {
                 </div>
               </div>
 
-              {/* Flecha */}
               <div className="absolute bottom-3 right-3 text-slate-400 group-hover:text-slate-600 group-hover:translate-x-1 transition-all">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
