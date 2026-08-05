@@ -20,18 +20,25 @@ export async function GET() {
       return NextResponse.json({ error: errorPccs.message, pccs: [], categorias: [] }, { status: 500 });
     }
 
-    const { data: categorias, error: errorCats } = await supabase
-      .from('haccp_categorias')
-      .select('id, nombre')
-      .order('id');
+    // Extraer categorías únicas desde categoria_nombre de haccp_pcc
+    const categoriasMap = new Map<string, { id: string; nombre: string }>();
+    
+    pccs?.forEach(pcc => {
+      if (pcc.categoria_id && pcc.categoria_nombre) {
+        categoriasMap.set(pcc.categoria_id, {
+          id: pcc.categoria_id,
+          nombre: pcc.categoria_nombre
+        });
+      }
+    });
 
-    if (errorCats) {
-      console.error('Error obteniendo categorías:', errorCats);
-    }
+    const categorias = Array.from(categoriasMap.values()).sort((a, b) => a.id.localeCompare(b.id));
+
+    console.log(`✅ ${pccs?.length || 0} PCCs, ${categorias.length} categorías`);
 
     return NextResponse.json({ 
       pccs: pccs || [], 
-      categorias: categorias || [] 
+      categorias 
     });
 
   } catch (error: any) {
@@ -65,18 +72,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Faltan campos obligatorios' }, { status: 400 });
     }
 
+    // Obtener el nombre de la categoría desde haccp_categorias
+    let categoriaNombre = null;
+    const { data: catData } = await supabase
+      .from('haccp_categorias')
+      .select('nombre')
+      .eq('id', categoria_id)
+      .single();
+    
+    categoriaNombre = catData?.nombre || null;
+
     const { data, error } = await supabase
       .from('haccp_pcc')
       .insert({
         id_pcc,
         nombre_pcc,
         categoria_id,
+        categoria_nombre: categoriaNombre,
         tipo_control: tipo_control || 'NUMERICO',
         limite_min: limite_min !== null && limite_min !== undefined ? limite_min : null,
         limite_max: limite_max !== null && limite_max !== undefined ? limite_max : null,
         unidad: unidad || null,
         frecuencia: frecuencia || 'Diaria',
-        descripcion: descripcion || null
+        descripcion: descripcion || null,
+        activo: true
       })
       .select()
       .single();
@@ -118,7 +137,16 @@ export async function PUT(request: Request) {
 
     const updateData: any = {};
     if (nombre_pcc !== undefined) updateData.nombre_pcc = nombre_pcc;
-    if (categoria_id !== undefined) updateData.categoria_id = categoria_id;
+    if (categoria_id !== undefined) {
+      updateData.categoria_id = categoria_id;
+      // Actualizar también categoria_nombre
+      const { data: catData } = await supabase
+        .from('haccp_categorias')
+        .select('nombre')
+        .eq('id', categoria_id)
+        .single();
+      if (catData) updateData.categoria_nombre = catData.nombre;
+    }
     if (tipo_control !== undefined) updateData.tipo_control = tipo_control;
     if (limite_min !== undefined) updateData.limite_min = limite_min;
     if (limite_max !== undefined) updateData.limite_max = limite_max;
