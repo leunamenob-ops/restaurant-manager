@@ -9,8 +9,6 @@ const supabase = createClient(
 // GET - Obtener todos los PCCs y categorías
 export async function GET() {
   try {
-    console.log(' API: Obteniendo PCCs...');
-    
     const { data: pccs, error: errorPccs } = await supabase
       .from('haccp_pcc')
       .select('*')
@@ -18,11 +16,9 @@ export async function GET() {
       .order('nombre_pcc', { ascending: true });
 
     if (errorPccs) {
-      console.error('❌ Error obteniendo PCCs:', errorPccs);
+      console.error('Error obteniendo PCCs:', errorPccs);
       return NextResponse.json({ error: errorPccs.message, pccs: [], categorias: [] }, { status: 500 });
     }
-
-    console.log(`✅ ${pccs?.length || 0} PCCs obtenidos`);
 
     const { data: categorias, error: errorCats } = await supabase
       .from('haccp_categorias')
@@ -30,10 +26,8 @@ export async function GET() {
       .order('id');
 
     if (errorCats) {
-      console.error('❌ Error obteniendo categorías:', errorCats);
+      console.error('Error obteniendo categorías:', errorCats);
     }
-
-    console.log(`✅ ${categorias?.length || 0} categorías obtenidas`);
 
     return NextResponse.json({ 
       pccs: pccs || [], 
@@ -41,7 +35,7 @@ export async function GET() {
     });
 
   } catch (error: any) {
-    console.error('❌ Error en API admin PCC:', error);
+    console.error('Error en API admin PCC:', error);
     return NextResponse.json({ 
       error: error.message, 
       pccs: [], 
