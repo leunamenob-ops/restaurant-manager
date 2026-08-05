@@ -16,7 +16,20 @@ export async function GET(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    // 🔥 PASO 1: Obtener registros del período (orden cronológico)
+    // 🔥 PASO 1: Obtener TODAS las categorías primero
+    const { data: todasCategorias, error: errorCats } = await supabase
+      .from('haccp_categorias')
+      .select('id, nombre');
+
+    if (errorCats) {
+      console.error('Error cargando categorías:', errorCats);
+    }
+
+    const catMapGlobal = new Map(
+      todasCategorias?.map(c => [c.id, c.nombre]) || []
+    );
+
+    // 🔥 PASO 2: Obtener registros del período
     const { data: registros, error: errorReg } = await supabase
       .from('haccp_registros')
       .select('*')
@@ -32,7 +45,7 @@ export async function GET(request: Request) {
       });
     }
 
-    // 🔥 PASO 2: Obtener PCCs y Categorías por separado (evita errores de joins anidados)
+    // 🔥 PASO 3: Obtener PCCs
     const pccIds = [...new Set(registros.map(r => r.id_pcc))];
     
     const { data: pccs } = await supabase
@@ -40,23 +53,16 @@ export async function GET(request: Request) {
       .select('id_pcc, nombre_pcc, categoria_id')
       .in('id_pcc', pccIds);
 
-    const catIds = [...new Set(pccs?.map(p => p.categoria_id) || [])];
-    
-    const { data: categorias } = await supabase
-      .from('haccp_categorias')
-      .select('id, nombre')
-      .in('id', catIds);
-
-    // 🔥 PASO 3: Crear mapas para búsqueda rápida
+    // 🔥 PASO 4: Crear mapas
     const pccMap = new Map(pccs?.map(p => [p.id_pcc, p]) || []);
-    const catMap = new Map(categorias?.map(c => [c.id, c.nombre]) || []);
 
-    // 🔥 PASO 4: Organizar datos: Categoría -> PCC -> Registros (ya vienen en orden cronológico)
+    // 🔥 PASO 5: Organizar datos usando el mapa global de categorías
     const registrosPorCategoria: any = {};
     
     registros.forEach((reg: any) => {
       const pcc = pccMap.get(reg.id_pcc);
-      const catNombre = pcc ? (catMap.get(pcc.categoria_id) || `Categoría ${pcc.categoria_id}`) : 'Sin Categoría';
+      const catId = pcc?.categoria_id || 'SIN_CAT';
+      const catNombre = catMapGlobal.get(catId) || `Categoría ${catId}`;
       const pccNombre = pcc?.nombre_pcc || 'PCC Desconocido';
 
       if (!registrosPorCategoria[catNombre]) {
@@ -92,7 +98,7 @@ export async function GET(request: Request) {
       });
     };
 
-    // 🔥 PASO 5: Generar HTML funcional y limpio
+    // 🔥 PASO 6: Generar HTML
     let html = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -214,7 +220,8 @@ export async function GET(request: Request) {
       
       incidencias.forEach((inc: any, index: number) => {
         const pcc = pccMap.get(inc.id_pcc);
-        const catNombre = pcc ? (catMap.get(pcc.categoria_id) || 'Sin Categoría') : 'Sin Categoría';
+        const catId = pcc?.categoria_id || 'SIN_CAT';
+        const catNombre = catMapGlobal.get(catId) || `Categoría ${catId}`;
         
         html += `
           <div class="inc-card">
