@@ -16,26 +16,15 @@ export async function GET(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    // 🔥 PASO 1: Obtener TODAS las categorías
-    const { data: todasCategorias, error: errorCats } = await supabase
-      .from('haccp_categorias')
-      .select('id, nombre');
-
-    const catMapGlobal = new Map(
-      todasCategorias?.map(c => [c.id, c.nombre]) || []
-    );
-
-    console.log('📂 Categorías cargadas:', Object.fromEntries(catMapGlobal));
-
-    // 🔥 PASO 2: Obtener registros
-    const { data: registros, error: errorReg } = await supabase
+    // 🔥 Obtener registros CON categoria_nombre y nombre_pcc (ya vienen en la tabla)
+    const { data: registros, error } = await supabase
       .from('haccp_registros')
       .select('*')
       .gte('fecha_hora', `${inicio}T00:00:00`)
       .lte('fecha_hora', `${fin}T23:59:59`)
       .order('fecha_hora', { ascending: true });
 
-    if (errorReg) throw errorReg;
+    if (error) throw error;
 
     if (!registros || registros.length === 0) {
       return new NextResponse('<h1>No hay registros en este período</h1>', { 
@@ -43,44 +32,13 @@ export async function GET(request: Request) {
       });
     }
 
-    // 🔥 PASO 3: Obtener PCCs
-    const pccIds = [...new Set(registros.map(r => r.id_pcc))];
-    
-    const { data: pccs } = await supabase
-      .from('haccp_pcc')
-      .select('id_pcc, nombre_pcc, categoria_id')
-      .in('id_pcc', pccIds);
-
-    console.log('📂 PCCs cargados:', pccs?.length);
-
-    //  PASO 4: Crear mapa de PCCs
-    const pccMap = new Map(pccs?.map(p => [p.id_pcc, p]) || []);
-
-    // 🔥 PASO 5: Organizar datos CON NOMBRES DE CATEGORÍAS
+    // 🔥 Organizar por categoria_nombre (que ya viene en el registro)
     const registrosPorCategoria: any = {};
     
     registros.forEach((reg: any) => {
-      const pcc = pccMap.get(reg.id_pcc);
-      
-      // Obtener ID de categoría del PCC
-      let catId = pcc?.categoria_id;
-      
-      // Si no hay categoría en el PCC, usar fallback
-      if (!catId) {
-        catId = 'SIN_CATEGORIA';
-      }
-      
-      // Obtener nombre de la categoría desde el mapa global
-      let catNombre = catMapGlobal.get(catId);
-      
-      // Si no existe en el mapa, usar el ID como fallback
-      if (!catNombre) {
-        catNombre = catId;
-      }
-      
-      const pccNombre = pcc?.nombre_pcc || 'PCC Desconocido';
-
-      console.log(`📝 Registro ${reg.id_pcc}: catId=${catId}, catNombre=${catNombre}, pcc=${pccNombre}`);
+      // USAR categoria_nombre directamente de haccp_registros
+      const catNombre = reg.categoria_nombre || reg.haccp_pcc?.haccp_categorias?.nombre || 'Sin Categoría';
+      const pccNombre = reg.nombre_pcc || reg.haccp_pcc?.nombre_pcc || 'PCC Desconocido';
 
       if (!registrosPorCategoria[catNombre]) {
         registrosPorCategoria[catNombre] = { items: [], ok: 0, nok: 0, pccs: {} };
@@ -97,7 +55,9 @@ export async function GET(request: Request) {
       else registrosPorCategoria[catNombre].nok++;
     });
 
-    // Estadísticas globales
+    console.log('📂 Categorías encontradas:', Object.keys(registrosPorCategoria));
+
+    // Estadísticas
     const totalRegistros = registros.length;
     const totalOK = registros.filter(r => r.estado === 'OK').length;
     const totalNOK = registros.filter(r => r.estado === 'NO_OK').length;
@@ -115,7 +75,7 @@ export async function GET(request: Request) {
       });
     };
 
-    // 🔥 PASO 6: Generar HTML
+    // Generar HTML
     let html = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -174,7 +134,7 @@ export async function GET(request: Request) {
   </div>
 `;
 
-    // 🔥 Renderizar por Categoría y Subcategoría (PCC)
+    // Renderizar por categoría
     Object.keys(registrosPorCategoria).forEach(catNombre => {
       const catData = registrosPorCategoria[catNombre];
       const pccKeys = Object.keys(catData.pccs);
@@ -214,7 +174,7 @@ export async function GET(request: Request) {
               <td>
                 ${reg.estado === 'NO_OK' ? `
                   <div style="color: red; font-weight: bold;">${reg.accion_correctora || 'Sin acción'}</div>
-                  ${reg.foto_evidencia ? '<div style="font-size: 9px; color: #666;">📷 Foto en apartado final</div>' : ''}
+                  ${reg.foto_evidencia ? '<div style="font-size: 9px; color: #666;"> Foto en apartado final</div>' : ''}
                 ` : '-'}
               </td>
             </tr>
@@ -227,7 +187,7 @@ export async function GET(request: Request) {
       html += `</div>`;
     });
 
-    // 🔥 Apartado de Incidencias al final
+    // Incidencias
     const incidencias = registros.filter((r: any) => r.estado === 'NO_OK');
     if (incidencias.length > 0) {
       html += `
@@ -236,13 +196,12 @@ export async function GET(request: Request) {
       `;
       
       incidencias.forEach((inc: any, index: number) => {
-        const pcc = pccMap.get(inc.id_pcc);
-        let catId = pcc?.categoria_id || 'SIN_CATEGORIA';
-        let catNombre = catMapGlobal.get(catId) || catId;
+        const catNombre = inc.categoria_nombre || 'Sin Categoría';
+        const pccNombre = inc.nombre_pcc || 'PCC Desconocido';
         
         html += `
           <div class="inc-card">
-            <div class="inc-title">${index + 1}. ${pcc?.nombre_pcc || 'PCC Desconocido'} <span style="font-weight: normal; color: #666;">(${catNombre})</span></div>
+            <div class="inc-title">${index + 1}. ${pccNombre} <span style="font-weight: normal; color: #666;">(${catNombre})</span></div>
             <div style="font-size: 10px; margin-bottom: 8px;">
               📅 ${formatearFechaHora(inc.fecha_hora)} | 📏 Valor: <strong>${inc.valor_medido !== null ? `${inc.valor_medido} ${inc.unidad || ''}` : 'N/A'}</strong> | 👤 ${inc.id_usuario}
             </div>
