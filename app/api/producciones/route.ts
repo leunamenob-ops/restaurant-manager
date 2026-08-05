@@ -14,7 +14,7 @@ const ESTADOS_VALIDOS = [
 ];
 
 // =====================================================
-// Cliente Supabase (sin @supabase/ssr)
+// Cliente Supabase
 // =====================================================
 function getSupabase() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -30,7 +30,7 @@ function getSupabase() {
 }
 
 // =====================================================
-// Generador de lote de respaldo (el trigger de BD también lo hace)
+// Utilidades
 // =====================================================
 function generarLoteNumero() {
   const now = new Date();
@@ -42,9 +42,42 @@ function generarLoteNumero() {
   return `PROD-${fecha}-${hora}-${random}`;
 }
 
+function round(n: number, decimales = 3) {
+  const p = Math.pow(10, decimales);
+  return Math.round(n * p) / p;
+}
+
+// Factor de escala según cantidad a producir
+function calcularFactor(
+  cantidad: number,
+  unidad: string,
+  gramosReceta: number,
+  porciones: number
+) {
+  const u = (unidad || '').toLowerCase();
+
+  if (gramosReceta > 0) {
+    if (u.includes('kg') || u.includes('kilo')) {
+      return (cantidad * 1000) / gramosReceta;
+    }
+    if (u.includes('gramo') || u === 'g' || u === 'gr') {
+      return cantidad / gramosReceta;
+    }
+    if (u.includes('litro') || u === 'l' || u === 'ml') {
+      const gramos = u === 'ml' ? cantidad : cantidad * 1000;
+      return gramos / gramosReceta;
+    }
+  }
+
+  if (porciones > 0) {
+    return cantidad / porciones;
+  }
+
+  return 1;
+}
+
 // =====================================================
 // GET /api/producciones
-// Filtros: ?estado= &q= &desde= &hasta= &ubicacion=
 // =====================================================
 export async function GET(request: Request) {
   try {
@@ -103,7 +136,6 @@ export async function GET(request: Request) {
 
 // =====================================================
 // POST /api/producciones
-// Crea producción + lote + materiales (opcional) + stock si terminada
 // =====================================================
 export async function POST(request: Request) {
   try {
@@ -184,7 +216,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Rollback de seguridad si falla algún paso posterior
     const rollbackProduccion = async (mensaje: string, status = 500) => {
       await supabase
         .from('lotes')
@@ -239,12 +270,101 @@ export async function POST(request: Request) {
     }
 
     // --------------------------------------------------
-    // 3. Materiales opcionales (despiece manual por ahora)
+    // 3. DESPIECE AUTOMÁTICO desde la sub-receta
     // --------------------------------------------------
-    let costeReal = Number(body?.coste_real || 0);
+    let factorAplicado = 1;
+    let materialesGenerados = 0;
 
+    if (payloadProduccion.sub_receta_id) {
+      const { data: receta } = await supabase
+        .from('recetas')
+        .select('id, nombre, porciones, produccion_gramos')
+        .eq('id', payloadProduccion.sub_receta_id)
+        .single();
+
+      if (receta) {
+        const { data: lineas } = await supabase
+          .from('receta_detalle')
+          .select('*')
+          .or(`receta_id.eq.${receta.id},subreceta_id.eq.${receta.id}`);
+
+        const lineasValidas = (lineas || []).filter((l: any) =>
+          /^[0-9a-fA-F-]{36}$/.test(String(l.ingrediente_id || ''))
+        );
+
+        const ids = Array.from(
+          new Set(lineasValidas.map((l: any) => l.ingrediente_id))
+        );
+
+        const nombres: Record<string, string> = {};
+
+        if (ids.length > 0) {
+          const { data: ings } = await supabase
+            .from('ingredientes')
+            .select('id, nombre')
+            .in('id', ids);
+
+          (ings || []).forEach((i: any) => {
+            nombres[i.id] = i.nombre;
+          });
+        }
+
+        const gramosReceta =
+          parseFloat(
+            String(receta.produccion_gramos || '').replace(',', '.')
+          ) || 0;
+        const porciones = Number(receta.porciones || 0);
+
+        factorAplicado = calcularFactor(
+          cantidad,
+          payloadProduccion.unidad_medida,
+          gramosReceta,
+          porciones
+        );
+
+        const materialesAuto = lineasValidas.map((l: any) => {
+          const cantTeorica =
+            Number(l.cantidad_necesaria || 0) * factorAplicado;
+
+          const costeUnitario =
+            Number(l.cantidad_necesaria) > 0
+              ? Number(l.coste_linea || 0) / Number(l.cantidad_necesaria)
+              : 0;
+
+          return {
+            produccion_id: produccion.id_produccion,
+            ingrediente_id: l.ingrediente_id,
+            ingrediente_nombre:
+              nombres[l.ingrediente_id] || 'Ingrediente sin nombre',
+            cantidad_teorica: round(cantTeorica),
+            cantidad_real: round(cantTeorica),
+            unidad: l.unidad || 'ud',
+            coste_unitario: round(costeUnitario, 4),
+            hotel_id: payloadProduccion.hotel_id,
+          };
+        });
+
+        if (materialesAuto.length > 0) {
+          const { error: errorAuto } = await supabase
+            .from('produccion_materiales')
+            .insert(materialesAuto);
+
+          if (errorAuto) {
+            return await rollbackProduccion(
+              `Falló el despiece automático: ${errorAuto.message}`
+            );
+          }
+
+          materialesGenerados = materialesAuto.length;
+        }
+      }
+    }
+
+    // --------------------------------------------------
+    // 4. Materiales manuales (opcionales)
+    // --------------------------------------------------
     if (Array.isArray(body?.materiales) && body.materiales.length > 0) {
-      const materiales = body.materiales
+      const manuales = body.materiales
         .filter((m: any) => m?.ingrediente_nombre)
         .map((m: any) => ({
           produccion_id: produccion.id_produccion,
@@ -257,37 +377,41 @@ export async function POST(request: Request) {
           hotel_id: payloadProduccion.hotel_id,
         }));
 
-      if (materiales.length > 0) {
-        const { error: errorMateriales } = await supabase
+      if (manuales.length > 0) {
+        const { error: errorManuales } = await supabase
           .from('produccion_materiales')
-          .insert(materiales);
+          .insert(manuales);
 
-        if (errorMateriales) {
+        if (errorManuales) {
           return await rollbackProduccion(
-            `Falló la creación de materiales: ${errorMateriales.message}`
+            `Falló la creación de materiales manuales: ${errorManuales.message}`
           );
         }
-
-        const { data: materialesCreados } = await supabase
-          .from('produccion_materiales')
-          .select('coste_total')
-          .eq('produccion_id', produccion.id_produccion);
-
-        costeReal =
-          materialesCreados?.reduce(
-            (total: number, item: any) => total + Number(item?.coste_total || 0),
-            0
-          ) || 0;
-
-        await supabase
-          .from('producciones')
-          .update({ coste_real: costeReal })
-          .eq('id_produccion', produccion.id_produccion);
       }
     }
 
     // --------------------------------------------------
-    // 4. Si está terminada → entrada de stock automática
+    // 5. Recalcular coste real con todos los materiales
+    // --------------------------------------------------
+    const { data: materialesCreados } = await supabase
+      .from('produccion_materiales')
+      .select('coste_total')
+      .eq('produccion_id', produccion.id_produccion);
+
+    if (materialesCreados && materialesCreados.length > 0) {
+      const costeReal = materialesCreados.reduce(
+        (total: number, item: any) => total + Number(item?.coste_total || 0),
+        0
+      );
+
+      await supabase
+        .from('producciones')
+        .update({ coste_real: round(costeReal, 2) })
+        .eq('id_produccion', produccion.id_produccion);
+    }
+
+    // --------------------------------------------------
+    // 6. Si está terminada → entrada de stock automática
     // --------------------------------------------------
     if (estado === 'terminada') {
       const { error: errorStock } = await supabase
@@ -316,7 +440,7 @@ export async function POST(request: Request) {
     }
 
     // --------------------------------------------------
-    // 5. Respuesta final con datos actualizados
+    // 7. Respuesta final
     // --------------------------------------------------
     const { data: produccionFinal } = await supabase
       .from('producciones')
@@ -330,6 +454,8 @@ export async function POST(request: Request) {
         message: 'Producción creada correctamente',
         data: produccionFinal || produccion,
         lote_numero: loteNumero,
+        factor_aplicado: round(factorAplicado, 4),
+        materiales_generados: materialesGenerados,
       },
       { status: 201 }
     );
