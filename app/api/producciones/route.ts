@@ -339,7 +339,7 @@ export async function POST(request: Request) {
             cantidad_teorica: round(cantTeorica),
             cantidad_real: round(cantTeorica),
             unidad: l.unidad || 'ud',
-            coste_unitario: round(costeUnitario, 4),
+            coste_unitario: round(costeUnitario, 6),
             hotel_id: payloadProduccion.hotel_id,
           };
         });
