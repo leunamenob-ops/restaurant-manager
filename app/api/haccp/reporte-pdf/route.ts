@@ -16,44 +16,48 @@ export async function GET(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    // 🔥 Consulta actualizada para incluir categorías, PCCs y fotos
-    const { data: registros, error } = await supabase
+    // 🔥 PASO 1: Obtener registros del período (orden cronológico)
+    const { data: registros, error: errorReg } = await supabase
       .from('haccp_registros')
-      .select(`
-        id_registro,
-        fecha_hora,
-        id_pcc,
-        valor_medido,
-        unidad,
-        estado,
-        accion_correctora,
-        foto_evidencia,
-        id_usuario,
-        haccp_pcc (
-          id_pcc,
-          nombre_pcc,
-          categoria_id,
-          haccp_categorias (
-            id,
-            nombre
-          )
-        )
-      `)
+      .select('*')
       .gte('fecha_hora', `${inicio}T00:00:00`)
       .lte('fecha_hora', `${fin}T23:59:59`)
-      .order('fecha_hora', { ascending: true }); // Orden cronológico
+      .order('fecha_hora', { ascending: true });
 
-    if (error) throw error;
+    if (errorReg) throw errorReg;
 
-    // Organizar por Categoría -> PCC (Subcategoría)
+    if (!registros || registros.length === 0) {
+      return new NextResponse('<h1>No hay registros en este período</h1>', { 
+        headers: { 'Content-Type': 'text/html; charset=utf-8' } 
+      });
+    }
+
+    // 🔥 PASO 2: Obtener PCCs y Categorías por separado (evita errores de joins anidados)
+    const pccIds = [...new Set(registros.map(r => r.id_pcc))];
+    
+    const { data: pccs } = await supabase
+      .from('haccp_pcc')
+      .select('id_pcc, nombre_pcc, categoria_id')
+      .in('id_pcc', pccIds);
+
+    const catIds = [...new Set(pccs?.map(p => p.categoria_id) || [])];
+    
+    const { data: categorias } = await supabase
+      .from('haccp_categorias')
+      .select('id, nombre')
+      .in('id', catIds);
+
+    // 🔥 PASO 3: Crear mapas para búsqueda rápida
+    const pccMap = new Map(pccs?.map(p => [p.id_pcc, p]) || []);
+    const catMap = new Map(categorias?.map(c => [c.id, c.nombre]) || []);
+
+    // 🔥 PASO 4: Organizar datos: Categoría -> PCC -> Registros (ya vienen en orden cronológico)
     const registrosPorCategoria: any = {};
     
-    registros?.forEach((reg: any) => {
-      const pcc = reg.haccp_pcc || {};
-      const cat = pcc.haccp_categorias || {};
-      const catId = pcc.categoria_id;
-      const catNombre = cat.nombre || `Categoría ${catId}`;
-      const pccNombre = pcc.nombre_pcc || 'PCC Desconocido';
+    registros.forEach((reg: any) => {
+      const pcc = pccMap.get(reg.id_pcc);
+      const catNombre = pcc ? (catMap.get(pcc.categoria_id) || `Categoría ${pcc.categoria_id}`) : 'Sin Categoría';
+      const pccNombre = pcc?.nombre_pcc || 'PCC Desconocido';
 
       if (!registrosPorCategoria[catNombre]) {
         registrosPorCategoria[catNombre] = { items: [], ok: 0, nok: 0, pccs: {} };
@@ -64,24 +68,17 @@ export async function GET(request: Request) {
       }
 
       registrosPorCategoria[catNombre].pccs[pccNombre].push(reg);
-      
-      if (reg.estado === 'OK') {
-        registrosPorCategoria[catNombre].ok++;
-      } else {
-        registrosPorCategoria[catNombre].nok++;
-      }
       registrosPorCategoria[catNombre].items.push(reg);
+      
+      if (reg.estado === 'OK') registrosPorCategoria[catNombre].ok++;
+      else registrosPorCategoria[catNombre].nok++;
     });
 
-    const totalRegistros = registros?.length || 0;
-    const totalOK = registros?.filter((r: any) => r.estado === 'OK').length || 0;
-    const totalNOK = registros?.filter((r: any) => r.estado === 'NO_OK').length || 0;
+    // Estadísticas globales
+    const totalRegistros = registros.length;
+    const totalOK = registros.filter(r => r.estado === 'OK').length;
+    const totalNOK = registros.filter(r => r.estado === 'NO_OK').length;
     const porcentajeCumplimiento = totalRegistros > 0 ? Math.round((totalOK / totalRegistros) * 100) : 0;
-
-    const fechaInicio = new Date(inicio);
-    const fechaFin = new Date(fin);
-    const dias = Math.ceil((fechaFin.getTime() - fechaInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    const promedioDiario = dias > 0 ? Math.round(totalRegistros / dias) : 0;
 
     const formatearFecha = (f: string) => {
       const [y, m, d] = f.split('-');
@@ -95,360 +92,161 @@ export async function GET(request: Request) {
       });
     };
 
-    // Generar HTML del Reporte
+    // 🔥 PASO 5: Generar HTML funcional y limpio
     let html = `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <title>Reporte HACCP ${inicio} - ${fin}</title>
   <style>
-    * { box-sizing: border-box; }
-    body { 
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-      margin: 0; 
-      padding: 20px; 
-      color: #1e293b;
-      background: #ffffff;
-      line-height: 1.5;
-      font-size: 10px;
-    }
+    body { font-family: Arial, sans-serif; margin: 20px; color: #000; font-size: 11px; }
+    .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+    .header h1 { margin: 0; font-size: 18px; }
+    .header p { margin: 5px 0; font-size: 12px; }
     
-    .header { 
-      text-align: center; 
-      padding: 15px 20px;
-      background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
-      color: white;
-      border-radius: 8px;
-      margin-bottom: 20px;
-    }
-    .header h1 { margin: 0; font-size: 20px; font-weight: 700; }
-    .header h2 { margin: 8px 0; font-size: 14px; font-weight: 400; }
-    .header p { margin: 5px 0; font-size: 11px; }
+    .kpi-grid { display: flex; justify-content: space-around; margin-bottom: 20px; border: 1px solid #ccc; padding: 10px; }
+    .kpi { text-align: center; }
+    .kpi-val { font-size: 20px; font-weight: bold; }
+    .kpi-ok { color: green; }
+    .kpi-nok { color: red; }
     
-    .kpi-grid { 
-      display: grid; 
-      grid-template-columns: repeat(5, 1fr); 
-      gap: 10px; 
-      margin-bottom: 20px; 
-    }
-    .kpi-card { 
-      background: #f8fafc;
-      padding: 12px;
-      border-radius: 6px;
-      border-left: 3px solid #0891b2;
-    }
-    .kpi-card.ok { border-left-color: #16a34a; }
-    .kpi-card.nok { border-left-color: #dc2626; }
-    .kpi-label { font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 5px; }
-    .kpi-value { font-size: 24px; font-weight: 700; color: #0f172a; margin: 0; }
-    .kpi-card.ok .kpi-value { color: #16a34a; }
-    .kpi-card.nok .kpi-value { color: #dc2626; }
-    .kpi-sub { font-size: 8px; color: #94a3b8; margin-top: 3px; }
+    .cat-section { margin-bottom: 20px; page-break-inside: avoid; border: 1px solid #999; }
+    .cat-title { background: #eee; padding: 8px; font-weight: bold; font-size: 13px; border-bottom: 1px solid #999; }
+    .pcc-title { background: #f9f9f9; padding: 5px 10px; font-weight: bold; font-size: 11px; border-bottom: 1px solid #ccc; }
     
-    .categoria-seccion {
-      margin-bottom: 20px;
-      page-break-inside: avoid;
-      background: white;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      overflow: hidden;
-    }
-    .cat-header {
-      background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
-      color: white;
-      padding: 10px 15px;
-      font-size: 13px;
-      font-weight: 700;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .cat-stats { display: flex; gap: 10px; font-size: 11px; }
-    .cat-stat { background: rgba(255,255,255,0.2); padding: 3px 8px; border-radius: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; }
+    th { background: #f5f5f5; }
+    .badge-ok { color: green; font-weight: bold; }
+    .badge-nok { color: red; font-weight: bold; }
     
-    .pcc-subsection {
-      margin: 10px 15px;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      overflow: hidden;
-      page-break-inside: avoid;
-    }
-    .pcc-header {
-      background: #f1f5f9;
-      padding: 8px 12px;
-      font-size: 11px;
-      font-weight: 700;
-      color: #334155;
-      border-bottom: 1px solid #e2e8f0;
-    }
+    .incidencias-section { margin-top: 30px; page-break-before: always; }
+    .inc-header { background: #fee; color: #900; padding: 8px; font-weight: bold; font-size: 14px; border: 1px solid #900; }
+    .inc-card { border: 1px solid #ccc; margin-bottom: 15px; padding: 10px; page-break-inside: avoid; }
+    .inc-title { font-weight: bold; font-size: 12px; margin-bottom: 5px; }
+    .inc-action { background: #fff0f0; padding: 8px; border-left: 3px solid red; margin: 8px 0; font-size: 10px; }
+    .inc-img { max-width: 250px; max-height: 180px; border: 1px solid #999; margin-top: 5px; }
     
-    .tabla-categoria {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 9px;
-    }
-    .tabla-categoria th {
-      background: #f8fafc;
-      padding: 8px 10px;
-      text-align: left;
-      font-size: 9px;
-      color: #64748b;
-      text-transform: uppercase;
-      border-bottom: 2px solid #e2e8f0;
-    }
-    .tabla-categoria td {
-      padding: 8px 10px;
-      border-bottom: 1px solid #f1f5f9;
-      vertical-align: top;
-    }
-    
-    .badge { display: inline-block; padding: 2px 6px; border-radius: 12px; font-size: 9px; font-weight: 700; }
-    .badge-ok { background: #dcfce7; color: #16a34a; }
-    .badge-nok { background: #fee2e2; color: #dc2626; }
-    
-    /* 🔥 APARTADO DE INCIDENCIAS */
-    .incidencias-section {
-      margin-top: 30px;
-      page-break-before: always;
-    }
-    .incidencias-header {
-      background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-      color: white;
-      padding: 12px 15px;
-      border-radius: 8px 8px 0 0;
-      font-size: 14px;
-      font-weight: 700;
-    }
-    .incidencias-list {
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
-      padding: 15px;
-      background: #fef2f2;
-      border-radius: 0 0 8px 8px;
-      border: 1px solid #fecaca;
-      border-top: none;
-    }
-    .incidencia-card {
-      background: white;
-      padding: 12px;
-      border-radius: 6px;
-      border-left: 4px solid #dc2626;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-      page-break-inside: avoid;
-    }
-    .incidencia-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-      border-bottom: 1px solid #f1f5f9;
-      padding-bottom: 6px;
-    }
-    .incidencia-title { font-size: 12px; font-weight: 700; color: #1e293b; }
-    .incidencia-cat { font-size: 10px; color: #64748b; background: #f1f5f9; padding: 2px 8px; border-radius: 12px; }
-    .incidencia-details {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
-      margin-bottom: 10px;
-    }
-    .incidencia-meta { font-size: 10px; color: #475569; }
-    .incidencia-action-box {
-      background: #fff1f2;
-      padding: 10px;
-      border-radius: 6px;
-      margin-bottom: 10px;
-    }
-    .incidencia-action-label {
-      font-size: 10px;
-      font-weight: 700;
-      color: #9f1239;
-      margin-bottom: 4px;
-      text-transform: uppercase;
-    }
-    .incidencia-action-text { font-size: 11px; color: #1e293b; line-height: 1.4; }
-    .incidencia-foto { margin-top: 10px; }
-    .incidencia-img {
-      max-width: 200px;
-      max-height: 150px;
-      border-radius: 6px;
-      border: 1px solid #e2e8f0;
-      object-fit: cover;
-      margin-top: 6px;
-    }
-    
-    .footer { margin-top: 30px; text-align: center; color: #94a3b8; font-size: 9px; padding-top: 15px; border-top: 1px solid #e2e8f0; }
-    
-    .print-btn {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      padding: 12px 24px;
-      background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 700;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(8, 145, 178, 0.3);
-    }
+    .footer { margin-top: 30px; text-align: center; font-size: 9px; color: #666; border-top: 1px solid #ccc; padding-top: 10px; }
     
     @media print {
-      body { margin: 10px; padding: 10px; }
-      .print-btn { display: none; }
-      .categoria-seccion, .pcc-subsection, .incidencia-card { box-shadow: none; }
+      body { margin: 10px; }
+      .no-print { display: none; }
       @page { margin: 1cm; size: A4; }
     }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>🛡️ KOST SOFTWARE</h1>
-    <h2>Reporte de Inspección HACCP</h2>
-    <p>📅 Período: ${formatearFecha(inicio)} al ${formatearFecha(fin)} (${dias} días) | Promedio: ${promedioDiario} registros/día</p>
+    <h1>REPORTE DE CONTROL HACCP</h1>
+    <p><strong>Período:</strong> ${formatearFecha(inicio)} al ${formatearFecha(fin)}</p>
+    <p><strong>Generado:</strong> ${new Date().toLocaleString('es-ES')}</p>
   </div>
 
   <div class="kpi-grid">
-    <div class="kpi-card">
-      <div class="kpi-label">📊 Total Registros</div>
-      <div class="kpi-value">${totalRegistros}</div>
-    </div>
-    <div class="kpi-card ok">
-      <div class="kpi-label">✅ Registros OK</div>
-      <div class="kpi-value">${totalOK}</div>
-    </div>
-    <div class="kpi-card nok">
-      <div class="kpi-label">⚠️ Incidencias</div>
-      <div class="kpi-value">${totalNOK}</div>
-    </div>
-    <div class="kpi-card ${porcentajeCumplimiento >= 95 ? 'ok' : 'nok'}">
-      <div class="kpi-label">📈 Cumplimiento</div>
-      <div class="kpi-value">${porcentajeCumplimiento}%</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">📅 Días evaluados</div>
-      <div class="kpi-value">${dias}</div>
-    </div>
+    <div class="kpi"><div class="kpi-val">${totalRegistros}</div><div>Total Registros</div></div>
+    <div class="kpi"><div class="kpi-val kpi-ok">${totalOK}</div><div>Conforme (OK)</div></div>
+    <div class="kpi"><div class="kpi-val kpi-nok">${totalNOK}</div><div>No Conforme (NOK)</div></div>
+    <div class="kpi"><div class="kpi-val">${porcentajeCumplimiento}%</div><div>Cumplimiento</div></div>
   </div>
 `;
 
-    // 🔥 Renderizar Categorías y Subcategorías (PCCs)
+    // 🔥 Renderizar por Categoría y Subcategoría (PCC)
     Object.keys(registrosPorCategoria).forEach(catNombre => {
       const catData = registrosPorCategoria[catNombre];
       const pccKeys = Object.keys(catData.pccs);
       
       html += `
-      <div class="categoria-seccion">
-        <div class="cat-header">
-          <span>📁 ${catNombre}</span>
-          <div class="cat-stats">
-            <span class="cat-stat">📊 ${catData.items.length}</span>
-            <span class="cat-stat" style="background: rgba(22, 163, 74, 0.3);">✅ ${catData.ok}</span>
-            ${catData.nok > 0 ? `<span class="cat-stat" style="background: rgba(220, 38, 38, 0.3);">⚠️ ${catData.nok}</span>` : ''}
-          </div>
-        </div>
+      <div class="cat-section">
+        <div class="cat-title">📁 ${catNombre} (Total: ${catData.items.length} | OK: ${catData.ok} | NOK: ${catData.nok})</div>
       `;
 
       pccKeys.forEach(pccNombre => {
         const pccRegs = catData.pccs[pccNombre];
         html += `
-        <div class="pcc-subsection">
-          <div class="pcc-header">📍 ${pccNombre}</div>
-          <table class="tabla-categoria">
-            <thead>
-              <tr>
-                <th style="width: 20%">🕐 Fecha/Hora</th>
-                <th style="width: 15%">📏 Valor</th>
-                <th style="width: 15%">✓ Estado</th>
-                <th style="width: 15%">👤 Usuario</th>
-                <th style="width: 35%">🔧 Acción / Foto</th>
-              </tr>
-            </thead>
-            <tbody>
+        <div class="pcc-title">📍 ${pccNombre}</div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 22%">Fecha/Hora</th>
+              <th style="width: 15%">Valor</th>
+              <th style="width: 12%">Estado</th>
+              <th style="width: 15%">Usuario</th>
+              <th style="width: 36%">Acción Correctora / Foto</th>
+            </tr>
+          </thead>
+          <tbody>
         `;
 
         pccRegs.forEach((reg: any) => {
-          const badgeClass = reg.estado === 'OK' ? 'badge-ok' : 'badge-nok';
+          const badge = reg.estado === 'OK' ? '<span class="badge-ok">OK</span>' : '<span class="badge-nok">NOK</span>';
+          const valor = reg.valor_medido !== null ? `${reg.valor_medido} ${reg.unidad || ''}` : '-';
+          
           html += `
             <tr>
               <td>${formatearFechaHora(reg.fecha_hora)}</td>
-              <td>${reg.valor_medido !== null ? `${reg.valor_medido} ${reg.unidad || ''}` : '-'}</td>
-              <td><span class="badge ${badgeClass}">${reg.estado}</span></td>
+              <td>${valor}</td>
+              <td>${badge}</td>
               <td>${reg.id_usuario}</td>
               <td>
                 ${reg.estado === 'NO_OK' ? `
-                  <div style="color: #dc2626; font-weight: 600; font-size: 9px; margin-bottom: 4px;">
-                    🔧 ${reg.accion_correctora ? reg.accion_correctora.substring(0, 60) + (reg.accion_correctora.length > 60 ? '...' : '') : 'Sin acción'}
-                  </div>
-                  ${reg.foto_evidencia ? `<div style="font-size: 8px; color: #64748b;">📷 Foto adjunta (ver apartado final)</div>` : ''}
+                  <div style="color: red; font-weight: bold;">${reg.accion_correctora || 'Sin acción'}</div>
+                  ${reg.foto_evidencia ? '<div style="font-size: 9px; color: #666;">📷 Foto en apartado final</div>' : ''}
                 ` : '-'}
               </td>
             </tr>
           `;
         });
 
-        html += `
-            </tbody>
-          </table>
-        </div>
-        `;
+        html += `</tbody></table></div>`;
       });
 
       html += `</div>`;
     });
 
-    // 🔥 Apartado dedicado de Incidencias al final del reporte
-    const incidencias = registros?.filter((r: any) => r.estado === 'NO_OK') || [];
+    // 🔥 Apartado de Incidencias al final
+    const incidencias = registros.filter((r: any) => r.estado === 'NO_OK');
     if (incidencias.length > 0) {
       html += `
       <div class="incidencias-section">
-        <div class="incidencias-header">🚨 APARTADO DE INCIDENCIAS Y MEDIDAS CORRECTORAS (${incidencias.length})</div>
-        <div class="incidencias-list">
+        <div class="inc-header">🚨 DETALLE DE INCIDENCIAS Y MEDIDAS CORRECTORAS (${incidencias.length})</div>
       `;
       
       incidencias.forEach((inc: any, index: number) => {
-        const pcc = inc.haccp_pcc || {};
-        const cat = pcc.haccp_categorias || {};
+        const pcc = pccMap.get(inc.id_pcc);
+        const catNombre = pcc ? (catMap.get(pcc.categoria_id) || 'Sin Categoría') : 'Sin Categoría';
+        
         html += `
-          <div class="incidencia-card">
-            <div class="incidencia-top">
-              <div class="incidencia-title">${index + 1}. ${pcc.nombre_pcc || 'PCC Desconocido'}</div>
-              <div class="incidencia-cat">${cat.nombre || 'Sin Categoría'}</div>
+          <div class="inc-card">
+            <div class="inc-title">${index + 1}. ${pcc?.nombre_pcc || 'PCC Desconocido'} <span style="font-weight: normal; color: #666;">(${catNombre})</span></div>
+            <div style="font-size: 10px; margin-bottom: 8px;">
+              📅 ${formatearFechaHora(inc.fecha_hora)} | 📏 Valor: <strong>${inc.valor_medido !== null ? `${inc.valor_medido} ${inc.unidad || ''}` : 'N/A'}</strong> | 👤 ${inc.id_usuario}
             </div>
-            <div class="incidencia-details">
-              <div class="incidencia-meta">📅 ${formatearFechaHora(inc.fecha_hora)}</div>
-              <div class="incidencia-meta">📏 Valor: <strong>${inc.valor_medido !== null ? `${inc.valor_medido} ${inc.unidad || ''}` : 'N/A'}</strong></div>
-              <div class="incidencia-meta">👤 Usuario: ${inc.id_usuario}</div>
-            </div>
-            <div class="incidencia-action-box">
-              <div class="incidencia-action-label">🔧 Medida Correctora Aplicada:</div>
-              <div class="incidencia-action-text">${inc.accion_correctora || 'No se documentó ninguna acción correctora.'}</div>
+            <div class="inc-action">
+              <strong>🔧 Medida Correctora:</strong><br>
+              ${inc.accion_correctora || 'No se documentó ninguna acción correctora.'}
             </div>
             ${inc.foto_evidencia ? `
-            <div class="incidencia-foto">
-              <div class="incidencia-action-label">📷 Evidencia Fotográfica:</div>
-              <img src="${inc.foto_evidencia}" alt="Evidencia" class="incidencia-img" />
+            <div>
+              <strong>📷 Evidencia Fotográfica:</strong><br>
+              <img src="${inc.foto_evidencia}" alt="Evidencia" class="inc-img" />
             </div>
             ` : ''}
           </div>
         `;
       });
       
-      html += `
-        </div>
-      </div>
-      `;
+      html += `</div>`;
     }
 
     html += `
   <div class="footer">
-    <p><strong>KOST Software</strong> - Sistema de Gestión HACCP para Hostelería</p>
-    <p style="margin-top: 5px;">© ${new Date().getFullYear()} | Generado el ${new Date().toLocaleString('es-ES')}</p>
+    <p>KOST Software - Sistema de Gestión HACCP para Hostelería</p>
   </div>
 
-  <button class="print-btn" onclick="window.print()">📄 Imprimir / Guardar PDF</button>
+  <button class="no-print" onclick="window.print()" style="position: fixed; bottom: 20px; right: 20px; padding: 15px 30px; background: #000; color: #fff; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; font-weight: bold;">
+    🖨️ IMPRIMIR / GUARDAR PDF
+  </button>
 
   <script>
     setTimeout(() => { if (confirm('¿Deseas imprimir o guardar este reporte como PDF?')) { window.print(); } }, 500);
