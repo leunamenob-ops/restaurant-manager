@@ -52,12 +52,23 @@ export default function AdminPCCsPage() {
   async function cargarDatos() {
     setLoading(true);
     try {
+      console.log('📡 Cargando PCCs y categorías...');
       const res = await fetch('/api/haccp/admin/pcc');
       const data = await res.json();
-      setPccs(data.pccs || []);
-      setCategorias(data.categorias || []);
+      
+      console.log('📦 Datos recibidos:', data);
+      
+      if (data.pccs) {
+        setPccs(data.pccs);
+        console.log(`✅ ${data.pccs.length} PCCs cargados`);
+      }
+      
+      if (data.categorias) {
+        setCategorias(data.categorias);
+        console.log(`✅ ${data.categorias.length} categorías cargadas`);
+      }
     } catch (error) {
-      console.error('Error cargando datos:', error);
+      console.error('❌ Error cargando datos:', error);
     } finally {
       setLoading(false);
     }
@@ -105,6 +116,8 @@ export default function AdminPCCsPage() {
       const url = pccEditando ? '/api/haccp/admin/pcc' : '/api/haccp/admin/pcc';
       const method = pccEditando ? 'PUT' : 'POST';
 
+      console.log('💾 Guardando PCC:', formData);
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -117,9 +130,11 @@ export default function AdminPCCsPage() {
         throw new Error(data.error || 'Error al guardar');
       }
 
+      console.log('✅ PCC guardado correctamente');
       setModalAbierto(false);
       await cargarDatos();
     } catch (err: any) {
+      console.error('❌ Error guardando:', err);
       setError(err.message);
     } finally {
       setGuardando(false);
@@ -132,6 +147,8 @@ export default function AdminPCCsPage() {
     }
 
     try {
+      console.log('🗑️ Eliminando PCC:', id_pcc);
+      
       const res = await fetch(`/api/haccp/admin/pcc?id_pcc=${id_pcc}`, {
         method: 'DELETE'
       });
@@ -142,8 +159,10 @@ export default function AdminPCCsPage() {
         throw new Error(data.error || 'Error al eliminar');
       }
 
+      console.log('✅ PCC eliminado correctamente');
       await cargarDatos();
     } catch (err: any) {
+      console.error('❌ Error eliminando:', err);
       alert('Error: ' + err.message);
     }
   }
@@ -164,7 +183,7 @@ export default function AdminPCCsPage() {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-4 animate-pulse">
+          <div className="w-16 h-16 bg-cyan-600 rounded-2xl flex items-center justify-center mx-auto mb-4 animate-pulse">
             <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -215,7 +234,7 @@ export default function AdminPCCsPage() {
           <div className="flex-1">
             <input
               type="text"
-              placeholder="Buscar por nombre o ID..."
+              placeholder="🔍 Buscar por nombre o ID..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               className="w-full p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 outline-none"
@@ -236,7 +255,25 @@ export default function AdminPCCsPage() {
         {/* Lista de PCCs por categoría */}
         {pccsPorCategoria.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-            <p className="text-slate-500">No se encontraron PCCs con los filtros actuales</p>
+            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">
+              {pccs.length === 0 ? 'No hay PCCs creados' : 'No se encontraron PCCs con los filtros actuales'}
+            </h3>
+            <p className="text-slate-500 mb-4">
+              {pccs.length === 0 ? 'Comienza creando tu primer PCC' : 'Prueba a limpiar los filtros'}
+            </p>
+            {pccs.length === 0 && (
+              <button
+                onClick={abrirModalCrear}
+                className="px-6 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-all font-medium"
+              >
+                Crear Primer PCC
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-6">
@@ -244,32 +281,34 @@ export default function AdminPCCsPage() {
               <div key={categoria.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 <div className="bg-slate-50 px-6 py-3 border-b border-slate-200 flex items-center justify-between">
                   <h2 className="font-bold text-slate-900">{categoria.nombre}</h2>
-                  <span className="text-sm text-slate-500">{pccsCat.length} PCCs</span>
+                  <span className="text-sm text-slate-500 bg-white px-3 py-1 rounded-full border border-slate-200">
+                    {pccsCat.length} PCCs
+                  </span>
                 </div>
                 <div className="divide-y divide-slate-100">
                   {pccsCat.map(pcc => (
                     <div key={pcc.id_pcc} className="px-6 py-4 hover:bg-slate-50 transition-colors flex items-center justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-1">
-                          <span className="font-mono text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                          <span className="font-mono text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                             {pcc.id_pcc}
                           </span>
                           <h3 className="font-semibold text-slate-900 truncate">{pcc.nombre_pcc}</h3>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                           <span className={`px-2 py-0.5 rounded font-medium ${
-                            pcc.tipo_control === 'NUMERICO' ? 'bg-cyan-50 text-cyan-700' :
-                            pcc.tipo_control === 'CUALITATIVO' ? 'bg-purple-50 text-purple-700' :
-                            'bg-amber-50 text-amber-700'
+                            pcc.tipo_control === 'NUMERICO' ? 'bg-cyan-50 text-cyan-700 border border-cyan-200' :
+                            pcc.tipo_control === 'CUALITATIVO' ? 'bg-purple-50 text-purple-700 border border-purple-200' :
+                            'bg-amber-50 text-amber-700 border border-amber-200'
                           }`}>
                             {pcc.tipo_control}
                           </span>
                           {pcc.limite_min !== null && pcc.limite_max !== null && (
-                            <span className="text-slate-600">
+                            <span className="text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                               Rango: {pcc.limite_min} - {pcc.limite_max} {pcc.unidad || ''}
                             </span>
                           )}
-                          <span className="text-slate-500">
+                          <span className="text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                             🕐 {pcc.frecuencia || 'Diaria'}
                           </span>
                         </div>
@@ -277,7 +316,7 @@ export default function AdminPCCsPage() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => abrirModalEditar(pcc)}
-                          className="p-2 text-slate-600 hover:text-cyan-600 hover:bg-cyan-50 rounded-lg transition-all"
+                          className="p-2 text-slate-600 hover:text-cyan-600 hover:bg-cyan-50 rounded-lg transition-all border border-transparent hover:border-cyan-200"
                           title="Editar"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -286,7 +325,7 @@ export default function AdminPCCsPage() {
                         </button>
                         <button
                           onClick={() => eliminarPCC(pcc.id_pcc, pcc.nombre_pcc)}
-                          className="p-2 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                          className="p-2 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all border border-transparent hover:border-rose-200"
                           title="Eliminar"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -303,7 +342,7 @@ export default function AdminPCCsPage() {
         )}
       </main>
 
-      {/* Modal Crear/Editar */}
+      {/* Modal Crear/Editar - SOLO se muestra si modalAbierto es true */}
       {modalAbierto && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setModalAbierto(false)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
