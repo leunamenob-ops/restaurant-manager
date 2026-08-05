@@ -16,20 +16,18 @@ export async function GET(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    // 🔥 PASO 1: Obtener TODAS las categorías primero
+    // 🔥 PASO 1: Obtener TODAS las categorías
     const { data: todasCategorias, error: errorCats } = await supabase
       .from('haccp_categorias')
       .select('id, nombre');
-
-    if (errorCats) {
-      console.error('Error cargando categorías:', errorCats);
-    }
 
     const catMapGlobal = new Map(
       todasCategorias?.map(c => [c.id, c.nombre]) || []
     );
 
-    // 🔥 PASO 2: Obtener registros del período
+    console.log('📂 Categorías cargadas:', Object.fromEntries(catMapGlobal));
+
+    // 🔥 PASO 2: Obtener registros
     const { data: registros, error: errorReg } = await supabase
       .from('haccp_registros')
       .select('*')
@@ -53,17 +51,36 @@ export async function GET(request: Request) {
       .select('id_pcc, nombre_pcc, categoria_id')
       .in('id_pcc', pccIds);
 
-    // 🔥 PASO 4: Crear mapas
+    console.log('📂 PCCs cargados:', pccs?.length);
+
+    //  PASO 4: Crear mapa de PCCs
     const pccMap = new Map(pccs?.map(p => [p.id_pcc, p]) || []);
 
-    // 🔥 PASO 5: Organizar datos usando el mapa global de categorías
+    // 🔥 PASO 5: Organizar datos CON NOMBRES DE CATEGORÍAS
     const registrosPorCategoria: any = {};
     
     registros.forEach((reg: any) => {
       const pcc = pccMap.get(reg.id_pcc);
-      const catId = pcc?.categoria_id || 'SIN_CAT';
-      const catNombre = catMapGlobal.get(catId) || `Categoría ${catId}`;
+      
+      // Obtener ID de categoría del PCC
+      let catId = pcc?.categoria_id;
+      
+      // Si no hay categoría en el PCC, usar fallback
+      if (!catId) {
+        catId = 'SIN_CATEGORIA';
+      }
+      
+      // Obtener nombre de la categoría desde el mapa global
+      let catNombre = catMapGlobal.get(catId);
+      
+      // Si no existe en el mapa, usar el ID como fallback
+      if (!catNombre) {
+        catNombre = catId;
+      }
+      
       const pccNombre = pcc?.nombre_pcc || 'PCC Desconocido';
+
+      console.log(`📝 Registro ${reg.id_pcc}: catId=${catId}, catNombre=${catNombre}, pcc=${pccNombre}`);
 
       if (!registrosPorCategoria[catNombre]) {
         registrosPorCategoria[catNombre] = { items: [], ok: 0, nok: 0, pccs: {} };
@@ -220,8 +237,8 @@ export async function GET(request: Request) {
       
       incidencias.forEach((inc: any, index: number) => {
         const pcc = pccMap.get(inc.id_pcc);
-        const catId = pcc?.categoria_id || 'SIN_CAT';
-        const catNombre = catMapGlobal.get(catId) || `Categoría ${catId}`;
+        let catId = pcc?.categoria_id || 'SIN_CATEGORIA';
+        let catNombre = catMapGlobal.get(catId) || catId;
         
         html += `
           <div class="inc-card">
