@@ -1,6 +1,6 @@
+// app/api/producciones/route.ts
 import { NextResponse } from 'next/server';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,36 +13,30 @@ const ESTADOS_VALIDOS = [
   'cancelada',
 ];
 
-async function getSupabase() {
-  const cookieStore = await cookies();
-
+// =====================================================
+// Cliente Supabase (sin @supabase/ssr)
+// =====================================================
+function getSupabase() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY');
+    throw new Error(
+      'Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY'
+    );
   }
 
-  return createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value;
-      },
-      set(name: string, value: string, options: CookieOptions) {
-        cookieStore.set({ name, value, ...options });
-      },
-      remove(name: string, options: CookieOptions) {
-        cookieStore.set({ name, value: '', ...options });
-      },
-    },
-  });
+  return createClient(supabaseUrl, supabaseAnonKey);
 }
 
+// =====================================================
+// Generador de lote de respaldo (el trigger de BD también lo hace)
+// =====================================================
 function generarLoteNumero() {
   const now = new Date();
 
-  const fecha = now.toISOString().slice(0, 10).replaceAll('-', '');
-  const hora = now.toTimeString().slice(0, 8).replaceAll(':', '');
+  const fecha = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const hora = now.toTimeString().slice(0, 8).replace(/:/g, '');
   const random = Math.random().toString(36).slice(2, 5).toUpperCase();
 
   return `PROD-${fecha}-${hora}-${random}`;
@@ -50,11 +44,11 @@ function generarLoteNumero() {
 
 // =====================================================
 // GET /api/producciones
+// Filtros: ?estado= &q= &desde= &hasta= &ubicacion=
 // =====================================================
 export async function GET(request: Request) {
   try {
-    const supabase = await getSupabase();
-
+    const supabase = getSupabase();
     const url = new URL(request.url);
 
     const estado = url.searchParams.get('estado');
@@ -93,24 +87,15 @@ export async function GET(request: Request) {
 
     if (error) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: error.message,
-        },
+        { ok: false, error: error.message },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({
-      ok: true,
-      data,
-    });
+    return NextResponse.json({ ok: true, data });
   } catch (error: any) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: error?.message || 'Error al listar producciones',
-      },
+      { ok: false, error: error?.message || 'Error al listar producciones' },
       { status: 500 }
     );
   }
@@ -118,10 +103,11 @@ export async function GET(request: Request) {
 
 // =====================================================
 // POST /api/producciones
+// Crea producción + lote + materiales (opcional) + stock si terminada
 // =====================================================
 export async function POST(request: Request) {
   try {
-    const supabase = await getSupabase();
+    const supabase = getSupabase();
 
     let body: any;
 
@@ -129,10 +115,7 @@ export async function POST(request: Request) {
       body = await request.json();
     } catch {
       return NextResponse.json(
-        {
-          ok: false,
-          error: 'JSON inválido',
-        },
+        { ok: false, error: 'JSON inválido' },
         { status: 400 }
       );
     }
@@ -143,7 +126,8 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           ok: false,
-          error: 'Campos obligatorios: nombre, fecha_caducidad y cantidad_producida mayor que 0',
+          error:
+            'Campos obligatorios: nombre, fecha_caducidad y cantidad_producida mayor que 0',
         },
         { status: 400 }
       );
@@ -155,7 +139,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           ok: false,
-          error: `Estado inválido. Estados permitidos: ${ESTADOS_VALIDOS.join(', ')}`,
+          error: `Estado inválido. Permitidos: ${ESTADOS_VALIDOS.join(', ')}`,
         },
         { status: 400 }
       );
@@ -181,9 +165,9 @@ export async function POST(request: Request) {
       hotel_id: body?.hotel_id || DEFAULT_HOTEL_ID,
     };
 
-    // =====================================================
+    // --------------------------------------------------
     // 1. Crear producción
-    // =====================================================
+    // --------------------------------------------------
     const { data: produccion, error: errorProduccion } = await supabase
       .from('producciones')
       .insert(payloadProduccion)
@@ -200,6 +184,7 @@ export async function POST(request: Request) {
       );
     }
 
+    // Rollback de seguridad si falla algún paso posterior
     const rollbackProduccion = async (mensaje: string, status = 500) => {
       await supabase
         .from('lotes')
@@ -216,18 +201,12 @@ export async function POST(request: Request) {
         .delete()
         .eq('id_produccion', produccion.id_produccion);
 
-      return NextResponse.json(
-        {
-          ok: false,
-          error: mensaje,
-        },
-        { status }
-      );
+      return NextResponse.json({ ok: false, error: mensaje }, { status });
     };
 
-    // =====================================================
-    // 2. Crear lote asociado
-    // =====================================================
+    // --------------------------------------------------
+    // 2. Crear lote asociado (trazabilidad + QR)
+    // --------------------------------------------------
     const qrData = {
       tipo: 'produccion',
       lote: loteNumero,
@@ -239,44 +218,42 @@ export async function POST(request: Request) {
       ubicacion: produccion.ubicacion_almacen,
     };
 
-    const { error: errorLote } = await supabase
-      .from('lotes')
-      .insert({
-        lote_numero: loteNumero,
-        produccion_id: produccion.id_produccion,
-        fecha_produccion: produccion.fecha_produccion,
-        fecha_caducidad: produccion.fecha_caducidad,
-        cantidad_total: produccion.cantidad_producida,
-        cantidad_consumida: 0,
-        estado: 'activo',
-        temperatura_conservacion: body?.temperatura_conservacion || null,
-        alergen_info: body?.alergen_info || null,
-        qr_data: qrData,
-        hotel_id: payloadProduccion.hotel_id,
-      });
+    const { error: errorLote } = await supabase.from('lotes').insert({
+      lote_numero: loteNumero,
+      produccion_id: produccion.id_produccion,
+      fecha_produccion: produccion.fecha_produccion,
+      fecha_caducidad: produccion.fecha_caducidad,
+      cantidad_total: produccion.cantidad_producida,
+      cantidad_consumida: 0,
+      estado: 'activo',
+      temperatura_conservacion: body?.temperatura_conservacion || null,
+      alergen_info: body?.alergen_info || null,
+      qr_data: qrData,
+      hotel_id: payloadProduccion.hotel_id,
+    });
 
     if (errorLote) {
-      return rollbackProduccion(
-        `Producción creada pero falló la creación del lote: ${errorLote.message}`
+      return await rollbackProduccion(
+        `Producción creada pero falló el lote: ${errorLote.message}`
       );
     }
 
-    // =====================================================
-    // 3. Materiales opcionales
-    // =====================================================
+    // --------------------------------------------------
+    // 3. Materiales opcionales (despiece manual por ahora)
+    // --------------------------------------------------
+    let costeReal = Number(body?.coste_real || 0);
+
     if (Array.isArray(body?.materiales) && body.materiales.length > 0) {
       const materiales = body.materiales
-        .filter((material: any) => material?.ingrediente_nombre)
-        .map((material: any) => ({
+        .filter((m: any) => m?.ingrediente_nombre)
+        .map((m: any) => ({
           produccion_id: produccion.id_produccion,
-          ingrediente_id: material?.ingrediente_id || null,
-          ingrediente_nombre: material.ingrediente_nombre,
-          cantidad_teorica: Number(material?.cantidad_teorica || 0),
-          cantidad_real: Number(
-            material?.cantidad_real || material?.cantidad_teorica || 0
-          ),
-          unidad: material?.unidad || 'ud',
-          coste_unitario: Number(material?.coste_unitario || 0),
+          ingrediente_id: m?.ingrediente_id || null,
+          ingrediente_nombre: m.ingrediente_nombre,
+          cantidad_teorica: Number(m?.cantidad_teorica || 0),
+          cantidad_real: Number(m?.cantidad_real || m?.cantidad_teorica || 0),
+          unidad: m?.unidad || 'ud',
+          coste_unitario: Number(m?.coste_unitario || 0),
           hotel_id: payloadProduccion.hotel_id,
         }));
 
@@ -286,21 +263,19 @@ export async function POST(request: Request) {
           .insert(materiales);
 
         if (errorMateriales) {
-          return rollbackProduccion(
+          return await rollbackProduccion(
             `Falló la creación de materiales: ${errorMateriales.message}`
           );
         }
 
-        // Recalcular coste real según materiales
         const { data: materialesCreados } = await supabase
           .from('produccion_materiales')
           .select('coste_total')
           .eq('produccion_id', produccion.id_produccion);
 
-        const costeReal =
+        costeReal =
           materialesCreados?.reduce(
-            (total: number, item: any) =>
-              total + Number(item?.coste_total || 0),
+            (total: number, item: any) => total + Number(item?.coste_total || 0),
             0
           ) || 0;
 
@@ -311,9 +286,9 @@ export async function POST(request: Request) {
       }
     }
 
-    // =====================================================
-    // 4. Si está terminada, generar stock de entrada
-    // =====================================================
+    // --------------------------------------------------
+    // 4. Si está terminada → entrada de stock automática
+    // --------------------------------------------------
     if (estado === 'terminada') {
       const { error: errorStock } = await supabase
         .from('stock_producciones')
@@ -334,27 +309,33 @@ export async function POST(request: Request) {
         });
 
       if (errorStock) {
-        return rollbackProduccion(
-          `Falló la creación del stock de producto terminado: ${errorStock.message}`
+        return await rollbackProduccion(
+          `Falló la entrada de stock: ${errorStock.message}`
         );
       }
     }
+
+    // --------------------------------------------------
+    // 5. Respuesta final con datos actualizados
+    // --------------------------------------------------
+    const { data: produccionFinal } = await supabase
+      .from('producciones')
+      .select('*')
+      .eq('id_produccion', produccion.id_produccion)
+      .single();
 
     return NextResponse.json(
       {
         ok: true,
         message: 'Producción creada correctamente',
-        data: produccion,
+        data: produccionFinal || produccion,
         lote_numero: loteNumero,
       },
       { status: 201 }
     );
   } catch (error: any) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: error?.message || 'Error al crear la producción',
-      },
+      { ok: false, error: error?.message || 'Error al crear la producción' },
       { status: 500 }
     );
   }
