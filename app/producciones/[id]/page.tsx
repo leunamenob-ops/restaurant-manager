@@ -168,7 +168,7 @@ export default function FichaProduccionPage() {
     setProduccion(prod);
 
     if (prod) {
-      const [mats, lt, stk, cfg] = await Promise.all([
+      const [matsRes, ltRes, stkRes, cfgRes] = await Promise.all([
         supabase
           .from('produccion_materiales')
           .select('*')
@@ -179,10 +179,10 @@ export default function FichaProduccionPage() {
         supabase.from('etiquetas_config').select('*').eq('es_default', true).single(),
       ]);
 
-      setMateriales(mats || []);
-      setLote(lt);
-      setStock(stk || []);
-      setConfigEtiqueta(cfg);
+      setMateriales(matsRes.data || []);
+      setLote(ltRes.data);
+      setStock(stkRes.data || []);
+      setConfigEtiqueta(cfgRes.data);
     }
 
     setLoading(false);
