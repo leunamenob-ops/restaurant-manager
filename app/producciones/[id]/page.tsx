@@ -150,6 +150,7 @@ export default function FichaProduccionPage() {
   const [stock, setStock] = useState<MovStock[]>([]);
   const [configEtiqueta, setConfigEtiqueta] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [cambiandoEstado, setCambiandoEstado] = useState(false);
 
   useEffect(() => {
     if (id) cargarTodo();
@@ -188,44 +189,52 @@ export default function FichaProduccionPage() {
     setLoading(false);
   }
 
+  // =====================================================
+  // CAMBIO DE ESTADO vía endpoint (consume stock + crea stock terminado)
+  // =====================================================
   async function cambiarEstado(nuevo: string) {
-    const { error } = await supabase
-      .from('producciones')
-      .update({ estado: nuevo })
-      .eq('id_produccion', id);
+    if (cambiandoEstado) return;
+    setCambiandoEstado(true);
 
-    if (error) {
-      alert(`Error: ${error.message}`);
-      return;
-    }
+    try {
+      const res = await fetch(`/api/producciones/${id}/estado`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          estado: nuevo,
+          usuario: produccion?.responsable_nombre || 'Sistema Producciones',
+        }),
+      });
 
-    // Si pasa a terminada y no hay entrada de stock, la creamos
-    if (nuevo === 'terminada' && produccion) {
-      const { data: existente } = await supabase
-        .from('stock_producciones')
-        .select('id')
-        .eq('produccion_id', id)
-        .eq('movimiento_tipo', 'entrada');
+      const data = await res.json();
 
-      if (!existente || existente.length === 0) {
-        await supabase.from('stock_producciones').insert({
-          produccion_id: id,
-          producto_nombre: produccion.nombre,
-          cantidad_disponible: produccion.cantidad_producida,
-          cantidad_inicial: produccion.cantidad_producida,
-          unidad_medida: produccion.unidad_medida,
-          ubicacion: produccion.ubicacion_almacen || 'GENERAL',
-          fecha_entrada: produccion.fecha_produccion,
-          fecha_caducidad: produccion.fecha_caducidad,
-          lote_numero: produccion.lote_numero,
-          movimiento_tipo: 'entrada',
-          responsable_movimiento: produccion.responsable_nombre,
-          observaciones: 'Entrada automática al terminar producción',
-        });
+      if (!data.ok) {
+        alert(`Error: ${data.error}`);
+        setCambiandoEstado(false);
+        return;
       }
-    }
 
-    cargarTodo();
+      let mensaje = `✅ Producción → ${data.estado}`;
+      if (data.consumo_realizado && data.consumo?.length > 0) {
+        const resumen = data.consumo
+          .map(
+            (c: any) =>
+              `• ${c.ingrediente}: ${c.cantidad.toFixed(2)} ${c.unidad_compra}`
+          )
+          .join('\n');
+        mensaje += `\n\nIngredientes consumidos:\n${resumen}`;
+      }
+      if (data.stock_terminado_creado) {
+        mensaje += '\n\n📦 Entrada de stock de producto terminada generada';
+      }
+
+      alert(mensaje);
+      cargarTodo();
+    } catch (error: any) {
+      alert(`Error de conexión: ${error.message}`);
+    } finally {
+      setCambiandoEstado(false);
+    }
   }
 
   if (loading) {
@@ -289,7 +298,8 @@ export default function FichaProduccionPage() {
               {produccion.estado === 'planificada' && (
                 <button
                   onClick={() => cambiarEstado('en_proceso')}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-all text-sm"
+                  disabled={cambiandoEstado}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   🔵 Iniciar producción
                 </button>
@@ -297,7 +307,8 @@ export default function FichaProduccionPage() {
               {produccion.estado === 'en_proceso' && (
                 <button
                   onClick={() => cambiarEstado('terminada')}
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium transition-all text-sm"
+                  disabled={cambiandoEstado}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   🟢 Terminar producción
                 </button>
@@ -305,7 +316,8 @@ export default function FichaProduccionPage() {
               {produccion.estado !== 'cancelada' && produccion.estado !== 'terminada' && (
                 <button
                   onClick={() => cambiarEstado('cancelada')}
-                  className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 font-medium transition-all text-sm"
+                  disabled={cambiandoEstado}
+                  className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 font-medium transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancelar
                 </button>
