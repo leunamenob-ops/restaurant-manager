@@ -81,7 +81,7 @@ function formatearCantidad(c: number, unidad: string) {
 }
 
 // =====================================================
-// ETIQUETA IMPRIMIBLE (se renderiza en pantalla y en print)
+// ETIQUETA IMPRIMIBLE
 // =====================================================
 function Etiqueta({
   prod,
@@ -190,7 +190,7 @@ export default function FichaProduccionPage() {
   }
 
   // =====================================================
-  // CAMBIO DE ESTADO vía endpoint (consume stock + crea stock terminado)
+  // CAMBIO DE ESTADO vía endpoint
   // =====================================================
   async function cambiarEstado(nuevo: string) {
     if (cambiandoEstado) return;
@@ -217,10 +217,7 @@ export default function FichaProduccionPage() {
       let mensaje = `✅ Producción → ${data.estado}`;
       if (data.consumo_realizado && data.consumo?.length > 0) {
         const resumen = data.consumo
-          .map(
-            (c: any) =>
-              `• ${c.ingrediente}: ${c.cantidad.toFixed(2)} ${c.unidad_compra}`
-          )
+          .map((c: any) => `• ${c.ingrediente}: ${c.cantidad.toFixed(2)} ${c.unidad_compra}`)
           .join('\n');
         mensaje += `\n\nIngredientes consumidos:\n${resumen}`;
       }
@@ -235,6 +232,49 @@ export default function FichaProduccionPage() {
     } finally {
       setCambiandoEstado(false);
     }
+  }
+
+  // =====================================================
+  // BLOQUE D: CANTIDAD REAL + MERMA REAL
+  // =====================================================
+  async function guardarCantidadReal(m: Material, valor: number) {
+    if (isNaN(valor) || valor < 0) return;
+    if (valor === m.cantidad_real) return;
+
+    const { error } = await supabase
+      .from('produccion_materiales')
+      .update({ cantidad_real: valor })
+      .eq('id', m.id);
+
+    if (error) {
+      alert(`Error: ${error.message}`);
+      return;
+    }
+
+    // Recalcular coste real y merma global de la producción
+    const { data: mats } = await supabase
+      .from('produccion_materiales')
+      .select('coste_total, coste_unitario, cantidad_teorica')
+      .eq('produccion_id', id);
+
+    if (mats && mats.length > 0) {
+      const costeReal = mats.reduce((s, x) => s + Number(x.coste_total || 0), 0);
+      const costeTeo = mats.reduce(
+        (s, x) => s + Number(x.cantidad_teorica || 0) * Number(x.coste_unitario || 0),
+        0
+      );
+      const mermaGlobal = costeTeo > 0 ? ((costeReal - costeTeo) / costeTeo) * 100 : 0;
+
+      await supabase
+        .from('producciones')
+        .update({
+          coste_real: Math.round(costeReal * 100) / 100,
+          merma_porcentaje: Math.round(Math.max(0, mermaGlobal) * 100) / 100,
+        })
+        .eq('id_produccion', id);
+    }
+
+    cargarTodo();
   }
 
   if (loading) {
@@ -267,10 +307,15 @@ export default function FichaProduccionPage() {
   const config = ESTADOS_CONFIG[produccion.estado] || ESTADOS_CONFIG.planificada;
   const dias = diasHastaCaducidad(produccion.fecha_caducidad);
   const totalMateriales = materiales.reduce((s, m) => s + (m.coste_total || 0), 0);
+  const costeTeorico = materiales.reduce(
+    (s, m) => s + Number(m.cantidad_teorica || 0) * Number(m.coste_unitario || 0),
+    0
+  );
+  const desviacion = totalMateriales - costeTeorico;
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      {/* ============ HEADER (no se imprime) ============ */}
+      {/* ============ HEADER ============ */}
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -338,7 +383,7 @@ export default function FichaProduccionPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 print:hidden">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* ============ COLUMNA IZQUIERDA (2/3) ============ */}
+          {/* ============ COLUMNA IZQUIERDA ============ */}
           <div className="lg:col-span-2 space-y-6">
             {/* DATOS GENERALES */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
@@ -380,8 +425,8 @@ export default function FichaProduccionPage() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">Merma</p>
-                  <p className="text-sm font-semibold text-orange-700">
+                  <p className="text-xs text-slate-500">Merma real</p>
+                  <p className={`text-sm font-semibold ${produccion.merma_porcentaje > 5 ? 'text-red-600' : 'text-orange-700'}`}>
                     {produccion.merma_porcentaje}%
                   </p>
                 </div>
@@ -400,11 +445,14 @@ export default function FichaProduccionPage() {
               )}
             </div>
 
-            {/* DESPIECE / MATERIALES */}
+            {/* DESPIECE CON CANTIDADES REALES EDITABLES */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-              <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-5">
+              <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-2">
                 🧮 Despiece ({materiales.length} ingredientes)
               </h2>
+              <p className="text-xs text-slate-400 mb-5">
+                ✏️ Edita la <strong>cant. real</strong> al terminar la producción: el coste y la merma se recalculan solos.
+              </p>
 
               {materiales.length === 0 ? (
                 <p className="text-sm text-slate-400 text-center py-6">
@@ -418,36 +466,87 @@ export default function FichaProduccionPage() {
                         <th className="pb-2 pr-4">Ingrediente</th>
                         <th className="pb-2 pr-4 text-right">Cant. teórica</th>
                         <th className="pb-2 pr-4 text-right">Cant. real</th>
+                        <th className="pb-2 pr-4 text-right">Merma</th>
                         <th className="pb-2 pr-4 text-right">Coste ud.</th>
                         <th className="pb-2 text-right">Coste total</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {materiales.map((m) => (
-                        <tr key={m.id} className="border-b border-slate-100 last:border-0">
-                          <td className="py-2.5 pr-4 font-medium text-slate-800">{m.ingrediente_nombre}</td>
-                          <td className="py-2.5 pr-4 text-right text-slate-600">
-                            {formatearCantidad(m.cantidad_teorica, m.unidad)}
-                          </td>
-                          <td className="py-2.5 pr-4 text-right text-slate-600">
-                            {formatearCantidad(m.cantidad_real, m.unidad)}
-                          </td>
-                          <td className="py-2.5 pr-4 text-right text-slate-600">
-                            {m.coste_unitario.toFixed(4)} €
-                          </td>
-                          <td className="py-2.5 text-right font-semibold text-slate-900">
-                            {(m.coste_total || 0).toFixed(2)} €
-                          </td>
-                        </tr>
-                      ))}
+                      {materiales.map((m) => {
+                        const mermaMat =
+                          m.cantidad_teorica > 0
+                            ? ((m.cantidad_real - m.cantidad_teorica) / m.cantidad_teorica) * 100
+                            : 0;
+
+                        return (
+                          <tr key={m.id} className="border-b border-slate-100 last:border-0">
+                            <td className="py-2.5 pr-4 font-medium text-slate-800">
+                              {m.ingrediente_nombre}
+                            </td>
+                            <td className="py-2.5 pr-4 text-right text-slate-600">
+                              {formatearCantidad(m.cantidad_teorica, m.unidad)}
+                            </td>
+                            <td className="py-2.5 pr-4 text-right">
+                              <input
+                                key={`${m.id}-${m.cantidad_real}`}
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                defaultValue={m.cantidad_real}
+                                onBlur={(e) => guardarCantidadReal(m, Number(e.target.value))}
+                                className="w-24 px-2 py-1 border border-slate-300 rounded-lg text-right text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
+                              />
+                            </td>
+                            <td
+                              className={`py-2.5 pr-4 text-right font-semibold ${
+                                mermaMat <= 0
+                                  ? 'text-emerald-600'
+                                  : mermaMat <= 5
+                                  ? 'text-amber-600'
+                                  : 'text-red-600'
+                              }`}
+                            >
+                              {mermaMat > 0 ? '+' : ''}
+                              {mermaMat.toFixed(1)}%
+                            </td>
+                            <td className="py-2.5 pr-4 text-right text-slate-600">
+                              {m.coste_unitario.toFixed(4)} €
+                            </td>
+                            <td className="py-2.5 text-right font-semibold text-slate-900">
+                              {(m.coste_total || 0).toFixed(2)} €
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                     <tfoot>
                       <tr className="border-t-2 border-slate-200">
-                        <td colSpan={4} className="pt-3 text-right font-bold text-slate-700">
-                          TOTAL DESPIECE:
+                        <td colSpan={5} className="pt-3 text-right font-bold text-slate-700">
+                          TOTAL REAL:
                         </td>
                         <td className="pt-3 text-right font-bold text-emerald-700 text-base">
                           {totalMateriales.toFixed(2)} €
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colSpan={5} className="text-right text-xs text-slate-500 pt-1">
+                          Coste teórico:
+                        </td>
+                        <td className="text-right text-xs font-semibold text-slate-700 pt-1">
+                          {costeTeorico.toFixed(2)} €
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colSpan={5} className="text-right text-xs text-slate-500 pt-1">
+                          Desviación por merma:
+                        </td>
+                        <td
+                          className={`text-right text-xs font-bold pt-1 ${
+                            desviacion > 0 ? 'text-red-600' : 'text-emerald-600'
+                          }`}
+                        >
+                          {desviacion > 0 ? '+' : ''}
+                          {desviacion.toFixed(2)} €
                         </td>
                       </tr>
                     </tfoot>
@@ -485,7 +584,7 @@ export default function FichaProduccionPage() {
             </div>
           </div>
 
-          {/* ============ COLUMNA DERECHA (1/3) ============ */}
+          {/* ============ COLUMNA DERECHA ============ */}
           <div className="space-y-6">
             {/* ETIQUETA */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
@@ -537,7 +636,7 @@ export default function FichaProduccionPage() {
         </div>
       </main>
 
-      {/* ============ VERSIÓN DE IMPRESIÓN (solo etiqueta) ============ */}
+      {/* ============ VERSIÓN DE IMPRESIÓN ============ */}
       <div className="hidden print:block p-4">
         <Etiqueta prod={produccion} lote={lote} config={configEtiqueta} />
       </div>
