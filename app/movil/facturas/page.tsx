@@ -26,7 +26,8 @@ export default function MovilFacturasPage() {
   }
 
   // =====================================================
-  // COMPRESIÓN EN EL MÓVIL (evita "Request Entity Too Large")
+  // COMPRESIÓN EN EL MÓVIL (2000px + calidad 0.9)
+  // Texto legible para Textract y dentro del límite de Vercel
   // =====================================================
   async function comprimirImagen(original: File): Promise<File> {
     if (!original.type.startsWith('image/')) return original;
@@ -37,7 +38,7 @@ export default function MovilFacturasPage() {
 
       img.onload = () => {
         try {
-          const maxDim = 1600;
+          const maxDim = 2000;
           let { width, height } = img;
           const scale = Math.min(1, maxDim / Math.max(width, height));
           width = Math.round(width * scale);
@@ -49,7 +50,6 @@ export default function MovilFacturasPage() {
           const ctx = canvas.getContext('2d');
           if (!ctx) return resolve(original);
 
-          // Fondo blanco (por si el JPEG tiene transparencia)
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(0, 0, width, height);
           ctx.drawImage(img, 0, 0, width, height);
@@ -65,7 +65,7 @@ export default function MovilFacturasPage() {
               );
             },
             'image/jpeg',
-            0.85
+            0.9
           );
         } catch {
           resolve(original);
@@ -108,7 +108,6 @@ export default function MovilFacturasPage() {
         body: JSON.stringify({ texto: dataProc.texto }),
       });
 
-      // Si la respuesta no es JSON (p.ej. otro 413), leer como texto para el mensaje
       const textoRes = await resAna.text();
       let dataAna: any;
       try {
@@ -150,6 +149,10 @@ export default function MovilFacturasPage() {
         {/* Paso 1: foto */}
         {!file && (
           <div className="space-y-3">
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-[11px] text-amber-800 leading-relaxed">
+              💡 <strong>Para mejor lectura:</strong> foto de frente (no en ángulo), con buena luz y que se vea TODA la factura dentro del encuadre.
+            </div>
+
             <button
               onClick={() => camRef.current?.click()}
               className="w-full bg-gradient-to-br from-blue-600 to-cyan-600 rounded-2xl p-8 text-white shadow-lg active:scale-[0.98] transition"
@@ -249,7 +252,7 @@ export default function MovilFacturasPage() {
         <div className="mt-6 bg-white rounded-2xl border border-slate-200 p-4 text-xs text-slate-500 space-y-1">
           <p className="font-bold text-slate-700 text-sm mb-2">¿Cómo funciona?</p>
           <p>1️⃣ Foto a la factura con la cámara</p>
-          <p>2️⃣ Se optimiza en tu móvil (pesa 10x menos)</p>
+          <p>2️⃣ Se optimiza en tu móvil (alta calidad, peso reducido)</p>
           <p>3️⃣ AWS Textract lee el texto</p>
           <p>4️⃣ OpenAI extrae proveedor, líneas y precios</p>
           <p>5️⃣ Validas y guardas en la pantalla de revisión</p>
