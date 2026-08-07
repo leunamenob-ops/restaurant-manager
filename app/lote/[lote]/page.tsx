@@ -38,6 +38,7 @@ export default function LoteMovilPage() {
   const [unidad, setUnidad] = useState('');
   const [ubicacion, setUbicacion] = useState('');
   const [lotesAntiguos, setLotesAntiguos] = useState<LoteAntiguo[]>([]);
+  const [envaseNum, setEnvaseNum] = useState<string | null>(null);
 
   const [mostrarForm, setMostrarForm] = useState(false);
   const [cantidad, setCantidad] = useState<number>(0);
@@ -45,6 +46,14 @@ export default function LoteMovilPage() {
   const [responsable, setResponsable] = useState('');
   const [procesando, setProcesando] = useState(false);
   const [exito, setExito] = useState(false);
+
+  // Leer parámetro ?e=N del QR (envase numerado)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      setEnvaseNum(params.get('e'));
+    }
+  }, []);
 
   useEffect(() => {
     if (loteParam) cargarLote();
@@ -191,6 +200,11 @@ export default function LoteMovilPage() {
         <div className="bg-slate-900 text-white rounded-2xl p-5 shadow-lg">
           <p className="text-xs font-mono text-slate-400">{lote.lote_numero}</p>
           <h1 className="text-xl font-bold mt-1 uppercase">{producto}</h1>
+          {envaseNum && (
+            <span className="inline-block mt-2 px-3 py-1 bg-orange-500/20 text-orange-300 border border-orange-500/40 rounded-full text-xs font-bold">
+              🏷️ Envase {envaseNum}
+            </span>
+          )}
           <div className="flex items-center gap-4 mt-4">
             <div>
               <p className="text-3xl font-bold text-orange-400">
