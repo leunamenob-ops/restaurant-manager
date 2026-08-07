@@ -1,0 +1,18 @@
+{
+  "name": "Kost Software - Gestión de Cocina",
+  "short_name": "Kost",
+  "description": "HACCP, inventarios, facturas y trazabilidad en tu móvil",
+  "start_url": "/movil",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8fafc",
+  "theme_color": "#ea580c",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
