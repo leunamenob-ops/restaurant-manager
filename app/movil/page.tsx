@@ -8,7 +8,7 @@ const MODULOS = [
     emoji: '🌡️',
     titulo: 'HACCP Rápido',
     desc: 'Registro de temperaturas en 10 seg',
-    href: '/haccp',
+    href: '/movil/haccp',
     color: 'from-teal-500 to-emerald-600',
   },
   {
