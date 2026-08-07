@@ -20,6 +20,15 @@ interface Produccion {
   created_at: string;
 }
 
+interface StockDisp {
+  id: string;
+  producto_nombre: string;
+  cantidad_disponible: number;
+  unidad_medida: string;
+  fecha_caducidad: string;
+  lote_numero: string;
+}
+
 const ESTADOS_CONFIG = {
   planificada: {
     label: 'Planificada',
@@ -27,7 +36,6 @@ const ESTADOS_CONFIG = {
     bg: 'bg-amber-50',
     text: 'text-amber-700',
     border: 'border-amber-200',
-    ring: 'ring-amber-500',
   },
   en_proceso: {
     label: 'En proceso',
@@ -35,7 +43,6 @@ const ESTADOS_CONFIG = {
     bg: 'bg-blue-50',
     text: 'text-blue-700',
     border: 'border-blue-200',
-    ring: 'ring-blue-500',
   },
   terminada: {
     label: 'Terminada',
@@ -43,7 +50,6 @@ const ESTADOS_CONFIG = {
     bg: 'bg-emerald-50',
     text: 'text-emerald-700',
     border: 'border-emerald-200',
-    ring: 'ring-emerald-500',
   },
   cancelada: {
     label: 'Cancelada',
@@ -51,35 +57,55 @@ const ESTADOS_CONFIG = {
     bg: 'bg-red-50',
     text: 'text-red-700',
     border: 'border-red-200',
-    ring: 'ring-red-500',
   },
 };
+
+const DESTINOS_SUGERIDOS = [
+  'Chiringuito Playa',
+  'Restaurante Principal',
+  'Bar Piscina',
+  'Evento / Banquete',
+  'Cocina Central',
+];
 
 export default function ProduccionesPage() {
   const router = useRouter();
   const [producciones, setProducciones] = useState<Produccion[]>([]);
+  const [stockDisponible, setStockDisponible] = useState<StockDisp[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState<string>('todas');
   const [filtroUbicacion, setFiltroUbicacion] = useState<string>('todas');
   const [filtroCaducidad, setFiltroCaducidad] = useState<string>('todas');
 
+  // Modal de salida FIFO
+  const [mostrarSalida, setMostrarSalida] = useState(false);
+  const [productoSalida, setProductoSalida] = useState('');
+  const [cantidadSalida, setCantidadSalida] = useState<number>(0);
+  const [destinoSalida, setDestinoSalida] = useState('');
+  const [responsableSalida, setResponsableSalida] = useState('');
+  const [procesandoSalida, setProcesandoSalida] = useState(false);
+
   useEffect(() => {
-    cargarProducciones();
+    cargarDatos();
   }, []);
 
-  async function cargarProducciones() {
+  async function cargarDatos() {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('producciones')
-      .select('*')
-      .order('fecha_produccion', { ascending: false });
 
-    if (error) {
-      console.error('Error cargando producciones:', error);
-    } else {
-      setProducciones(data || []);
-    }
+    const [prodRes, stockRes] = await Promise.all([
+      supabase.from('producciones').select('*').order('fecha_produccion', { ascending: false }),
+      supabase
+        .from('stock_producciones')
+        .select('id, producto_nombre, cantidad_disponible, unidad_medida, fecha_caducidad, lote_numero')
+        .eq('movimiento_tipo', 'entrada')
+        .gt('cantidad_disponible', 0)
+        .order('fecha_caducidad', { ascending: true }),
+    ]);
+
+    if (!prodRes.error) setProducciones(prodRes.data || []);
+    if (!stockRes.error) setStockDisponible(stockRes.data || []);
+
     setLoading(false);
   }
 
@@ -101,7 +127,7 @@ export default function ProduccionesPage() {
 
       setTimeout(() => {
         alert('Producción eliminada correctamente');
-        cargarProducciones();
+        cargarDatos();
       }, 100);
     } catch (error: any) {
       alert(`Error: ${error.message}`);
@@ -117,7 +143,7 @@ export default function ProduccionesPage() {
     if (error) {
       alert(`Error: ${error.message}`);
     } else {
-      cargarProducciones();
+      cargarDatos();
     }
   }
 
@@ -136,8 +162,82 @@ export default function ProduccionesPage() {
     return Array.from(new Set(ubicaciones));
   }
 
+  // ---------- SALIDA FIFO ----------
+
+  const productosConStock = (() => {
+    const mapa = new Map<string, { total: number; unidad: string }>();
+    stockDisponible.forEach((s) => {
+      const actual = mapa.get(s.producto_nombre) || { total: 0, unidad: s.unidad_medida };
+      actual.total += Number(s.cantidad_disponible || 0);
+      mapa.set(s.producto_nombre, actual);
+    });
+    return Array.from(mapa.entries()).map(([nombre, d]) => ({
+      nombre,
+      total: d.total,
+      unidad: d.unidad,
+    }));
+  })();
+
+  const lotesFifo = stockDisponible.filter((s) => s.producto_nombre === productoSalida);
+
+  const previewFifo = (() => {
+    let restante = cantidadSalida || 0;
+    return lotesFifo.map((l) => {
+      const tomar = Math.min(Number(l.cantidad_disponible || 0), Math.max(0, restante));
+      restante -= tomar;
+      return { ...l, tomar };
+    });
+  })();
+
+  async function registrarSalida() {
+    if (!productoSalida || !cantidadSalida || cantidadSalida <= 0) {
+      alert('Selecciona producto y cantidad válida');
+      return;
+    }
+
+    setProcesandoSalida(true);
+
+    try {
+      const res = await fetch('/api/stock-producciones/salida', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          producto_nombre: productoSalida,
+          cantidad: cantidadSalida,
+          destino: destinoSalida,
+          responsable: responsableSalida,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.ok) {
+        alert(`Error: ${data.error}`);
+        setProcesandoSalida(false);
+        return;
+      }
+
+      const detalle = (data.consumos || [])
+        .map((c: any) => `• Lote ${c.lote}: ${c.cantidad}${c.agotado ? ' (agotado)' : ''}`)
+        .join('\n');
+
+      alert(`✅ Salida registrada (FIFO)\n\n${detalle}\n\nDestino: ${destinoSalida || 'servicio'}`);
+
+      setMostrarSalida(false);
+      setProductoSalida('');
+      setCantidadSalida(0);
+      setDestinoSalida('');
+      cargarDatos();
+    } catch (error: any) {
+      alert(`Error de conexión: ${error.message}`);
+    } finally {
+      setProcesandoSalida(false);
+    }
+  }
+
   const produccionesFiltradas = producciones.filter((p) => {
-    const coincideBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+    const coincideBusqueda =
+      p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
       p.lote_numero.toLowerCase().includes(busqueda.toLowerCase());
 
     const coincideEstado = filtroEstado === 'todas' || p.estado === filtroEstado;
@@ -157,7 +257,6 @@ export default function ProduccionesPage() {
     return coincideBusqueda && coincideEstado && coincideUbicacion && coincideCaducidad;
   });
 
-  // Stats rápidos
   const stats = {
     total: producciones.length,
     planificadas: producciones.filter((p) => p.estado === 'planificada').length,
@@ -170,7 +269,7 @@ export default function ProduccionesPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      {/* HEADER MODERNO */}
+      {/* HEADER */}
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -198,6 +297,12 @@ export default function ProduccionesPage() {
                 Dashboard
               </a>
               <button
+                onClick={() => setMostrarSalida(true)}
+                className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-medium transition-all shadow-sm hover:shadow-md text-sm flex items-center gap-2"
+              >
+                🚚 Salida
+              </button>
+              <button
                 onClick={() => router.push('/producciones/nueva')}
                 className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium transition-all shadow-sm hover:shadow-md text-sm flex items-center gap-2"
               >
@@ -212,7 +317,7 @@ export default function ProduccionesPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        {/* STATS RÁPIDOS */}
+        {/* STATS */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <div className="flex items-center justify-between">
@@ -263,9 +368,7 @@ export default function ProduccionesPage() {
           </div>
 
           <div className={`rounded-xl border p-4 shadow-sm col-span-2 md:col-span-1 ${
-            stats.caducadas > 0 
-              ? 'bg-red-50 border-red-300' 
-              : 'bg-white border-slate-200'
+            stats.caducadas > 0 ? 'bg-red-50 border-red-300' : 'bg-white border-slate-200'
           }`}>
             <div className="flex items-center justify-between">
               <div>
@@ -289,7 +392,7 @@ export default function ProduccionesPage() {
           </div>
         </div>
 
-        {/* FILTROS AVANZADOS */}
+        {/* FILTROS */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
@@ -443,11 +546,8 @@ export default function ProduccionesPage() {
                   key={prod.id_produccion}
                   className="group bg-white rounded-xl shadow-sm border border-slate-200 hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1 transition-all duration-300 overflow-hidden flex flex-col"
                 >
-                  {/* Header con estado */}
                   <div className={`px-4 py-3 border-b ${config.border} ${config.bg} flex items-center justify-between`}>
-                    <span
-                      className={`px-2.5 py-1 text-xs font-semibold rounded-full ${config.text} ${config.bg} border ${config.border} flex items-center gap-1`}
-                    >
+                    <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${config.text} ${config.bg} border ${config.border} flex items-center gap-1`}>
                       <span>{config.emoji}</span>
                       {config.label}
                     </span>
@@ -456,7 +556,6 @@ export default function ProduccionesPage() {
                     </span>
                   </div>
 
-                  {/* Contenido */}
                   <div className="p-4 flex flex-col flex-1">
                     <h3
                       className="font-bold text-slate-900 text-sm mb-3 line-clamp-2 min-h-[2.5rem]"
@@ -465,7 +564,6 @@ export default function ProduccionesPage() {
                       {prod.nombre}
                     </h3>
 
-                    {/* Cantidad destacada */}
                     <div className="flex items-baseline gap-2 mb-4 pb-3 border-b border-slate-100">
                       <span className="text-2xl font-bold text-slate-900">
                         {prod.cantidad_producida}
@@ -473,7 +571,6 @@ export default function ProduccionesPage() {
                       <span className="text-sm text-slate-500 uppercase">{prod.unidad_medida}</span>
                     </div>
 
-                    {/* Métricas */}
                     <div className="space-y-2 mb-4 flex-1">
                       <div className="flex justify-between text-xs">
                         <span className="text-slate-500 flex items-center gap-1">
@@ -514,7 +611,6 @@ export default function ProduccionesPage() {
                       )}
                     </div>
 
-                    {/* Ubicación y responsable */}
                     <div className="flex items-center justify-between text-xs text-slate-500 mb-4 pb-4 border-t border-slate-100 pt-3">
                       <span className="flex items-center gap-1.5">
                         <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -533,7 +629,6 @@ export default function ProduccionesPage() {
                       )}
                     </div>
 
-                    {/* Botones de Acción */}
                     <div className="flex gap-2">
                       <button
                         onClick={() => router.push(`/producciones/${prod.id_produccion}`)}
@@ -571,7 +666,7 @@ export default function ProduccionesPage() {
                           cambiarEstado(prod.id_produccion, next);
                         }}
                         className="px-3 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-all duration-300 text-xs font-medium flex items-center justify-center group/btn"
-                        title={`Cambiar estado`}
+                        title="Cambiar estado"
                       >
                         <svg
                           className="w-4 h-4 transition-transform duration-300 group-hover/btn:scale-110"
@@ -602,8 +697,7 @@ export default function ProduccionesPage() {
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
                     </div>
@@ -632,6 +726,147 @@ export default function ProduccionesPage() {
           </button>
         </div>
       </main>
+
+      {/* ============ MODAL SALIDA FIFO ============ */}
+      {mostrarSalida && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full max-w-2xl rounded-t-2xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl">
+            <div className="bg-slate-900 text-white p-4 rounded-t-2xl flex justify-between items-center">
+              <h2 className="text-lg font-bold flex items-center gap-2">🚚 Salida de producto (FIFO)</h2>
+              <button
+                onClick={() => setMostrarSalida(false)}
+                className="text-slate-400 hover:text-white w-8 h-8 rounded-full flex items-center justify-center transition"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              {productosConStock.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-8">
+                  No hay stock de producto terminado disponible. Termina una producción primero.
+                </p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                        Producto
+                      </label>
+                      <select
+                        value={productoSalida}
+                        onChange={(e) => {
+                          setProductoSalida(e.target.value);
+                          setCantidadSalida(0);
+                        }}
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition bg-white text-slate-700"
+                      >
+                        <option value="">— Selecciona —</option>
+                        {productosConStock.map((p) => (
+                          <option key={p.nombre} value={p.nombre}>
+                            {p.nombre} ({p.total} {p.unidad} disp.)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                        Cantidad
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={cantidadSalida || ''}
+                        onChange={(e) => setCantidadSalida(Number(e.target.value))}
+                        placeholder="0"
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                        Destino
+                      </label>
+                      <input
+                        type="text"
+                        list="destinos"
+                        value={destinoSalida}
+                        onChange={(e) => setDestinoSalida(e.target.value)}
+                        placeholder="Ej: Chiringuito Playa"
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition"
+                      />
+                      <datalist id="destinos">
+                        {DESTINOS_SUGERIDOS.map((d) => (
+                          <option key={d} value={d} />
+                        ))}
+                      </datalist>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                        Responsable
+                      </label>
+                      <input
+                        type="text"
+                        value={responsableSalida}
+                        onChange={(e) => setResponsableSalida(e.target.value)}
+                        placeholder="Quién retira"
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition"
+                      />
+                    </div>
+                  </div>
+
+                  {/* PREVIEW FIFO */}
+                  {productoSalida && cantidadSalida > 0 && (
+                    <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
+                      <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">
+                        🔄 Consumirá (FIFO — primero el que antes caduca)
+                      </h3>
+                      <div className="space-y-2">
+                        {previewFifo
+                          .filter((l) => l.tomar > 0)
+                          .map((l) => (
+                            <div
+                              key={l.id}
+                              className="flex justify-between items-center bg-white rounded-lg px-3 py-2 text-xs border border-slate-200"
+                            >
+                              <div>
+                                <span className="font-mono font-semibold text-slate-800">{l.lote_numero}</span>
+                                <span className="text-slate-500 ml-2">
+                                  cad. {new Date(l.fecha_caducidad).toLocaleDateString('es-ES')}
+                                </span>
+                              </div>
+                              <span className="font-bold text-cyan-700">
+                                −{l.tomar} {l.unidad_medida}
+                                {l.tomar >= Number(l.cantidad_disponible) && (
+                                  <span className="ml-1 text-red-600">(agota)</span>
+                                )}
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 bg-slate-50 rounded-b-2xl">
+              <button
+                onClick={registrarSalida}
+                disabled={procesandoSalida || !productoSalida || !cantidadSalida}
+                className="w-full py-3 bg-cyan-600 text-white rounded-xl font-bold hover:bg-cyan-700 transition disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {procesandoSalida ? 'Registrando...' : '✅ Confirmar salida FIFO'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
