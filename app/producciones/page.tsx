@@ -304,6 +304,12 @@ export default function ProduccionesPage() {
                 Dashboard
               </a>
               <button
+                onClick={() => router.push('/producciones/inventario')}
+                className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium transition-all shadow-sm hover:shadow-md text-sm flex items-center gap-2"
+              >
+                📊 Inventario
+              </button>
+              <button
                 onClick={() => setMostrarSalida(true)}
                 className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-medium transition-all shadow-sm hover:shadow-md text-sm flex items-center gap-2"
               >
