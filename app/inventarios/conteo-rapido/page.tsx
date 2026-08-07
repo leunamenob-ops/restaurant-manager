@@ -73,7 +73,7 @@ function ScannerFase({ onSelect }: { onSelect: (id: string) => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-    async function procesarCodigo(valor: string) {
+  async function procesarCodigo(valor: string) {
     if (!valor) return;
     setBuscando(true);
     setError(null);
@@ -160,48 +160,11 @@ function ScannerFase({ onSelect }: { onSelect: (id: string) => void }) {
     setError(`❓ No se encontró ningún ingrediente para: ${valor.slice(0, 60)}`);
   }
 
-    // Buscar por código de barras
-    const { data: porCodigo } = await supabase
-      .from('ingredientes')
-      .select('id, nombre')
-      .eq('codigo', valor)
-      .maybeSingle();
-
-    if (porCodigo) {
-      onSelect(porCodigo.id);
-      setBuscando(false);
-      return;
-    }
-
-    // Buscar por nombre (búsqueda aproximada)
-    const { data: porNombre } = await supabase
-      .from('ingredientes')
-      .select('id, nombre')
-      .ilike('nombre', `%${valor}%`)
-      .limit(5);
-
-    if (porNombre && porNombre.length === 1) {
-      onSelect(porNombre[0].id);
-      setBuscando(false);
-      return;
-    }
-
-    if (porNombre && porNombre.length > 1) {
-      setSugerencias(porNombre);
-      setBuscando(false);
-      setDetectado(false);
-      return;
-    }
-
-    setBuscando(false);
-    setDetectado(false);
-    setError(`❓ No se encontró ningún ingrediente para: ${valor}`);
-  }
-
   async function buscarManual() {
     if (!manual.trim()) return;
     setBuscando(true);
     setSugerencias([]);
+    setError(null);
 
     const { data } = await supabase
       .from('ingredientes')
@@ -226,7 +189,6 @@ function ScannerFase({ onSelect }: { onSelect: (id: string) => void }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 via-blue-700 to-cyan-800 p-4">
       <div className="max-w-md mx-auto pt-8">
-        {/* Header */}
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-white/10 backdrop-blur rounded-2xl mb-4">
             <span className="text-5xl">📦</span>
@@ -235,11 +197,9 @@ function ScannerFase({ onSelect }: { onSelect: (id: string) => void }) {
           <p className="text-blue-100 text-sm">Escanea el código del producto</p>
         </div>
 
-        {/* Cámara */}
         <div className="relative w-full aspect-square bg-black rounded-2xl overflow-hidden mb-6 shadow-2xl">
           <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
 
-          {/* Marco */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="w-56 h-32 border-4 border-blue-400 rounded-xl relative">
               <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-white rounded-tl"></div>
@@ -271,7 +231,6 @@ function ScannerFase({ onSelect }: { onSelect: (id: string) => void }) {
           )}
         </div>
 
-        {/* Búsqueda manual */}
         <div className="bg-white rounded-2xl shadow-xl p-4 mb-4">
           <label className="block text-xs font-semibold text-slate-500 uppercase mb-2">
             Búsqueda manual
@@ -299,7 +258,6 @@ function ScannerFase({ onSelect }: { onSelect: (id: string) => void }) {
           </div>
         </div>
 
-        {/* Sugerencias */}
         {sugerencias.length > 0 && (
           <div className="bg-white rounded-2xl shadow-xl p-3 space-y-1">
             <p className="text-xs font-semibold text-slate-500 uppercase mb-2 px-2">
@@ -322,7 +280,7 @@ function ScannerFase({ onSelect }: { onSelect: (id: string) => void }) {
 }
 
 // =====================================================
-// FASE 2: FORMULARIO DE CONTEO (tu código original)
+// FASE 2: FORMULARIO DE CONTEO
 // =====================================================
 function ConteoRapidoContent() {
   const router = useRouter();
@@ -483,7 +441,6 @@ function ConteoRapidoContent() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 p-4">
       <div className="max-w-md mx-auto pt-8">
-        {/* Botón volver */}
         <button
           onClick={volverAlScanner}
           className="mb-4 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-semibold transition flex items-center gap-2"
@@ -491,7 +448,6 @@ function ConteoRapidoContent() {
           ← Escanear otro producto
         </button>
 
-        {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-white/10 backdrop-blur rounded-2xl mb-4">
             <span className="text-5xl">📦</span>
@@ -500,7 +456,6 @@ function ConteoRapidoContent() {
           <p className="text-emerald-100 text-sm">Teclea • Guarda • Siguiente</p>
         </div>
 
-        {/* Tarjeta principal */}
         <div className="bg-white rounded-3xl shadow-2xl p-6 mb-6">
           <div className="text-center mb-6">
             <h2 className="text-xl font-bold text-slate-900 mb-2">{producto.nombre}</h2>
@@ -564,31 +519,15 @@ function ConteoRapidoContent() {
             {guardando ? (
               <>
                 <svg className="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                  ></path>
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                 </svg>
                 Guardando...
               </>
             ) : (
               <>
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 Guardar (Enter)
               </>
@@ -622,16 +561,13 @@ function ConteoRapidoContent() {
 }
 
 // =====================================================
-// PÁGINA PRINCIPAL: decide si mostrar scanner o formulario
+// ROUTER: decide si mostrar scanner o formulario
 // =====================================================
 function ConteoRapidoRouter() {
   const searchParams = useSearchParams();
   const productoId = searchParams.get('producto');
 
   const handleSelect = (id: string) => {
-    // Navegar a sí mismo con el parámetro
-    window.history.pushState({}, '', `/inventarios/conteo-rapido?producto=${id}`);
-    // Forzar recarga del componente
     window.location.href = `/inventarios/conteo-rapido?producto=${id}`;
   };
 
