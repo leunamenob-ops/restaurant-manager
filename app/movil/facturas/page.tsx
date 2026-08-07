@@ -57,9 +57,9 @@ export default function MovilFacturasPage() {
         throw new Error(dataAna.error || 'Error al analizar con IA');
       }
 
-      // 3. Misma mano que la web → página de revisión
+      // 3. Misma mano que la web → página de revisión MÓVIL
       sessionStorage.setItem('factura_datos', JSON.stringify(dataAna.datos));
-      router.push('/facturas/revisar');
+      router.push('/movil/facturas/revisar');
     } catch (e: any) {
       setError(e.message);
       setFase('idle');
