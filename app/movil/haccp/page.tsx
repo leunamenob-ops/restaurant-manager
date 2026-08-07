@@ -158,7 +158,7 @@ export default function MovilHaccpPage() {
             {categorias.map((cat) => (
               <button
                 key={cat.id}
-                onClick={() => router.push(`/haccp/${cat.id}`)}
+                onClick={() => router.push(`/movil/haccp/${cat.id}`)}
                 className={`w-full bg-gradient-to-br ${cat.color} rounded-2xl p-4 text-left text-white shadow-lg active:scale-[0.98] transition-transform`}
               >
                 <div className="flex items-center gap-4">
