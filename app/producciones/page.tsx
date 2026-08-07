@@ -324,6 +324,12 @@ export default function ProduccionesPage() {
                 </svg>
                 Nueva Producción
               </button>
+              <button
+  onClick={() => router.push('/producciones/informes')}
+  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium transition-all shadow-sm hover:shadow-md text-sm flex items-center gap-2"
+>
+  📊 Informes
+</button>
             </div>
           </div>
         </div>
