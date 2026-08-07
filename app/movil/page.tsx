@@ -73,7 +73,7 @@ export default function MovilHome() {
           {MODULOS.map((m) => (
             <button
               key={m.href}
-              onClick={() => router.push(`/movil/haccp/${cat
+              onClick={() => router.push(m.href)}
               className={`bg-gradient-to-br ${m.color} rounded-2xl p-5 text-left text-white shadow-lg hover:scale-[1.03] active:scale-[0.98] transition-transform min-h-[140px]`}
             >
               <span className="text-4xl">{m.emoji}</span>
