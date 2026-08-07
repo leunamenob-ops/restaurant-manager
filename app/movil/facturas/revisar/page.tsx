@@ -38,6 +38,10 @@ export default function MovilRevisarFacturaPage() {
 
   const num = (v: string) => (v === '' ? null : parseFloat(v));
 
+  const lineasIncompletas = (datos?.lineas || []).filter(
+    (l: any) => !l.descripcion || l.cantidad == null || l.precio_unitario == null
+  ).length;
+
   async function handleGuardar() {
     setGuardando(true);
     setMensaje('');
@@ -101,6 +105,14 @@ export default function MovilRevisarFacturaPage() {
           </div>
         </div>
 
+        {/* Aviso de líneas incompletas */}
+        {lineasIncompletas > 0 && (
+          <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-3 mb-4 text-[12px] text-amber-800 font-semibold">
+            ⚠️ {lineasIncompletas} línea{lineasIncompletas > 1 ? 's' : ''} con datos sin extraer —
+            complétalas a mano o vuelve atrás y repite la foto con más luz.
+          </div>
+        )}
+
         {/* Mensaje */}
         {mensaje && (
           <div className={`p-3 rounded-xl mb-4 text-center text-sm font-bold ${
@@ -120,8 +132,8 @@ export default function MovilRevisarFacturaPage() {
               type="text"
               value={datos.proveedor?.nombre || ''}
               onChange={(e) => updateField('proveedor', 'nombre', e.target.value)}
-              placeholder="Nombre / Razón social"
-              className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="⚠️ Nombre no extraído — escribe aquí"
+              className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none"
             />
             <div className="grid grid-cols-2 gap-2">
               <input
@@ -129,14 +141,14 @@ export default function MovilRevisarFacturaPage() {
                 value={datos.proveedor?.nif || ''}
                 onChange={(e) => updateField('proveedor', 'nif', e.target.value)}
                 placeholder="NIF/CIF"
-                className="px-3 py-2.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                className="px-3 py-2.5 border border-slate-300 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none"
               />
               <input
                 type="text"
                 value={datos.proveedor?.telefono || ''}
                 onChange={(e) => updateField('proveedor', 'telefono', e.target.value)}
                 placeholder="Teléfono"
-                className="px-3 py-2.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                className="px-3 py-2.5 border border-slate-300 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
           </div>
@@ -155,7 +167,7 @@ export default function MovilRevisarFacturaPage() {
                 value={datos.factura?.numero || ''}
                 onChange={(e) => updateField('factura', 'numero', e.target.value)}
                 placeholder="Nº factura"
-                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
             <div>
@@ -164,7 +176,7 @@ export default function MovilRevisarFacturaPage() {
                 type="date"
                 value={datos.factura?.fecha || ''}
                 onChange={(e) => updateField('factura', 'fecha', e.target.value)}
-                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
           </div>
@@ -184,7 +196,8 @@ export default function MovilRevisarFacturaPage() {
                 inputMode="decimal"
                 value={datos.importes?.base_imponible ?? ''}
                 onChange={(e) => updateField('importes', 'base_imponible', num(e.target.value))}
-                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm text-right focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="0.00"
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm text-slate-900 text-right focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
             <div>
@@ -195,7 +208,8 @@ export default function MovilRevisarFacturaPage() {
                 inputMode="decimal"
                 value={datos.importes?.iva ?? ''}
                 onChange={(e) => updateField('importes', 'iva', num(e.target.value))}
-                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm text-right focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="21"
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm text-slate-900 text-right focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
             <div>
@@ -206,7 +220,8 @@ export default function MovilRevisarFacturaPage() {
                 inputMode="decimal"
                 value={datos.importes?.total_iva ?? ''}
                 onChange={(e) => updateField('importes', 'total_iva', num(e.target.value))}
-                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm text-right focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="0.00"
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm text-slate-900 text-right focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
             <div>
@@ -217,6 +232,7 @@ export default function MovilRevisarFacturaPage() {
                 inputMode="decimal"
                 value={datos.importes?.total ?? ''}
                 onChange={(e) => updateField('importes', 'total', num(e.target.value))}
+                placeholder="0.00"
                 className="w-full px-3 py-2.5 bg-emerald-50 border-2 border-emerald-300 rounded-xl text-sm font-bold text-emerald-900 text-right focus:ring-2 focus:ring-emerald-500 outline-none"
               />
             </div>
@@ -230,57 +246,69 @@ export default function MovilRevisarFacturaPage() {
               📦 Líneas ({datos.lineas.length})
             </h2>
             <div className="space-y-3">
-              {datos.lineas.map((linea: any, index: number) => (
-                <div key={index} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="w-6 h-6 bg-slate-100 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0">
-                      {index + 1}
-                    </span>
-                    <input
-                      type="text"
-                      value={linea.descripcion || ''}
-                      onChange={(e) => updateLinea(index, 'descripcion', e.target.value)}
-                      placeholder="Descripción"
-                      className="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
+              {datos.lineas.map((linea: any, index: number) => {
+                const incompleta = !linea.descripcion || linea.cantidad == null || linea.precio_unitario == null;
+
+                return (
+                  <div
+                    key={index}
+                    className={`bg-white rounded-2xl shadow-sm p-4 border-2 ${
+                      incompleta ? 'border-amber-300' : 'border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-6 h-6 bg-slate-100 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0">
+                        {index + 1}
+                      </span>
+                      <input
+                        type="text"
+                        value={linea.descripcion || ''}
+                        onChange={(e) => updateLinea(index, 'descripcion', e.target.value)}
+                        placeholder="⚠️ Descripción no extraída"
+                        className="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] text-slate-500 uppercase mb-1">Cant.</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          inputMode="decimal"
+                          value={linea.cantidad ?? ''}
+                          onChange={(e) => updateLinea(index, 'cantidad', num(e.target.value))}
+                          placeholder="0"
+                          className="w-full px-2 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 text-right focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-500 uppercase mb-1">Precio</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          inputMode="decimal"
+                          value={linea.precio_unitario ?? ''}
+                          onChange={(e) => updateLinea(index, 'precio_unitario', num(e.target.value))}
+                          placeholder="0.00"
+                          className="w-full px-2 py-2 border border-slate-300 rounded-lg text-xs text-slate-900 text-right focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-emerald-600 uppercase mb-1">Total</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          inputMode="decimal"
+                          value={linea.total ?? ''}
+                          onChange={(e) => updateLinea(index, 'total', num(e.target.value))}
+                          placeholder="0.00"
+                          className="w-full px-2 py-2 bg-emerald-50 border border-emerald-300 rounded-lg text-xs font-bold text-emerald-900 text-right focus:ring-2 focus:ring-emerald-500 outline-none"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="block text-[10px] text-slate-500 uppercase mb-1">Cant.</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        inputMode="decimal"
-                        value={linea.cantidad ?? ''}
-                        onChange={(e) => updateLinea(index, 'cantidad', num(e.target.value))}
-                        className="w-full px-2 py-2 border border-slate-300 rounded-lg text-xs text-right focus:ring-2 focus:ring-blue-500 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-500 uppercase mb-1">Precio</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        inputMode="decimal"
-                        value={linea.precio_unitario ?? ''}
-                        onChange={(e) => updateLinea(index, 'precio_unitario', num(e.target.value))}
-                        className="w-full px-2 py-2 border border-slate-300 rounded-lg text-xs text-right focus:ring-2 focus:ring-blue-500 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-emerald-600 uppercase mb-1">Total</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        inputMode="decimal"
-                        value={linea.total ?? ''}
-                        onChange={(e) => updateLinea(index, 'total', num(e.target.value))}
-                        className="w-full px-2 py-2 bg-emerald-50 border border-emerald-300 rounded-lg text-xs font-bold text-emerald-900 text-right focus:ring-2 focus:ring-emerald-500 outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
