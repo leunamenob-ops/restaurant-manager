@@ -4,6 +4,15 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
+interface StockGrupo {
+  producto: string;
+  total_disponible: number;
+  unidad: string;
+  lotes: any[];
+  caducidad_proxima: string | null;
+  dias_proximos: number | null;
+}
+
 function getSupabase() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -42,7 +51,7 @@ export async function GET() {
     // =====================================================
     const ahora = new Date();
     const alertasCaducidad = stock
-      .map((s) => {
+      .map((s: any) => {
         const cad = new Date(s.fecha_caducidad);
         cad.setHours(0, 0, 0, 0);
         const hoy = new Date(ahora);
@@ -57,28 +66,23 @@ export async function GET() {
 
         return { ...s, dias_hasta_caducidad: dias, prioridad };
       })
-      .sort((a, b) => a.dias_hasta_caducidad - b.dias_hasta_caducidad);
+      .sort((a: any, b: any) => a.dias_hasta_caducidad - b.dias_hasta_caducidad);
 
     // =====================================================
     // STOCK AGRUPADO POR PRODUCTO
     // =====================================================
-    const stockAgrupado = new Map<string, {
-      producto: string;
-      total_disponible: number;
-      unidad: string;
-      lotes: any[];
-      caducidad_proxima: string | null;
-      dias_proximos: number | null;
-    }>();
+    const stockAgrupado = new Map<string, StockGrupo>();
 
-    stock.forEach((s) => {
-      const actual = stockAgrupado.get(s.producto_nombre) || {
+    stock.forEach((s: any) => {
+      const existente = stockAgrupado.get(s.producto_nombre);
+
+      const actual: StockGrupo = existente || {
         producto: s.producto_nombre,
         total_disponible: 0,
         unidad: s.unidad_medida,
-        lotes: [],
-        caducidad_proxima: null,
-        dias_proximos: null,
+        lotes: [] as any[],
+        caducidad_proxima: null as string | null,
+        dias_proximos: null as number | null,
       };
 
       actual.total_disponible += Number(s.cantidad_disponible || 0);
@@ -99,14 +103,14 @@ export async function GET() {
     });
 
     // =====================================================
-    // CALENDARIO: producciones próximas (30 días antes/después)
+    // CALENDARIO: producciones próximas
     // =====================================================
     const inicio = new Date(ahora);
     inicio.setDate(inicio.getDate() - 7);
     const fin = new Date(ahora);
     fin.setDate(fin.getDate() + 30);
 
-    const calendario = producciones.filter((p) => {
+    const calendario = producciones.filter((p: any) => {
       const fecha = new Date(p.fecha_produccion);
       return fecha >= inicio && fecha <= fin;
     });
@@ -115,7 +119,7 @@ export async function GET() {
       ok: true,
       data: {
         producciones,
-        stock: stockAgrupado,
+        stock: Object.fromEntries(stockAgrupado),
         alertas_caducidad: alertasCaducidad,
         calendario,
         lotes_activos: lotes,
