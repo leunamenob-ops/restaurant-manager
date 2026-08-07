@@ -14,12 +14,15 @@ export default function PedidosPage() {
   const [mostrarCarrito, setMostrarCarrito] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [loading, setLoading] = useState(true);
-  
+
   const filtroRef = useRef<HTMLDivElement>(null);
 
+  // =====================================================
+  // CARGAR PRODUCTOS + CARRITO AUTOMÁTICO
+  // =====================================================
   const cargarProductos = useCallback(async () => {
     setLoading(true);
-    
+
     try {
       let todosLosProductos: any[] = [];
       let desde = 0;
@@ -29,11 +32,7 @@ export default function PedidosPage() {
       while (hayMas) {
         const { data, error } = await supabase
           .from('ingredientes')
-          .select(`
-            *,
-            proveedor_id,
-            proveedor_nombre
-          `)
+          .select(`*, proveedor_id, proveedor_nombre`)
           .order('nombre')
           .range(desde, desde + lote - 1);
 
@@ -53,22 +52,57 @@ export default function PedidosPage() {
 
       const productosTransformados = todosLosProductos.map((item: any) => ({
         ...item,
-        proveedor_nombre: item.proveedor_nombre || 'Sin proveedor'
+        proveedor_nombre: item.proveedor_nombre || 'Sin proveedor',
       }));
 
       setTodosProductos(productosTransformados);
-      
+
       const proveedores = Array.from(
         new Set(
-          productosTransformados
-            .map((p: any) => p.proveedor_nombre)
-            .filter(Boolean)
+          productosTransformados.map((p: any) => p.proveedor_nombre).filter(Boolean)
         )
       ) as string[];
-      
+
       setProveedoresUnicos(proveedores.sort());
       setProductosFiltrados(productosTransformados);
-      
+
+      // 🆕 Cargar líneas del carrito automático (las que añadieron las producciones)
+      const { data: autoLineas } = await supabase
+        .from('carrito_compra')
+        .select('*')
+        .eq('estado', 'pendiente');
+
+      if (autoLineas && autoLineas.length > 0) {
+        // Enriquecer con datos del ingrediente (categoría, unidad_compra, precio)
+        const ids = Array.from(new Set(autoLineas.map((l) => l.ingrediente_id).filter(Boolean)));
+        let ingMap: Record<string, any> = {};
+        if (ids.length > 0) {
+          const { data: ings } = await supabase
+            .from('ingredientes')
+            .select('*')
+            .in('id', ids);
+          (ings || []).forEach((i) => (ingMap[i.id] = i));
+        }
+
+        const carritoAuto = autoLineas.map((l) => {
+          const ing = ingMap[l.ingrediente_id] || {};
+          return {
+            id: l.id, // id del carrito_compra
+            ingrediente_id: l.ingrediente_id,
+            nombre: l.ingrediente_nombre,
+            categoria: ing.categoria || '',
+            proveedor_nombre: l.proveedor_nombre || 'Sin proveedor',
+            precio_compra_actual: Number(l.coste_unitario || ing.precio_compra_actual || 0),
+            unidad_compra: l.unidad || ing.unidad_compra || 'ud',
+            cantidad: Number(l.cantidad),
+            origen: l.origen, // 'produccion' o 'minimo'
+            origen_ref: l.origen_ref,
+            carrito_id: l.id, // para poder borrarlo luego
+          };
+        });
+
+        setCarrito(carritoAuto);
+      }
     } catch (err: any) {
       console.error('Error cargando productos:', err);
     } finally {
@@ -93,7 +127,7 @@ export default function PedidosPage() {
     }
 
     if (proveedoresSeleccionados.length > 0) {
-      filtrados = filtrados.filter((p: any) => 
+      filtrados = filtrados.filter((p: any) =>
         proveedoresSeleccionados.includes(p.proveedor_nombre)
       );
     }
@@ -112,10 +146,8 @@ export default function PedidosPage() {
   }, []);
 
   function toggleProveedor(proveedor: string) {
-    setProveedoresSeleccionados(prev => 
-      prev.includes(proveedor)
-        ? prev.filter(p => p !== proveedor)
-        : [...prev, proveedor]
+    setProveedoresSeleccionados((prev) =>
+      prev.includes(proveedor) ? prev.filter((p) => p !== proveedor) : [...prev, proveedor]
     );
   }
 
@@ -132,41 +164,55 @@ export default function PedidosPage() {
     setProveedoresSeleccionados([]);
   }
 
+  // =====================================================
+  // AÑADIR AL CARRITO (manual) — usa ingrediente_id como identificador
+  // =====================================================
   function añadirAlCarrito(producto: any, cantidad: number) {
-    const existente = carrito.find(item => item.id === producto.id);
+    const existente = carrito.find(
+      (item) =>
+        (item.ingrediente_id || item.id) === producto.id && !item.carrito_id
+    );
+
     if (existente) {
-      setCarrito(carrito.map(item =>
-        item.id === producto.id ? { ...item, cantidad: item.cantidad + cantidad } : item
-      ));
+      setCarrito(
+        carrito.map((item) =>
+          (item.ingrediente_id || item.id) === producto.id && !item.carrito_id
+            ? { ...item, cantidad: item.cantidad + cantidad }
+            : item
+        )
+      );
     } else {
-      setCarrito([...carrito, { ...producto, cantidad }]);
+      setCarrito([
+        ...carrito,
+        { ...producto, cantidad, ingrediente_id: producto.id, origen: 'manual' },
+      ]);
     }
   }
 
-  function eliminarDelCarrito(id: string) {
-    setCarrito(carrito.filter(item => item.id !== id));
+  function eliminarDelCarrito(item: any) {
+    setCarrito(carrito.filter((i) => i !== item));
   }
 
-  function actualizarCantidad(id: string, cantidad: number) {
+  function actualizarCantidad(item: any, cantidad: number) {
     if (cantidad <= 0) {
-      eliminarDelCarrito(id);
+      eliminarDelCarrito(item);
       return;
     }
-    setCarrito(carrito.map(item =>
-      item.id === id ? { ...item, cantidad: Math.max(1, cantidad) } : item
-    ));
+    setCarrito(
+      carrito.map((i) => (i === item ? { ...i, cantidad: Math.max(1, cantidad) } : i))
+    );
   }
 
   function calcularTotalesPorProveedor() {
     const porProveedor: any = {};
-    carrito.forEach(item => {
+    carrito.forEach((item) => {
       const provNombre = item.proveedor_nombre || 'Sin proveedor';
       if (!porProveedor[provNombre]) {
         porProveedor[provNombre] = { items: [], total: 0, totalUnidades: 0 };
       }
       const precioUnitario = parseFloat(item.precio_compra_actual) || 0;
       const subtotal = precioUnitario * item.cantidad;
-      
+
       porProveedor[provNombre].items.push({ ...item, precioUnitario, subtotal });
       porProveedor[provNombre].total += subtotal;
       porProveedor[provNombre].totalUnidades += item.cantidad;
@@ -176,7 +222,7 @@ export default function PedidosPage() {
 
   const totalGeneral = carrito.reduce((sum, item) => {
     const precio = parseFloat(item.precio_compra_actual) || 0;
-    return sum + (precio * item.cantidad);
+    return sum + precio * item.cantidad;
   }, 0);
 
   const totalUnidades = carrito.reduce((sum, item) => sum + item.cantidad, 0);
@@ -186,7 +232,7 @@ export default function PedidosPage() {
       alert('El carrito está vacío');
       return;
     }
-    
+
     setEnviando(true);
     console.log('🚀 Iniciando envío...');
 
@@ -195,9 +241,11 @@ export default function PedidosPage() {
       const numeroPedido = `PED-${Date.now()}`;
       const fechaISO = new Date().toISOString();
 
+      const idsCarritoAEliminar: string[] = [];
+
       for (const [provNombre, data] of Object.entries(porProveedor) as [string, any][]) {
         console.log(`\n Procesando proveedor: ${provNombre}`);
-        
+
         const { data: provData, error: provError } = await supabase
           .from('proveedores')
           .select('id, email')
@@ -208,21 +256,21 @@ export default function PedidosPage() {
           console.error(`Error buscando proveedor ${provNombre}:`, provError);
         }
 
-    const { data: pedidoData, error: pedidoError } = await supabase
-  .from('pedidos')
-  .insert({
-    id: crypto.randomUUID(),
-    numero_pedido: numeroPedido,
-    proveedor_id: provData?.id || null,
-    proveedor_nombre: provNombre,
-    proveedor_email: provData?.email || null,
-    usuario_nombre: 'Cocina',
-    total_articulos: data.items.length,
-    total_estimado: data.total,
-    estado: 'enviado',
-    fecha: fechaISO,
-    created_at: fechaISO
-  })
+        const { data: pedidoData, error: pedidoError } = await supabase
+          .from('pedidos')
+          .insert({
+            id: crypto.randomUUID(),
+            numero_pedido: numeroPedido,
+            proveedor_id: provData?.id || null,
+            proveedor_nombre: provNombre,
+            proveedor_email: provData?.email || null,
+            usuario_nombre: 'Cocina',
+            total_articulos: data.items.length,
+            total_estimado: data.total,
+            estado: 'enviado',
+            fecha: fechaISO,
+            created_at: fechaISO,
+          })
           .select()
           .single();
 
@@ -233,11 +281,10 @@ export default function PedidosPage() {
 
         console.log('✅ Pedido guardado:', pedidoData);
 
-        // CORRECCIÓN: Añadidos precio_unitario y subtotal
         const itemsToInsert = data.items.map((item: any) => ({
           id: crypto.randomUUID(),
           pedido_id: pedidoData.id,
-          ingrediente_id: item.id,
+          ingrediente_id: item.ingrediente_id || item.id,
           codigo: item.codigo || '',
           descripcion: item.nombre,
           cantidad_pedida: item.cantidad,
@@ -246,7 +293,7 @@ export default function PedidosPage() {
           estado: 'pendiente',
           precio_unitario: item.precioUnitario || 0,
           subtotal: item.subtotal || 0,
-          created_at: fechaISO
+          created_at: fechaISO,
         }));
 
         const { error: itemsError } = await supabase
@@ -275,11 +322,11 @@ export default function PedidosPage() {
                   cantidad: i.cantidad,
                   unidad: i.unidad_compra,
                   precio: i.precioUnitario,
-                  subtotal: i.subtotal
+                  subtotal: i.subtotal,
                 })),
                 usuario: 'Cocina',
-                total: data.total
-              })
+                total: data.total,
+              }),
             });
 
             if (response.ok) {
@@ -291,12 +338,25 @@ export default function PedidosPage() {
             console.error('Error enviando email:', err);
           }
         }
+
+        // 🆕 Recopilar ids de carrito_compra a eliminar
+        data.items.forEach((item: any) => {
+          if (item.carrito_id) idsCarritoAEliminar.push(item.carrito_id);
+        });
+      }
+
+      // 🆕 Eliminar de carrito_compra las líneas que se han procesado
+      if (idsCarritoAEliminar.length > 0) {
+        const { error: errClean } = await supabase
+          .from('carrito_compra')
+          .delete()
+          .in('id', idsCarritoAEliminar);
+        if (errClean) console.warn('No se pudo limpiar carrito_compra:', errClean);
       }
 
       alert(`✅ Pedido ${numeroPedido} generado correctamente.`);
       setCarrito([]);
       setMostrarCarrito(false);
-      
     } catch (error) {
       console.error('❌ Error crítico:', error);
       alert('❌ Error: ' + (error as Error).message);
@@ -307,9 +367,12 @@ export default function PedidosPage() {
 
   const totalesPorProveedor = calcularTotalesPorProveedor();
 
+  // 🆕 Contadores para el header del carrito
+  const lineasAuto = carrito.filter((i) => i.carrito_id).length;
+  const lineasManual = carrito.length - lineasAuto;
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      
       {/* HEADER */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -325,7 +388,7 @@ export default function PedidosPage() {
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => window.location.href = '/dashboard'}
+                onClick={() => (window.location.href = '/dashboard')}
                 className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium transition-all text-sm flex items-center gap-2"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -333,9 +396,9 @@ export default function PedidosPage() {
                 </svg>
                 Dashboard
               </button>
-              
+
               <button
-                onClick={() => window.location.href = '/pedidos/historial'}
+                onClick={() => (window.location.href = '/pedidos/historial')}
                 className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 font-medium transition-all text-sm flex items-center gap-2"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -343,12 +406,14 @@ export default function PedidosPage() {
                 </svg>
                 Historial
               </button>
-              
+
               <button
                 onClick={() => setMostrarCarrito(true)}
                 className="relative px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium transition-all text-sm flex items-center gap-2 shadow-sm"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
                 Carrito
                 {carrito.length > 0 && (
                   <span className="absolute -top-2 -right-2 bg-emerald-500 text-white w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold shadow-md border-2 border-white">
@@ -362,7 +427,6 @@ export default function PedidosPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        
         {/* FILTROS */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
           <div className="flex flex-col md:flex-row gap-4 items-start">
@@ -371,7 +435,9 @@ export default function PedidosPage() {
                 Buscar por nombre o categoría
               </label>
               <div className="relative">
-                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
                 <input
                   type="text"
                   placeholder="Ej: Queso, Tomate, Verduras..."
@@ -391,32 +457,30 @@ export default function PedidosPage() {
                 className="w-full md:w-auto px-4 py-2.5 border border-slate-300 rounded-lg font-medium transition-all hover:border-emerald-400 hover:bg-slate-50 flex items-center justify-between gap-2 text-sm text-slate-700"
               >
                 <span className="truncate">
-                  {proveedoresSeleccionados.length > 0 
+                  {proveedoresSeleccionados.length > 0
                     ? `${proveedoresSeleccionados.length} seleccionado(s)`
-                    : 'Todos los proveedores'
-                  }
+                    : 'Todos los proveedores'}
                 </span>
-                <svg className={`w-4 h-4 text-slate-400 transition-transform ${mostrarFiltroProveedores ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                <svg className={`w-4 h-4 text-slate-400 transition-transform ${mostrarFiltroProveedores ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </button>
 
               {mostrarFiltroProveedores && (
-                <div className="absolute top-full left-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute top-full left-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl z-20 overflow-hidden">
                   <div className="p-3 border-b border-slate-100 bg-slate-50">
                     <button
                       onClick={toggleTodosProveedores}
                       className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 w-full text-left"
                     >
-                      {proveedoresSeleccionados.length === proveedoresUnicos.length 
-                        ? 'Deseleccionar todos' 
+                      {proveedoresSeleccionados.length === proveedoresUnicos.length
+                        ? 'Deseleccionar todos'
                         : 'Seleccionar todos'}
                     </button>
                   </div>
                   <div className="max-h-64 overflow-y-auto p-2">
                     {proveedoresUnicos.map((proveedor) => (
-                      <label
-                        key={proveedor}
-                        className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
-                      >
+                      <label key={proveedor} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors">
                         <input
                           type="checkbox"
                           checked={proveedoresSeleccionados.includes(proveedor)}
@@ -440,7 +504,9 @@ export default function PedidosPage() {
                   onClick={limpiarFiltros}
                   className="w-full md:w-auto px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-lg font-medium transition text-sm flex items-center justify-center gap-2"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                   Limpiar filtros
                 </button>
               </div>
@@ -452,7 +518,9 @@ export default function PedidosPage() {
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="p-4 bg-slate-50 border-b border-slate-200">
             <h2 className="font-semibold text-slate-800 flex items-center gap-2">
-              <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+              <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
               Catálogo de Productos
             </h2>
           </div>
@@ -460,7 +528,10 @@ export default function PedidosPage() {
           <div className="divide-y divide-slate-100">
             {loading ? (
               <div className="p-12 text-center text-slate-500">
-                <svg className="animate-spin h-8 w-8 mx-auto mb-3 text-emerald-500" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                <svg className="animate-spin h-8 w-8 mx-auto mb-3 text-emerald-500" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
                 <p>Cargando productos...</p>
               </div>
             ) : productosFiltrados.length === 0 ? (
@@ -486,7 +557,9 @@ export default function PedidosPage() {
                       </div>
                       {producto.proveedor_nombre && (
                         <p className="text-sm text-cyan-700 font-medium mt-2 flex items-center gap-1">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                          </svg>
                           {producto.proveedor_nombre}
                         </p>
                       )}
@@ -507,12 +580,18 @@ export default function PedidosPage() {
                       />
                       <button
                         onClick={() => {
-                          const qty = parseInt((document.getElementById(`qty-${producto.id}`) as HTMLInputElement)?.value || '1');
+                          const qty =
+                            parseInt(
+                              (document.getElementById(`qty-${producto.id}`) as HTMLInputElement)
+                                ?.value || '1'
+                            );
                           añadirAlCarrito(producto, qty);
                         }}
                         className="flex-1 sm:flex-none px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition shadow-sm flex items-center justify-center gap-2"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
                         Añadir
                       </button>
                     </div>
@@ -527,30 +606,59 @@ export default function PedidosPage() {
       {/* MODAL CARRITO */}
       {mostrarCarrito && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white w-full max-w-3xl rounded-t-2xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom-4 duration-300">
+          <div className="bg-white w-full max-w-3xl rounded-t-2xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl">
             <div className="bg-slate-900 text-white p-4 rounded-t-2xl flex justify-between items-center">
               <h2 className="text-lg font-bold flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
                 Resumen del Pedido
               </h2>
-              <button onClick={() => setMostrarCarrito(false)} className="text-slate-400 hover:text-white w-8 h-8 rounded-full flex items-center justify-center transition">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              <button
+                onClick={() => setMostrarCarrito(false)}
+                className="text-slate-400 hover:text-white w-8 h-8 rounded-full flex items-center justify-center transition"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
+
+            {/* 🆕 Resumen de orígenes */}
+            {carrito.length > 0 && (
+              <div className="px-6 pt-4 pb-2 flex flex-wrap gap-2">
+                {lineasAuto > 0 && (
+                  <span className="px-3 py-1 bg-orange-50 text-orange-700 border border-orange-200 rounded-full text-xs font-semibold">
+                    🤖 {lineasAuto} automáticos (producciones/mínimos)
+                  </span>
+                )}
+                {lineasManual > 0 && (
+                  <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-semibold">
+                    ✍️ {lineasManual} manuales
+                  </span>
+                )}
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
               {carrito.length === 0 ? (
                 <div className="text-center py-12 text-slate-500">
-                  <svg className="w-16 h-16 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                  <svg className="w-16 h-16 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
                   <p className="text-lg font-medium">El carrito está vacío</p>
-                  <p className="text-sm mt-1">Añade productos del catálogo para comenzar</p>
+                  <p className="text-sm mt-1">
+                    Añade productos del catálogo o planifica una producción sin stock
+                  </p>
                 </div>
               ) : (
                 Object.entries(totalesPorProveedor).map(([provNombre, data]: [string, any]) => (
                   <div key={provNombre} className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                     <div className="bg-slate-50 p-3 border-b border-slate-200 flex justify-between items-center">
                       <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                        <svg className="w-4 h-4 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                        <svg className="w-4 h-4 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
                         {provNombre}
                       </h3>
                       <span className="text-xs text-slate-600 font-medium bg-white px-2 py-1 rounded border border-slate-200">
@@ -560,20 +668,50 @@ export default function PedidosPage() {
 
                     <div className="divide-y divide-slate-100">
                       {data.items.map((item: any) => (
-                        <div key={item.id} className="p-3 hover:bg-slate-50 transition">
+                        <div key={item.carrito_id || item.id} className="p-3 hover:bg-slate-50 transition">
                           <div className="flex justify-between items-start gap-4">
                             <div className="flex-1">
-                              <h4 className="font-semibold text-sm text-slate-900">{item.nombre}</h4>
+                              <h4 className="font-semibold text-sm text-slate-900 flex items-center gap-2 flex-wrap">
+                                {item.nombre}
+                                {item.carrito_id && (
+                                  <span
+                                    className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full border ${
+                                      item.origen === 'produccion'
+                                        ? 'bg-orange-50 text-orange-700 border-orange-200'
+                                        : 'bg-amber-50 text-amber-700 border-amber-200'
+                                    }`}
+                                    title={item.origen_ref || ''}
+                                  >
+                                    {item.origen === 'produccion' ? '🍳 PRODUCCIÓN' : '⚠️ MÍNIMO'}
+                                  </span>
+                                )}
+                              </h4>
                               <p className="text-xs text-slate-500 mt-0.5">
                                 {item.unidad_compra} • {item.precioUnitario.toFixed(2)} €/ud
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
-                              <button onClick={() => actualizarCantidad(item.id, item.cantidad - 1)} className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-md font-bold flex items-center justify-center transition text-slate-700">−</button>
+                              <button
+                                onClick={() => actualizarCantidad(item, item.cantidad - 1)}
+                                className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-md font-bold flex items-center justify-center transition text-slate-700"
+                              >
+                                −
+                              </button>
                               <span className="w-10 text-center font-semibold text-sm py-1">{item.cantidad}</span>
-                              <button onClick={() => actualizarCantidad(item.id, item.cantidad + 1)} className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-md font-bold flex items-center justify-center transition text-slate-700">+</button>
-                              <button onClick={() => eliminarDelCarrito(item.id)} className="ml-2 text-slate-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-md transition" title="Eliminar">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              <button
+                                onClick={() => actualizarCantidad(item, item.cantidad + 1)}
+                                className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-md font-bold flex items-center justify-center transition text-slate-700"
+                              >
+                                +
+                              </button>
+                              <button
+                                onClick={() => eliminarDelCarrito(item)}
+                                className="ml-2 text-slate-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-md transition"
+                                title="Eliminar"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
                               </button>
                             </div>
                           </div>
@@ -597,7 +735,9 @@ export default function PedidosPage() {
                 <div className="flex justify-between items-center mb-4 p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
                   <div>
                     <span className="font-semibold text-slate-700 text-lg">Total General:</span>
-                    <p className="text-sm text-slate-500 mt-0.5">{totalUnidades} unidades • {carrito.length} productos</p>
+                    <p className="text-sm text-slate-500 mt-0.5">
+                      {totalUnidades} unidades • {carrito.length} productos
+                    </p>
                   </div>
                   <div className="text-right">
                     <p className="font-bold text-emerald-700 text-2xl">{totalGeneral.toFixed(2)} €</p>
@@ -610,12 +750,17 @@ export default function PedidosPage() {
                 >
                   {enviando ? (
                     <>
-                      <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                      <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                      </svg>
                       Procesando y enviando...
                     </>
                   ) : (
                     <>
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                      </svg>
                       Confirmar y Enviar Pedido
                     </>
                   )}
