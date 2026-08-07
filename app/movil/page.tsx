@@ -22,7 +22,7 @@ const MODULOS = [
     emoji: '🧾',
     titulo: 'Escanear Factura',
     desc: 'Foto → lectura automática',
-    href: '/facturas/upload',
+     href: '/movil/facturas',
     color: 'from-pink-500 to-rose-600',
   },
   {
