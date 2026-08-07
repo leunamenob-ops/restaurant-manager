@@ -73,11 +73,41 @@ function ScannerFase({ onSelect }: { onSelect: (id: string) => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function procesarCodigo(valor: string) {
+    async function procesarCodigo(valor: string) {
     if (!valor) return;
     setBuscando(true);
+    setError(null);
 
-    // Si es UUID → buscar por ID directamente
+    // 1. URL de etiqueta de producto (?producto=UUID) → extraer ID
+    if (valor.includes('producto=')) {
+      try {
+        const url = new URL(valor);
+        const id = url.searchParams.get('producto');
+        if (id) {
+          const { data } = await supabase
+            .from('ingredientes')
+            .select('id, nombre')
+            .eq('id', id)
+            .maybeSingle();
+
+          if (data) {
+            onSelect(data.id);
+            setBuscando(false);
+            return;
+          }
+        }
+      } catch (e) {
+        // URL mal formada, seguir intentando
+      }
+    }
+
+    // 2. URL de lote (trazabilidad) → redirigir a su página
+    if (valor.includes('/lote/')) {
+      window.location.href = valor;
+      return;
+    }
+
+    // 3. UUID directo
     if (/^[0-9a-fA-F-]{36}$/.test(valor)) {
       const { data } = await supabase
         .from('ingredientes')
@@ -91,6 +121,44 @@ function ScannerFase({ onSelect }: { onSelect: (id: string) => void }) {
         return;
       }
     }
+
+    // 4. Código de barras (EAN, etc.)
+    const { data: porCodigo } = await supabase
+      .from('ingredientes')
+      .select('id, nombre')
+      .eq('codigo', valor)
+      .maybeSingle();
+
+    if (porCodigo) {
+      onSelect(porCodigo.id);
+      setBuscando(false);
+      return;
+    }
+
+    // 5. Búsqueda aproximada por nombre
+    const { data: porNombre } = await supabase
+      .from('ingredientes')
+      .select('id, nombre')
+      .ilike('nombre', `%${valor}%`)
+      .limit(5);
+
+    if (porNombre && porNombre.length === 1) {
+      onSelect(porNombre[0].id);
+      setBuscando(false);
+      return;
+    }
+
+    if (porNombre && porNombre.length > 1) {
+      setSugerencias(porNombre);
+      setBuscando(false);
+      setDetectado(false);
+      return;
+    }
+
+    setBuscando(false);
+    setDetectado(false);
+    setError(`❓ No se encontró ningún ingrediente para: ${valor.slice(0, 60)}`);
+  }
 
     // Buscar por código de barras
     const { data: porCodigo } = await supabase
