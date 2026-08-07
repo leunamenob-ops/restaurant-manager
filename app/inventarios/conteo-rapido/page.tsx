@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabaseClient';
 // FASE 1: SCANNER DE CÁMARA
 // =====================================================
 function ScannerFase({ onSelect }: { onSelect: (id: string) => void }) {
+  const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [buscando, setBuscando] = useState(false);
@@ -259,7 +260,7 @@ function ScannerFase({ onSelect }: { onSelect: (id: string) => void }) {
         </div>
 
         {sugerencias.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-xl p-3 space-y-1">
+          <div className="bg-white rounded-2xl shadow-xl p-3 space-y-1 mb-4">
             <p className="text-xs font-semibold text-slate-500 uppercase mb-2 px-2">
               Selecciona producto:
             </p>
@@ -274,6 +275,14 @@ function ScannerFase({ onSelect }: { onSelect: (id: string) => void }) {
             ))}
           </div>
         )}
+
+        {/* 🏠 Volver al inicio */}
+        <button
+          onClick={() => router.push('/movil')}
+          className="w-full py-3.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-bold transition flex items-center justify-center gap-2"
+        >
+          🏠 Volver al inicio
+        </button>
       </div>
     </div>
   );
@@ -293,7 +302,6 @@ function ConteoRapidoContent() {
   const [motivo, setMotivo] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState('');
-  const [ultimoActualizado, setUltimoActualizado] = useState('');
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -397,22 +405,15 @@ function ConteoRapidoContent() {
         if (errorMov) throw errorMov;
       }
 
+      // ✅ Éxito → mostrar mensaje y VOLVER SOLO A LA CÁMARA
       setMensaje(`✅ Guardado: ${producto.nombre} = ${cantidad} ${producto.unidad_compra}`);
-      setUltimoActualizado(new Date().toLocaleTimeString());
-
-      setStockActual(cantidad);
 
       setTimeout(() => {
-        setCantidadReal('');
-        setMotivo('');
-        setMensaje('');
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      }, 1500);
+        router.replace('/inventarios/conteo-rapido');
+      }, 1200);
     } catch (error: any) {
       console.error('Error guardando:', error);
       setMensaje('❌ Error: ' + error.message);
-    } finally {
       setGuardando(false);
     }
   }
@@ -421,10 +422,6 @@ function ConteoRapidoContent() {
     if (e.key === 'Enter') {
       guardarConteo();
     }
-  }
-
-  function volverAlScanner() {
-    router.replace('/inventarios/conteo-rapido');
   }
 
   if (!producto) {
@@ -440,24 +437,33 @@ function ConteoRapidoContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 p-4">
-      <div className="max-w-md mx-auto pt-8">
-        <button
-          onClick={volverAlScanner}
-          className="mb-4 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-semibold transition flex items-center gap-2"
-        >
-          ← Escanear otro producto
-        </button>
-
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-white/10 backdrop-blur rounded-2xl mb-4">
-            <span className="text-5xl">📦</span>
-          </div>
-          <h1 className="text-2xl font-bold text-white mb-1">Conteo Rápido</h1>
-          <p className="text-emerald-100 text-sm">Teclea • Guarda • Siguiente</p>
+      <div className="max-w-md mx-auto pt-6">
+        {/* Botonera superior: casa + escanear otro */}
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => router.push('/movil')}
+            className="flex-1 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-bold transition flex items-center justify-center gap-2"
+          >
+            🏠 Inicio
+          </button>
+          <button
+            onClick={() => router.replace('/inventarios/conteo-rapido')}
+            className="flex-1 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-bold transition flex items-center justify-center gap-2"
+          >
+            📷 Escanear otro
+          </button>
         </div>
 
-        <div className="bg-white rounded-3xl shadow-2xl p-6 mb-6">
-          <div className="text-center mb-6">
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-white/10 backdrop-blur rounded-2xl mb-3">
+            <span className="text-4xl">📦</span>
+          </div>
+          <h1 className="text-xl font-bold text-white mb-1">Conteo Rápido</h1>
+          <p className="text-emerald-100 text-xs">Teclea • Guarda • Siguiente escaneo</p>
+        </div>
+
+        <div className="bg-white rounded-3xl shadow-2xl p-6 mb-4">
+          <div className="text-center mb-5">
             <h2 className="text-xl font-bold text-slate-900 mb-2">{producto.nombre}</h2>
             <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
               <span className="px-3 py-1 bg-slate-100 rounded-full">
@@ -469,13 +475,13 @@ function ConteoRapidoContent() {
             </div>
           </div>
 
-          <div className="bg-slate-50 rounded-2xl p-4 mb-6 text-center">
+          <div className="bg-slate-50 rounded-2xl p-4 mb-5 text-center">
             <p className="text-sm text-slate-500 mb-1">Stock Actual</p>
             <p className="text-4xl font-bold text-slate-900">{stockActual}</p>
             <p className="text-xs text-slate-400 mt-1">{producto.unidad_compra}</p>
           </div>
 
-          <div className="mb-6">
+          <div className="mb-5">
             <label className="block text-sm font-semibold text-slate-700 mb-2 text-center">
               Cantidad Real Contada
             </label>
@@ -499,7 +505,7 @@ function ConteoRapidoContent() {
           </div>
 
           {cantidadReal && parseFloat(cantidadReal) !== stockActual && (
-            <div className="mb-6">
+            <div className="mb-5">
               <input
                 type="text"
                 value={motivo}
@@ -542,18 +548,14 @@ function ConteoRapidoContent() {
             }`}
           >
             {mensaje}
+            {mensaje.includes('✅') && (
+              <p className="text-xs text-emerald-100 mt-1">Volviendo a la cámara...</p>
+            )}
           </div>
         )}
 
-        {ultimoActualizado && (
-          <p className="text-center text-emerald-100 text-xs mt-4">
-            Último: {ultimoActualizado}
-          </p>
-        )}
-
-        <div className="mt-8 text-center text-emerald-100 text-xs space-y-1">
-          <p>📷 Pulsa "Escanear otro" para continuar</p>
-          <p>⌨️ O pulsa Enter para guardar rápido</p>
+        <div className="mt-6 text-center text-emerald-100 text-xs">
+          <p>💾 Al guardar, vuelve solo a la cámara para el siguiente</p>
         </div>
       </div>
     </div>
