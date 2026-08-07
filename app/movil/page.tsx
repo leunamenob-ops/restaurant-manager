@@ -32,20 +32,6 @@ const MODULOS = [
     href: '/movil/scan',
     color: 'from-orange-500 to-amber-600',
   },
-  {
-    emoji: '🍳',
-    titulo: 'Producciones',
-    desc: 'Planifica y controla tandas',
-    href: '/producciones',
-    color: 'from-red-500 to-orange-600',
-  },
-  {
-    emoji: '📊',
-    titulo: 'Inventario Central',
-    desc: 'Calendario y caducidades',
-    href: '/producciones/inventario',
-    color: 'from-slate-600 to-slate-800',
-  },
 ];
 
 export default function MovilHome() {
@@ -63,9 +49,9 @@ export default function MovilHome() {
 
   return (
     <div className="min-h-screen bg-slate-100 font-sans">
-      <div className="max-w-md mx-auto px-4 py-8">
+      <div className="max-w-md mx-auto px-4 py-10">
         {/* Cabecera */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-10">
           <div className="w-16 h-16 mx-auto bg-gradient-to-br from-orange-600 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-600/30">
             <span className="text-white font-bold text-3xl">K</span>
           </div>
@@ -82,22 +68,22 @@ export default function MovilHome() {
           )}
         </div>
 
-        {/* Grid de módulos */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Grid 2x2 de módulos operativos */}
+        <div className="grid grid-cols-2 gap-4">
           {MODULOS.map((m) => (
             <button
               key={m.href}
               onClick={() => router.push(m.href)}
-              className={`bg-gradient-to-br ${m.color} rounded-2xl p-4 text-left text-white shadow-lg hover:scale-[1.03] active:scale-[0.98] transition-transform`}
+              className={`bg-gradient-to-br ${m.color} rounded-2xl p-5 text-left text-white shadow-lg hover:scale-[1.03] active:scale-[0.98] transition-transform min-h-[140px]`}
             >
-              <span className="text-3xl">{m.emoji}</span>
-              <p className="font-bold text-sm mt-2 leading-tight">{m.titulo}</p>
-              <p className="text-[10px] text-white/80 mt-1 leading-snug">{m.desc}</p>
+              <span className="text-4xl">{m.emoji}</span>
+              <p className="font-bold text-base mt-3 leading-tight">{m.titulo}</p>
+              <p className="text-[11px] text-white/80 mt-1 leading-snug">{m.desc}</p>
             </button>
           ))}
         </div>
 
-        <p className="text-center text-[11px] text-slate-400 mt-8">
+        <p className="text-center text-[11px] text-slate-400 mt-10">
           Versión móvil · optimizada para cocina
         </p>
       </div>
