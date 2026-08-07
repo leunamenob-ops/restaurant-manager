@@ -1,0 +1,136 @@
+// app/api/stock-producciones/salida/route.ts
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+export const dynamic = 'force-dynamic';
+
+function getSupabase() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Faltan variables de entorno de Supabase');
+  }
+
+  return createClient(supabaseUrl, supabaseAnonKey);
+}
+
+export async function POST(request: Request) {
+  try {
+    const supabase = getSupabase();
+
+    const body = await request.json().catch(() => ({}));
+    const productoNombre = body?.producto_nombre;
+    const cantidad = Number(body?.cantidad);
+    const destino = body?.destino || null;
+    const responsable = body?.responsable || null;
+
+    if (!productoNombre || !cantidad || cantidad <= 0) {
+      return NextResponse.json(
+        { ok: false, error: 'Faltan producto_nombre o cantidad válida' },
+        { status: 400 }
+      );
+    }
+
+    // FIFO: entradas con stock, ordenadas por caducidad (la más próxima primero)
+    const { data: entradas, error: errEntradas } = await supabase
+      .from('stock_producciones')
+      .select('*')
+      .eq('producto_nombre', productoNombre)
+      .eq('movimiento_tipo', 'entrada')
+      .gt('cantidad_disponible', 0)
+      .order('fecha_caducidad', { ascending: true });
+
+    if (errEntradas) {
+      return NextResponse.json({ ok: false, error: errEntradas.message }, { status: 500 });
+    }
+
+    const disponibleTotal = (entradas || []).reduce(
+      (s, e) => s + Number(e.cantidad_disponible || 0),
+      0
+    );
+
+    if (disponibleTotal < cantidad) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Stock insuficiente. Disponible: ${disponibleTotal} · Solicitado: ${cantidad}`,
+        },
+        { status: 400 }
+      );
+    }
+
+    let restante = cantidad;
+    const consumos: any[] = [];
+
+    for (const e of entradas || []) {
+      if (restante <= 0) break;
+
+      const tomar = Math.min(Number(e.cantidad_disponible || 0), restante);
+      if (tomar <= 0) continue;
+
+      // 1. Descontar de la entrada
+      const nuevoDisponible = Number(e.cantidad_disponible) - tomar;
+
+      await supabase
+        .from('stock_producciones')
+        .update({
+          cantidad_disponible: nuevoDisponible,
+          fecha_salida: new Date().toISOString(),
+        })
+        .eq('id', e.id);
+
+      // 2. Registrar movimiento de salida
+      await supabase.from('stock_producciones').insert({
+        produccion_id: e.produccion_id,
+        producto_nombre: e.producto_nombre,
+        cantidad_disponible: tomar,
+        cantidad_inicial: tomar,
+        unidad_medida: e.unidad_medida,
+        ubicacion: destino || e.ubicacion,
+        fecha_entrada: new Date().toISOString(),
+        fecha_salida: new Date().toISOString(),
+        fecha_caducidad: e.fecha_caducidad,
+        lote_numero: e.lote_numero,
+        movimiento_tipo: 'salida',
+        responsable_movimiento: responsable,
+        observaciones: `Salida FIFO a ${destino || 'servicio'}`,
+        hotel_id: e.hotel_id,
+      });
+
+      // 3. Actualizar trazabilidad del lote
+      const { data: loteAct } = await supabase
+        .from('lotes')
+        .select('id, cantidad_consumida, cantidad_total')
+        .eq('produccion_id', e.produccion_id)
+        .single();
+
+      if (loteAct) {
+        const nuevaConsumida = Number(loteAct.cantidad_consumida || 0) + tomar;
+        await supabase
+          .from('lotes')
+          .update({
+            cantidad_consumida: nuevaConsumida,
+            estado: nuevaConsumida >= Number(loteAct.cantidad_total) ? 'consumido' : 'activo',
+          })
+          .eq('id', loteAct.id);
+      }
+
+      consumos.push({
+        lote: e.lote_numero,
+        cantidad: tomar,
+        caducidad: e.fecha_caducidad,
+        agotado: nuevoDisponible <= 0,
+      });
+
+      restante -= tomar;
+    }
+
+    return NextResponse.json({ ok: true, consumos });
+  } catch (error: any) {
+    return NextResponse.json(
+      { ok: false, error: error?.message || 'Error al registrar salida' },
+      { status: 500 }
+    );
+  }
+}
