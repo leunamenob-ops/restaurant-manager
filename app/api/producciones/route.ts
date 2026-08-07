@@ -6,39 +6,24 @@ export const dynamic = 'force-dynamic';
 
 const DEFAULT_HOTEL_ID = '00000000-0000-0000-0000-000000000001';
 
-const ESTADOS_VALIDOS = [
-  'planificada',
-  'en_proceso',
-  'terminada',
-  'cancelada',
-];
+const ESTADOS_VALIDOS = ['planificada', 'en_proceso', 'terminada', 'cancelada'];
 
-// =====================================================
-// Cliente Supabase
-// =====================================================
 function getSupabase() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(
-      'Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY'
-    );
+    throw new Error('Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY');
   }
 
   return createClient(supabaseUrl, supabaseAnonKey);
 }
 
-// =====================================================
-// Utilidades
-// =====================================================
 function generarLoteNumero() {
   const now = new Date();
-
   const fecha = now.toISOString().slice(0, 10).replace(/-/g, '');
   const hora = now.toTimeString().slice(0, 8).replace(/:/g, '');
   const random = Math.random().toString(36).slice(2, 5).toUpperCase();
-
   return `PROD-${fecha}-${hora}-${random}`;
 }
 
@@ -47,33 +32,36 @@ function round(n: number, decimales = 3) {
   return Math.round(n * p) / p;
 }
 
-// Factor de escala según cantidad a producir
-function calcularFactor(
-  cantidad: number,
-  unidad: string,
-  gramosReceta: number,
-  porciones: number
-) {
+function calcularFactor(cantidad: number, unidad: string, gramosReceta: number, porciones: number) {
   const u = (unidad || '').toLowerCase();
 
   if (gramosReceta > 0) {
-    if (u.includes('kg') || u.includes('kilo')) {
-      return (cantidad * 1000) / gramosReceta;
-    }
-    if (u.includes('gramo') || u === 'g' || u === 'gr') {
-      return cantidad / gramosReceta;
-    }
+    if (u.includes('kg') || u.includes('kilo')) return (cantidad * 1000) / gramosReceta;
+    if (u.includes('gramo') || u === 'g' || u === 'gr') return cantidad / gramosReceta;
     if (u.includes('litro') || u === 'l' || u === 'ml') {
       const gramos = u === 'ml' ? cantidad : cantidad * 1000;
       return gramos / gramosReceta;
     }
   }
 
-  if (porciones > 0) {
-    return cantidad / porciones;
-  }
-
+  if (porciones > 0) return cantidad / porciones;
   return 1;
+}
+
+function factorUnidad(u: string): number {
+  const s = (u || '').toLowerCase().replace(/\./g, '').trim();
+  if (['kg', 'kilo', 'kilos'].includes(s)) return 1000;
+  if (['g', 'gr', 'gramo', 'gramos'].includes(s)) return 1;
+  if (['l', 'litro', 'litros'].includes(s)) return 1000;
+  if (['ml', 'mililitro', 'mililitros'].includes(s)) return 1;
+  return 0;
+}
+
+function convertirAUnidadCompra(cantidad: number, unidadReceta: string, unidadCompra: string | null) {
+  const a = factorUnidad(unidadReceta);
+  const b = factorUnidad(unidadCompra || '');
+  if (a === 0 || b === 0) return cantidad;
+  return cantidad * (a / b);
 }
 
 // =====================================================
@@ -96,33 +84,16 @@ export async function GET(request: Request) {
       .order('fecha_produccion', { ascending: false })
       .limit(200);
 
-    if (estado && estado !== 'todas') {
-      query = query.eq('estado', estado);
-    }
-
-    if (q) {
-      query = query.ilike('nombre', `%${q}%`);
-    }
-
-    if (ubicacion) {
-      query = query.ilike('ubicacion_almacen', `%${ubicacion}%`);
-    }
-
-    if (desde) {
-      query = query.gte('fecha_produccion', desde);
-    }
-
-    if (hasta) {
-      query = query.lte('fecha_produccion', hasta);
-    }
+    if (estado && estado !== 'todas') query = query.eq('estado', estado);
+    if (q) query = query.ilike('nombre', `%${q}%`);
+    if (ubicacion) query = query.ilike('ubicacion_almacen', `%${ubicacion}%`);
+    if (desde) query = query.gte('fecha_produccion', desde);
+    if (hasta) query = query.lte('fecha_produccion', hasta);
 
     const { data, error } = await query;
 
     if (error) {
-      return NextResponse.json(
-        { ok: false, error: error.message },
-        { status: 500 }
-      );
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true, data });
@@ -142,25 +113,17 @@ export async function POST(request: Request) {
     const supabase = getSupabase();
 
     let body: any;
-
     try {
       body = await request.json();
     } catch {
-      return NextResponse.json(
-        { ok: false, error: 'JSON inválido' },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: 'JSON inválido' }, { status: 400 });
     }
 
     const cantidad = Number(body?.cantidad_producida);
 
     if (!body?.nombre || !body?.fecha_caducidad || !cantidad || cantidad <= 0) {
       return NextResponse.json(
-        {
-          ok: false,
-          error:
-            'Campos obligatorios: nombre, fecha_caducidad y cantidad_producida mayor que 0',
-        },
+        { ok: false, error: 'Campos obligatorios: nombre, fecha_caducidad y cantidad_producida mayor que 0' },
         { status: 400 }
       );
     }
@@ -169,10 +132,7 @@ export async function POST(request: Request) {
 
     if (!ESTADOS_VALIDOS.includes(estado)) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: `Estado inválido. Permitidos: ${ESTADOS_VALIDOS.join(', ')}`,
-        },
+        { ok: false, error: `Estado inválido. Permitidos: ${ESTADOS_VALIDOS.join(', ')}` },
         { status: 400 }
       );
     }
@@ -208,35 +168,20 @@ export async function POST(request: Request) {
 
     if (errorProduccion || !produccion) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: errorProduccion?.message || 'No se pudo crear la producción',
-        },
+        { ok: false, error: errorProduccion?.message || 'No se pudo crear la producción' },
         { status: 500 }
       );
     }
 
     const rollbackProduccion = async (mensaje: string, status = 500) => {
-      await supabase
-        .from('lotes')
-        .delete()
-        .eq('produccion_id', produccion.id_produccion);
-
-      await supabase
-        .from('produccion_materiales')
-        .delete()
-        .eq('produccion_id', produccion.id_produccion);
-
-      await supabase
-        .from('producciones')
-        .delete()
-        .eq('id_produccion', produccion.id_produccion);
-
+      await supabase.from('lotes').delete().eq('produccion_id', produccion.id_produccion);
+      await supabase.from('produccion_materiales').delete().eq('produccion_id', produccion.id_produccion);
+      await supabase.from('producciones').delete().eq('id_produccion', produccion.id_produccion);
       return NextResponse.json({ ok: false, error: mensaje }, { status });
     };
 
     // --------------------------------------------------
-    // 2. Crear lote asociado (trazabilidad + QR)
+    // 2. Crear lote asociado
     // --------------------------------------------------
     const qrData = {
       tipo: 'produccion',
@@ -264,16 +209,15 @@ export async function POST(request: Request) {
     });
 
     if (errorLote) {
-      return await rollbackProduccion(
-        `Producción creada pero falló el lote: ${errorLote.message}`
-      );
+      return await rollbackProduccion(`Producción creada pero falló el lote: ${errorLote.message}`);
     }
 
     // --------------------------------------------------
-    // 3. DESPIECE AUTOMÁTICO desde la sub-receta
+    // 3. DESPIECE AUTOMÁTICO + CARRITO DE COMPRA
     // --------------------------------------------------
     let factorAplicado = 1;
     let materialesGenerados = 0;
+    let carritoLineas = 0;
 
     if (payloadProduccion.sub_receta_id) {
       const { data: receta } = await supabase
@@ -292,50 +236,64 @@ export async function POST(request: Request) {
           /^[0-9a-fA-F-]{36}$/.test(String(l.ingrediente_id || ''))
         );
 
-        const ids = Array.from(
-          new Set(lineasValidas.map((l: any) => l.ingrediente_id))
-        );
+        const ids = Array.from(new Set(lineasValidas.map((l: any) => l.ingrediente_id)));
 
-        const nombres: Record<string, string> = {};
+        const ingMap: Record<string, any> = {};
+        const stockMap: Record<string, number> = {};
 
         if (ids.length > 0) {
           const { data: ings } = await supabase
             .from('ingredientes')
-            .select('id, nombre')
+            .select('id, nombre, unidad_compra, proveedor_nombre, precio_compra_actual, stock_minimo')
             .in('id', ids);
 
           (ings || []).forEach((i: any) => {
-            nombres[i.id] = i.nombre;
+            ingMap[i.id] = i;
+          });
+
+          const { data: stocksIng } = await supabase
+            .from('stock')
+            .select('ingrediente_id, cantidad_actual')
+            .in('ingrediente_id', ids);
+
+          (stocksIng || []).forEach((s: any) => {
+            stockMap[s.ingrediente_id] = s.cantidad_actual || 0;
           });
         }
 
         const gramosReceta =
-          parseFloat(
-            String(receta.produccion_gramos || '').replace(',', '.')
-          ) || 0;
+          parseFloat(String(receta.produccion_gramos || '').replace(',', '.')) || 0;
         const porciones = Number(receta.porciones || 0);
 
-        factorAplicado = calcularFactor(
-          cantidad,
-          payloadProduccion.unidad_medida,
-          gramosReceta,
-          porciones
-        );
+        factorAplicado = calcularFactor(cantidad, payloadProduccion.unidad_medida, gramosReceta, porciones);
+
+        const faltasCarrito: any[] = [];
 
         const materialesAuto = lineasValidas.map((l: any) => {
-          const cantTeorica =
-            Number(l.cantidad_necesaria || 0) * factorAplicado;
+          const cantTeorica = Number(l.cantidad_necesaria || 0) * factorAplicado;
 
           const costeUnitario =
             Number(l.cantidad_necesaria) > 0
               ? Number(l.coste_linea || 0) / Number(l.cantidad_necesaria)
               : 0;
 
+          // --- Calcular falta para el carrito ---
+          const ing = ingMap[l.ingrediente_id];
+          if (ing) {
+            const cantCompra = convertirAUnidadCompra(cantTeorica, l.unidad, ing.unidad_compra);
+            const stockActual = stockMap[l.ingrediente_id] || 0;
+            const minimo = Number(ing.stock_minimo || 0);
+            const falta = Math.max(0, cantCompra + minimo - stockActual);
+
+            if (falta > 0.0001) {
+              faltasCarrito.push({ ing, falta });
+            }
+          }
+
           return {
             produccion_id: produccion.id_produccion,
             ingrediente_id: l.ingrediente_id,
-            ingrediente_nombre:
-              nombres[l.ingrediente_id] || 'Ingrediente sin nombre',
+            ingrediente_nombre: ingMap[l.ingrediente_id]?.nombre || 'Ingrediente sin nombre',
             cantidad_teorica: round(cantTeorica),
             cantidad_real: round(cantTeorica),
             unidad: l.unidad || 'ud',
@@ -350,12 +308,43 @@ export async function POST(request: Request) {
             .insert(materialesAuto);
 
           if (errorAuto) {
-            return await rollbackProduccion(
-              `Falló el despiece automático: ${errorAuto.message}`
-            );
+            return await rollbackProduccion(`Falló el despiece automático: ${errorAuto.message}`);
           }
 
           materialesGenerados = materialesAuto.length;
+        }
+
+        // --- Añadir faltas al carrito (acumula si ya estaba pendiente) ---
+        for (const f of faltasCarrito) {
+          const { data: existente } = await supabase
+            .from('carrito_compra')
+            .select('id, cantidad')
+            .eq('ingrediente_id', f.ing.id)
+            .eq('estado', 'pendiente')
+            .maybeSingle();
+
+          if (existente) {
+            await supabase
+              .from('carrito_compra')
+              .update({ cantidad: Number(existente.cantidad) + f.falta })
+              .eq('id', existente.id);
+          } else {
+            await supabase.from('carrito_compra').insert({
+              ingrediente_id: f.ing.id,
+              ingrediente_nombre: f.ing.nombre,
+              proveedor_nombre: f.ing.proveedor_nombre || null,
+              cantidad: round(f.falta, 3),
+              unidad: f.ing.unidad_compra || 'ud',
+              coste_unitario: Number(f.ing.precio_compra_actual || 0),
+              coste_total: round(f.falta * Number(f.ing.precio_compra_actual || 0), 2),
+              origen: 'produccion',
+              origen_ref: produccion.nombre,
+              estado: 'pendiente',
+              hotel_id: payloadProduccion.hotel_id,
+            });
+          }
+
+          carritoLineas++;
         }
       }
     }
@@ -383,15 +372,13 @@ export async function POST(request: Request) {
           .insert(manuales);
 
         if (errorManuales) {
-          return await rollbackProduccion(
-            `Falló la creación de materiales manuales: ${errorManuales.message}`
-          );
+          return await rollbackProduccion(`Falló la creación de materiales manuales: ${errorManuales.message}`);
         }
       }
     }
 
     // --------------------------------------------------
-    // 5. Recalcular coste real con todos los materiales
+    // 5. Recalcular coste real
     // --------------------------------------------------
     const { data: materialesCreados } = await supabase
       .from('produccion_materiales')
@@ -411,31 +398,27 @@ export async function POST(request: Request) {
     }
 
     // --------------------------------------------------
-    // 6. Si está terminada → entrada de stock automática
+    // 6. Stock si terminada
     // --------------------------------------------------
     if (estado === 'terminada') {
-      const { error: errorStock } = await supabase
-        .from('stock_producciones')
-        .insert({
-          produccion_id: produccion.id_produccion,
-          producto_nombre: produccion.nombre,
-          cantidad_disponible: produccion.cantidad_producida,
-          cantidad_inicial: produccion.cantidad_producida,
-          unidad_medida: produccion.unidad_medida,
-          ubicacion: produccion.ubicacion_almacen || 'GENERAL',
-          fecha_entrada: produccion.fecha_produccion,
-          fecha_caducidad: produccion.fecha_caducidad,
-          lote_numero: loteNumero,
-          movimiento_tipo: 'entrada',
-          responsable_movimiento: produccion.responsable_nombre || null,
-          observaciones: 'Entrada automática por producción terminada',
-          hotel_id: payloadProduccion.hotel_id,
-        });
+      const { error: errorStock } = await supabase.from('stock_producciones').insert({
+        produccion_id: produccion.id_produccion,
+        producto_nombre: produccion.nombre,
+        cantidad_disponible: produccion.cantidad_producida,
+        cantidad_inicial: produccion.cantidad_producida,
+        unidad_medida: produccion.unidad_medida,
+        ubicacion: produccion.ubicacion_almacen || 'GENERAL',
+        fecha_entrada: produccion.fecha_produccion,
+        fecha_caducidad: produccion.fecha_caducidad,
+        lote_numero: loteNumero,
+        movimiento_tipo: 'entrada',
+        responsable_movimiento: produccion.responsable_nombre || null,
+        observaciones: 'Entrada automática por producción terminada',
+        hotel_id: payloadProduccion.hotel_id,
+      });
 
       if (errorStock) {
-        return await rollbackProduccion(
-          `Falló la entrada de stock: ${errorStock.message}`
-        );
+        return await rollbackProduccion(`Falló la entrada de stock: ${errorStock.message}`);
       }
     }
 
@@ -456,6 +439,7 @@ export async function POST(request: Request) {
         lote_numero: loteNumero,
         factor_aplicado: round(factorAplicado, 4),
         materiales_generados: materialesGenerados,
+        carrito_lineas: carritoLineas,
       },
       { status: 201 }
     );
