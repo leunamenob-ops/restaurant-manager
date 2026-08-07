@@ -174,6 +174,7 @@ export default function FichaProduccionPage() {
   const [lote, setLote] = useState<Lote | null>(null);
   const [stock, setStock] = useState<MovStock[]>([]);
   const [configEtiqueta, setConfigEtiqueta] = useState<any>(null);
+  const [controlCalidad, setControlCalidad] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [cambiandoEstado, setCambiandoEstado] = useState(false);
 
@@ -199,7 +200,7 @@ export default function FichaProduccionPage() {
     setProduccion(prod);
 
     if (prod) {
-      const [matsRes, ltRes, stkRes, cfgRes] = await Promise.all([
+      const [matsRes, ltRes, stkRes, cfgRes, ccRes] = await Promise.all([
         supabase
           .from('produccion_materiales')
           .select('*')
@@ -208,12 +209,18 @@ export default function FichaProduccionPage() {
         supabase.from('lotes').select('*').eq('produccion_id', id).single(),
         supabase.from('stock_producciones').select('*').eq('produccion_id', id),
         supabase.from('etiquetas_config').select('*').eq('es_default', true).single(),
+        supabase
+          .from('control_calidad_produccion')
+          .select('resultado')
+          .eq('produccion_id', id)
+          .maybeSingle(),
       ]);
 
       setMateriales(matsRes.data || []);
       setLote(ltRes.data);
       setStock(stkRes.data || []);
       setConfigEtiqueta(cfgRes.data);
+      setControlCalidad(ccRes.data);
     }
 
     setLoading(false);
@@ -624,7 +631,6 @@ export default function FichaProduccionPage() {
                 🏷️ Etiquetas de trazabilidad
               </h2>
 
-              {/* Vista previa (envase 1) */}
               <div className="flex justify-center">
                 <Etiqueta
                   prod={produccion}
@@ -634,7 +640,6 @@ export default function FichaProduccionPage() {
                 />
               </div>
 
-              {/* Controles de envasado */}
               <div className="mt-5 space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
@@ -698,6 +703,34 @@ export default function FichaProduccionPage() {
                   🖨️ Imprimir {numEnvases} etiqueta{numEnvases > 1 ? 's' : ''}
                 </button>
               </div>
+            </div>
+
+            {/* APPCC */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4">
+                🧪 Control de calidad (APPCC)
+              </h2>
+              {controlCalidad ? (
+                controlCalidad.resultado === 'conforme' ? (
+                  <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-sm font-bold text-emerald-700 text-center">
+                    ✅ CONFORME
+                  </div>
+                ) : (
+                  <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm font-bold text-red-700 text-center">
+                    🚫 NO CONFORME
+                  </div>
+                )
+              ) : (
+                <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm font-bold text-amber-700 text-center">
+                  ⏳ Pendiente de control
+                </div>
+              )}
+              <button
+                onClick={() => router.push(`/producciones/${id}/calidad`)}
+                className="mt-3 w-full px-4 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium transition-all text-sm"
+              >
+                {controlCalidad ? 'Ver / editar control' : 'Realizar control'}
+              </button>
             </div>
 
             {/* TRAZABILIDAD */}
