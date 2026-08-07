@@ -1,39 +1,35 @@
-// app/api/producciones/route.ts
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+'use client';
 
-export const dynamic = 'force-dynamic';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '../../lib/supabaseClient';
 
-const DEFAULT_HOTEL_ID = '00000000-0000-0000-0000-000000000001';
-
-const ESTADOS_VALIDOS = ['planificada', 'en_proceso', 'terminada', 'cancelada'];
-
-function getSupabase() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY');
-  }
-
-  return createClient(supabaseUrl, supabaseAnonKey);
+interface Receta {
+  id: string;
+  nombre: string;
+  porciones: number;
+  produccion_gramos: string | null;
 }
 
-function generarLoteNumero() {
-  const now = new Date();
-  const fecha = now.toISOString().slice(0, 10).replace(/-/g, '');
-  const hora = now.toTimeString().slice(0, 8).replace(/:/g, '');
-  const random = Math.random().toString(36).slice(2, 5).toUpperCase();
-  return `PROD-${fecha}-${hora}-${random}`;
+interface LineaPreview {
+  nombre: string;
+  cantidad: number;
+  unidad: string;
+  coste: number;
 }
 
-function round(n: number, decimales = 3) {
-  const p = Math.pow(10, decimales);
-  return Math.round(n * p) / p;
-}
+const UNIDADES = ['kg', 'gr', 'litros', 'ml', 'unidades', 'porciones'];
+
+const UBICACIONES_SUGERIDAS = [
+  'Nevera 0-4°C',
+  'Congelador -18°C',
+  'Cámara frigorífica',
+  'Almacén seco',
+  'Abatidor',
+];
 
 // =====================================================
-// FACTOR DE ESCALA (corregido)
+// FACTOR DE ESCALA (corregido) — misma lógica que la API
 // =====================================================
 function calcularFactor(
   cantidad: number,
@@ -56,414 +52,482 @@ function calcularFactor(
   return cantidad; // 1 unidad = 1 tanda completa de la receta
 }
 
-function factorUnidad(u: string): number {
-  const s = (u || '').toLowerCase().replace(/\./g, '').trim();
-  if (['kg', 'kilo', 'kilos'].includes(s)) return 1000;
-  if (['g', 'gr', 'gramo', 'gramos'].includes(s)) return 1;
-  if (['l', 'litro', 'litros'].includes(s)) return 1000;
-  if (['ml', 'mililitro', 'mililitros'].includes(s)) return 1;
-  return 0;
+// Días sugeridos de caducidad según ubicación
+function caducidadSugerida(ubicacion: string): number | null {
+  const u = ubicacion.toLowerCase();
+  if (u.includes('congel') || u.includes('-18')) return 90;
+  if (u.includes('nevera') || u.includes('frigor') || u.includes('4°')) return 3;
+  if (u.includes('seco')) return 30;
+  return null;
 }
 
-function convertirAUnidadCompra(
-  cantidad: number,
-  unidadReceta: string,
-  unidadCompra: string | null
-) {
-  const a = factorUnidad(unidadReceta);
-  const b = factorUnidad(unidadCompra || '');
-  if (a === 0 || b === 0) return cantidad;
-  return cantidad * (a / b);
-}
+export default function NuevaProduccionPage() {
+  const router = useRouter();
 
-// =====================================================
-// GET /api/producciones
-// =====================================================
-export async function GET(request: Request) {
-  try {
-    const supabase = getSupabase();
-    const url = new URL(request.url);
+  const [subRecetas, setSubRecetas] = useState<Receta[]>([]);
+  const [guardando, setGuardando] = useState(false);
 
-    const estado = url.searchParams.get('estado');
-    const q = url.searchParams.get('q');
-    const desde = url.searchParams.get('desde');
-    const hasta = url.searchParams.get('hasta');
-    const ubicacion = url.searchParams.get('ubicacion');
+  // Campos del formulario
+  const [nombre, setNombre] = useState('');
+  const [subRecetaId, setSubRecetaId] = useState('');
+  const [cantidad, setCantidad] = useState<number>(0);
+  const [unidad, setUnidad] = useState('kg');
+  const [fechaProduccion, setFechaProduccion] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
+  const [fechaCaducidad, setFechaCaducidad] = useState('');
+  const [ubicacion, setUbicacion] = useState('');
+  const [responsable, setResponsable] = useState('');
+  const [merma, setMerma] = useState<number>(0);
+  const [observaciones, setObservaciones] = useState('');
 
-    let query = supabase
-      .from('producciones')
-      .select('*')
-      .order('fecha_produccion', { ascending: false })
-      .limit(200);
+  // Preview del despiece
+  const [lineasPreview, setLineasPreview] = useState<LineaPreview[]>([]);
+  const [factor, setFactor] = useState(1);
+  const [costeEstimado, setCosteEstimado] = useState(0);
+  const [cargandoPreview, setCargandoPreview] = useState(false);
 
-    if (estado && estado !== 'todas') query = query.eq('estado', estado);
-    if (q) query = query.ilike('nombre', `%${q}%`);
-    if (ubicacion) query = query.ilike('ubicacion_almacen', `%${ubicacion}%`);
-    if (desde) query = query.gte('fecha_produccion', desde);
-    if (hasta) query = query.lte('fecha_produccion', hasta);
+  useEffect(() => {
+    cargarSubRecetas();
+  }, []);
 
-    const { data, error } = await query;
+  async function cargarSubRecetas() {
+    const { data } = await supabase
+      .from('recetas')
+      .select('id, nombre, porciones, produccion_gramos')
+      .eq('tipo', 'sub_receta')
+      .order('nombre');
 
-    if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ ok: true, data });
-  } catch (error: any) {
-    return NextResponse.json(
-      { ok: false, error: error?.message || 'Error al listar producciones' },
-      { status: 500 }
-    );
+    setSubRecetas(data || []);
   }
-}
 
-// =====================================================
-// POST /api/producciones
-// =====================================================
-export async function POST(request: Request) {
-  try {
-    const supabase = getSupabase();
+  // Preview del despiece en vivo
+  useEffect(() => {
+    cargarPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subRecetaId, cantidad, unidad]);
 
-    let body: any;
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json({ ok: false, error: 'JSON inválido' }, { status: 400 });
+  async function cargarPreview() {
+    if (!subRecetaId || !cantidad || cantidad <= 0) {
+      setLineasPreview([]);
+      setFactor(1);
+      setCosteEstimado(0);
+      return;
     }
 
-    const cantidad = Number(body?.cantidad_producida);
+    setCargandoPreview(true);
 
-    if (!body?.nombre || !body?.fecha_caducidad || !cantidad || cantidad <= 0) {
-      return NextResponse.json(
-        { ok: false, error: 'Campos obligatorios: nombre, fecha_caducidad y cantidad_producida mayor que 0' },
-        { status: 400 }
-      );
-    }
-
-    const estado = body?.estado || 'planificada';
-
-    if (!ESTADOS_VALIDOS.includes(estado)) {
-      return NextResponse.json(
-        { ok: false, error: `Estado inválido. Permitidos: ${ESTADOS_VALIDOS.join(', ')}` },
-        { status: 400 }
-      );
-    }
-
-    const loteNumero = body?.lote_numero?.trim() || generarLoteNumero();
-
-    const payloadProduccion = {
-      nombre: body.nombre.trim(),
-      sub_receta_id: body?.sub_receta_id || null,
-      fecha_produccion: body?.fecha_produccion || new Date().toISOString(),
-      fecha_caducidad: body.fecha_caducidad,
-      cantidad_producida: cantidad,
-      unidad_medida: body?.unidad_medida || 'unidades',
-      lote_numero: loteNumero,
-      responsable_id: body?.responsable_id || null,
-      responsable_nombre: body?.responsable_nombre || null,
-      ubicacion_almacen: body?.ubicacion_almacen || null,
-      estado,
-      merma_porcentaje: Number(body?.merma_porcentaje || 0),
-      coste_real: Number(body?.coste_real || 0),
-      observaciones: body?.observaciones || null,
-      hotel_id: body?.hotel_id || DEFAULT_HOTEL_ID,
-    };
-
-    // --------------------------------------------------
-    // 1. Crear producción
-    // --------------------------------------------------
-    const { data: produccion, error: errorProduccion } = await supabase
-      .from('producciones')
-      .insert(payloadProduccion)
-      .select()
+    const { data: receta } = await supabase
+      .from('recetas')
+      .select('id, nombre, porciones, produccion_gramos')
+      .eq('id', subRecetaId)
       .single();
 
-    if (errorProduccion || !produccion) {
-      return NextResponse.json(
-        { ok: false, error: errorProduccion?.message || 'No se pudo crear la producción' },
-        { status: 500 }
-      );
+    if (!receta) {
+      setCargandoPreview(false);
+      return;
     }
 
-    const rollbackProduccion = async (mensaje: string, status = 500) => {
-      await supabase.from('lotes').delete().eq('produccion_id', produccion.id_produccion);
-      await supabase.from('produccion_materiales').delete().eq('produccion_id', produccion.id_produccion);
-      await supabase.from('producciones').delete().eq('id_produccion', produccion.id_produccion);
-      return NextResponse.json({ ok: false, error: mensaje }, { status });
-    };
+    const { data: lineas } = await supabase
+      .from('receta_detalle')
+      .select('*')
+      .or(`receta_id.eq.${receta.id},subreceta_id.eq.${receta.id}`);
 
-    // --------------------------------------------------
-    // 2. Crear lote asociado
-    // --------------------------------------------------
-    const qrData = {
-      tipo: 'produccion',
-      lote: loteNumero,
-      producto: produccion.nombre,
-      fecha_produccion: produccion.fecha_produccion,
-      fecha_caducidad: produccion.fecha_caducidad,
-      cantidad: produccion.cantidad_producida,
-      unidad: produccion.unidad_medida,
-      ubicacion: produccion.ubicacion_almacen,
-    };
+    const validas = (lineas || []).filter((l: any) =>
+      /^[0-9a-fA-F-]{36}$/.test(String(l.ingrediente_id || ''))
+    );
 
-    const { error: errorLote } = await supabase.from('lotes').insert({
-      lote_numero: loteNumero,
-      produccion_id: produccion.id_produccion,
-      fecha_produccion: produccion.fecha_produccion,
-      fecha_caducidad: produccion.fecha_caducidad,
-      cantidad_total: produccion.cantidad_producida,
-      cantidad_consumida: 0,
-      estado: 'activo',
-      temperatura_conservacion: body?.temperatura_conservacion || null,
-      alergen_info: body?.alergen_info || null,
-      qr_data: qrData,
-      hotel_id: payloadProduccion.hotel_id,
-    });
+    const ids = Array.from(new Set(validas.map((l: any) => l.ingrediente_id)));
 
-    if (errorLote) {
-      return await rollbackProduccion(`Producción creada pero falló el lote: ${errorLote.message}`);
+    const nombres: Record<string, string> = {};
+    if (ids.length > 0) {
+      const { data: ings } = await supabase
+        .from('ingredientes')
+        .select('id, nombre')
+        .in('id', ids);
+
+      (ings || []).forEach((i: any) => {
+        nombres[i.id] = i.nombre;
+      });
     }
 
-    // --------------------------------------------------
-    // 3. DESPIECE AUTOMÁTICO + CARRITO DE COMPRA
-    // --------------------------------------------------
-    let factorAplicado = 1;
-    let materialesGenerados = 0;
-    let carritoLineas = 0;
+    const gramosReceta =
+      parseFloat(String(receta.produccion_gramos || '').replace(',', '.')) || 0;
+    const f = calcularFactor(
+      cantidad,
+      unidad,
+      gramosReceta,
+      Number(receta.porciones || 0)
+    );
 
-    if (payloadProduccion.sub_receta_id) {
-      const { data: receta } = await supabase
-        .from('recetas')
-        .select('id, nombre, porciones, produccion_gramos')
-        .eq('id', payloadProduccion.sub_receta_id)
-        .single();
+    const rows: LineaPreview[] = validas.map((l: any) => ({
+      nombre: nombres[l.ingrediente_id] || 'Ingrediente',
+      cantidad: Number(l.cantidad_necesaria || 0) * f,
+      unidad: l.unidad || 'ud',
+      coste: Number(l.coste_linea || 0) * f,
+    }));
 
-      if (receta) {
-        const { data: lineas } = await supabase
-          .from('receta_detalle')
-          .select('*')
-          .or(`receta_id.eq.${receta.id},subreceta_id.eq.${receta.id}`);
+    setFactor(f);
+    setLineasPreview(rows);
+    setCosteEstimado(rows.reduce((s, r) => s + r.coste, 0));
+    setCargandoPreview(false);
+  }
 
-        const lineasValidas = (lineas || []).filter((l: any) =>
-          /^[0-9a-fA-F-]{36}$/.test(String(l.ingrediente_id || ''))
-        );
-
-        const ids = Array.from(new Set(lineasValidas.map((l: any) => l.ingrediente_id)));
-
-        const ingMap: Record<string, any> = {};
-        const stockMap: Record<string, number> = {};
-
-        if (ids.length > 0) {
-          const { data: ings } = await supabase
-            .from('ingredientes')
-            .select('id, nombre, unidad_compra, proveedor_nombre, precio_compra_actual, stock_minimo')
-            .in('id', ids);
-
-          (ings || []).forEach((i: any) => {
-            ingMap[i.id] = i;
-          });
-
-          const { data: stocksIng } = await supabase
-            .from('stock')
-            .select('ingrediente_id, cantidad_actual')
-            .in('ingrediente_id', ids);
-
-          (stocksIng || []).forEach((s: any) => {
-            stockMap[s.ingrediente_id] = s.cantidad_actual || 0;
-          });
-        }
-
-        const gramosReceta =
-          parseFloat(String(receta.produccion_gramos || '').replace(',', '.')) || 0;
-        const porciones = Number(receta.porciones || 0);
-
-        factorAplicado = calcularFactor(
-          cantidad,
-          payloadProduccion.unidad_medida,
-          gramosReceta,
-          porciones
-        );
-
-        const faltasCarrito: any[] = [];
-
-        const materialesAuto = lineasValidas.map((l: any) => {
-          const cantTeorica = Number(l.cantidad_necesaria || 0) * factorAplicado;
-
-          const costeUnitario =
-            Number(l.cantidad_necesaria) > 0
-              ? Number(l.coste_linea || 0) / Number(l.cantidad_necesaria)
-              : 0;
-
-          // --- Calcular falta para el carrito ---
-          const ing = ingMap[l.ingrediente_id];
-          if (ing) {
-            const cantCompra = convertirAUnidadCompra(cantTeorica, l.unidad, ing.unidad_compra);
-            const stockActual = stockMap[l.ingrediente_id] || 0;
-            const minimo = Number(ing.stock_minimo || 0);
-            const falta = Math.max(0, cantCompra + minimo - stockActual);
-
-            if (falta > 0.0001) {
-              faltasCarrito.push({ ing, falta });
-            }
-          }
-
-          return {
-            produccion_id: produccion.id_produccion,
-            ingrediente_id: l.ingrediente_id,
-            ingrediente_nombre: ingMap[l.ingrediente_id]?.nombre || 'Ingrediente sin nombre',
-            cantidad_teorica: round(cantTeorica),
-            cantidad_real: round(cantTeorica),
-            unidad: l.unidad || 'ud',
-            coste_unitario: round(costeUnitario, 6),
-            hotel_id: payloadProduccion.hotel_id,
-          };
-        });
-
-        if (materialesAuto.length > 0) {
-          const { error: errorAuto } = await supabase
-            .from('produccion_materiales')
-            .insert(materialesAuto);
-
-          if (errorAuto) {
-            return await rollbackProduccion(`Falló el despiece automático: ${errorAuto.message}`);
-          }
-
-          materialesGenerados = materialesAuto.length;
-        }
-
-        // --- Añadir faltas al carrito (acumula si ya estaba pendiente) ---
-        for (const f of faltasCarrito) {
-          const { data: existente } = await supabase
-            .from('carrito_compra')
-            .select('id, cantidad')
-            .eq('ingrediente_id', f.ing.id)
-            .eq('estado', 'pendiente')
-            .maybeSingle();
-
-          if (existente) {
-            await supabase
-              .from('carrito_compra')
-              .update({ cantidad: Number(existente.cantidad) + f.falta })
-              .eq('id', existente.id);
-          } else {
-            await supabase.from('carrito_compra').insert({
-              ingrediente_id: f.ing.id,
-              ingrediente_nombre: f.ing.nombre,
-              proveedor_nombre: f.ing.proveedor_nombre || null,
-              cantidad: round(f.falta, 3),
-              unidad: f.ing.unidad_compra || 'ud',
-              coste_unitario: Number(f.ing.precio_compra_actual || 0),
-              coste_total: round(f.falta * Number(f.ing.precio_compra_actual || 0), 2),
-              origen: 'produccion',
-              origen_ref: produccion.nombre,
-              estado: 'pendiente',
-              hotel_id: payloadProduccion.hotel_id,
-            });
-          }
-
-          carritoLineas++;
-        }
+  // Autocompletar caducidad sugerida al elegir ubicación
+  function onUbicacionChange(valor: string) {
+    setUbicacion(valor);
+    if (!fechaCaducidad) {
+      const dias = caducidadSugerida(valor);
+      if (dias) {
+        const d = new Date();
+        d.setDate(d.getDate() + dias);
+        setFechaCaducidad(d.toISOString().slice(0, 10));
       }
     }
+  }
 
-    // --------------------------------------------------
-    // 4. Materiales manuales (opcionales)
-    // --------------------------------------------------
-    if (Array.isArray(body?.materiales) && body.materiales.length > 0) {
-      const manuales = body.materiales
-        .filter((m: any) => m?.ingrediente_nombre)
-        .map((m: any) => ({
-          produccion_id: produccion.id_produccion,
-          ingrediente_id: m?.ingrediente_id || null,
-          ingrediente_nombre: m.ingrediente_nombre,
-          cantidad_teorica: Number(m?.cantidad_teorica || 0),
-          cantidad_real: Number(m?.cantidad_real || m?.cantidad_teorica || 0),
-          unidad: m?.unidad || 'ud',
-          coste_unitario: Number(m?.coste_unitario || 0),
-          hotel_id: payloadProduccion.hotel_id,
-        }));
+  async function crearProduccion(e: React.FormEvent) {
+    e.preventDefault();
 
-      if (manuales.length > 0) {
-        const { error: errorManuales } = await supabase
-          .from('produccion_materiales')
-          .insert(manuales);
-
-        if (errorManuales) {
-          return await rollbackProduccion(`Falló la creación de materiales manuales: ${errorManuales.message}`);
-        }
-      }
+    if (!nombre || !fechaCaducidad || !cantidad || cantidad <= 0) {
+      alert('Completa al menos: nombre, cantidad y fecha de caducidad.');
+      return;
     }
 
-    // --------------------------------------------------
-    // 5. Recalcular coste real
-    // --------------------------------------------------
-    const { data: materialesCreados } = await supabase
-      .from('produccion_materiales')
-      .select('coste_total')
-      .eq('produccion_id', produccion.id_produccion);
+    setGuardando(true);
 
-    if (materialesCreados && materialesCreados.length > 0) {
-      const costeReal = materialesCreados.reduce(
-        (total: number, item: any) => total + Number(item?.coste_total || 0),
-        0
-      );
-
-      await supabase
-        .from('producciones')
-        .update({ coste_real: round(costeReal, 2) })
-        .eq('id_produccion', produccion.id_produccion);
-    }
-
-    // --------------------------------------------------
-    // 6. Stock si terminada
-    // --------------------------------------------------
-    if (estado === 'terminada') {
-      const { error: errorStock } = await supabase.from('stock_producciones').insert({
-        produccion_id: produccion.id_produccion,
-        producto_nombre: produccion.nombre,
-        cantidad_disponible: produccion.cantidad_producida,
-        cantidad_inicial: produccion.cantidad_producida,
-        unidad_medida: produccion.unidad_medida,
-        ubicacion: produccion.ubicacion_almacen || 'GENERAL',
-        fecha_entrada: produccion.fecha_produccion,
-        fecha_caducidad: produccion.fecha_caducidad,
-        lote_numero: loteNumero,
-        movimiento_tipo: 'entrada',
-        responsable_movimiento: produccion.responsable_nombre || null,
-        observaciones: 'Entrada automática por producción terminada',
-        hotel_id: payloadProduccion.hotel_id,
+    try {
+      const res = await fetch('/api/producciones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre,
+          sub_receta_id: subRecetaId || null,
+          cantidad_producida: cantidad,
+          unidad_medida: unidad,
+          fecha_produccion: new Date(fechaProduccion + 'T08:00:00').toISOString(),
+          fecha_caducidad: new Date(fechaCaducidad + 'T12:00:00').toISOString(),
+          ubicacion_almacen: ubicacion || null,
+          responsable_nombre: responsable || null,
+          merma_porcentaje: merma,
+          observaciones: observaciones || null,
+          estado: 'planificada',
+        }),
       });
 
-      if (errorStock) {
-        return await rollbackProduccion(`Falló la entrada de stock: ${errorStock.message}`);
+      const data = await res.json();
+
+      if (!data.ok) {
+        alert(`Error: ${data.error}`);
+        setGuardando(false);
+        return;
       }
+
+      alert(
+        `✅ Producción creada correctamente\nLote: ${data.lote_numero}\nFactor: ×${data.factor_aplicado}\nMateriales: ${data.materiales_generados}\nAñadidos al carrito: ${data.carrito_lineas}`
+      );
+      router.push('/producciones');
+    } catch (error: any) {
+      alert(`Error de conexión: ${error.message}`);
+      setGuardando(false);
     }
-
-    // --------------------------------------------------
-    // 7. Respuesta final
-    // --------------------------------------------------
-    const { data: produccionFinal } = await supabase
-      .from('producciones')
-      .select('*')
-      .eq('id_produccion', produccion.id_produccion)
-      .single();
-
-    return NextResponse.json(
-      {
-        ok: true,
-        message: 'Producción creada correctamente',
-        data: produccionFinal || produccion,
-        lote_numero: loteNumero,
-        factor_aplicado: round(factorAplicado, 4),
-        materiales_generados: materialesGenerados,
-        carrito_lineas: carritoLineas,
-      },
-      { status: 201 }
-    );
-  } catch (error: any) {
-    return NextResponse.json(
-      { ok: false, error: error?.message || 'Error al crear la producción' },
-      { status: 500 }
-    );
   }
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+      {/* HEADER */}
+      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-orange-600 to-amber-600 rounded-xl flex items-center justify-center shadow-md">
+                <span className="text-white font-bold text-lg">+</span>
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+                  Nueva Producción
+                </h1>
+                <p className="text-sm text-slate-500">
+                  Planifica y calcula el despiece automáticamente
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => router.push('/producciones')}
+              className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium transition-all text-sm flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Volver
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <form onSubmit={crearProduccion}>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* COLUMNA IZQUIERDA: FORMULARIO */}
+            <div className="lg:col-span-2 space-y-6">
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-5">
+                  📋 Datos de la producción
+                </h2>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Nombre de la producción *
+                    </label>
+                    <input
+                      type="text"
+                      value={nombre}
+                      onChange={(e) => setNombre(e.target.value)}
+                      placeholder="Ej: Salsa de tomate lote semanal"
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Sub-receta base
+                    </label>
+                    <select
+                      value={subRecetaId}
+                      onChange={(e) => setSubRecetaId(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition bg-white text-slate-700"
+                    >
+                      <option value="">— Sin receta (despiece manual) —</option>
+                      {subRecetas.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          🥘 {r.nombre}
+                          {r.produccion_gramos ? ` (${parseFloat(r.produccion_gramos)}g base)` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Cantidad a producir *
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={cantidad || ''}
+                      onChange={(e) => setCantidad(Number(e.target.value))}
+                      placeholder="0"
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Unidad
+                    </label>
+                    <select
+                      value={unidad}
+                      onChange={(e) => setUnidad(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition bg-white text-slate-700"
+                    >
+                      {UNIDADES.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Fecha de producción
+                    </label>
+                    <input
+                      type="date"
+                      value={fechaProduccion}
+                      onChange={(e) => setFechaProduccion(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Fecha de caducidad *
+                    </label>
+                    <input
+                      type="date"
+                      value={fechaCaducidad}
+                      onChange={(e) => setFechaCaducidad(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Ubicación de almacén
+                    </label>
+                    <input
+                      type="text"
+                      list="ubicaciones"
+                      value={ubicacion}
+                      onChange={(e) => onUbicacionChange(e.target.value)}
+                      placeholder="Ej: Nevera 0-4°C"
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                    />
+                    <datalist id="ubicaciones">
+                      {UBICACIONES_SUGERIDAS.map((u) => (
+                        <option key={u} value={u} />
+                      ))}
+                    </datalist>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      💡 Al elegir ubicación se sugiere caducidad (nevera 3d, congelador 90d, seco 30d)
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Responsable
+                    </label>
+                    <input
+                      type="text"
+                      value={responsable}
+                      onChange={(e) => setResponsable(e.target.value)}
+                      placeholder="Ej: Chef Juan"
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Merma prevista (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.5"
+                      value={merma || ''}
+                      onChange={(e) => setMerma(Number(e.target.value))}
+                      placeholder="0"
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Observaciones
+                    </label>
+                    <textarea
+                      value={observaciones}
+                      onChange={(e) => setObservaciones(e.target.value)}
+                      rows={3}
+                      placeholder="Notas internas de la producción..."
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition resize-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* COLUMNA DERECHA: DESPIECE EN VIVO */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sticky top-24">
+                <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-5">
+                  🧮 Despiece automático
+                </h2>
+
+                {!subRecetaId ? (
+                  <div className="text-center py-8 text-slate-400">
+                    <div className="text-4xl mb-3">🥘</div>
+                    <p className="text-sm">
+                      Selecciona una sub-receta para ver los ingredientes necesarios
+                    </p>
+                  </div>
+                ) : cargandoPreview ? (
+                  <div className="py-8 text-center">
+                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-4 border-orange-200 border-t-orange-600 mb-2"></div>
+                    <p className="text-xs text-slate-500">Calculando despiece...</p>
+                  </div>
+                ) : lineasPreview.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400">
+                    <p className="text-sm">
+                      Esta receta no tiene ingredientes cargados o falta la cantidad
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+                      <span className="text-xs text-slate-500">Factor de escala:</span>
+                      <span className="px-2.5 py-1 bg-orange-50 text-orange-700 border border-orange-200 rounded-full text-xs font-bold">
+                        ×{factor.toFixed(2)}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2.5 mb-5 max-h-72 overflow-y-auto pr-1">
+                      {lineasPreview.map((l, i) => (
+                        <div
+                          key={i}
+                          className="flex justify-between items-center text-xs bg-slate-50 rounded-lg px-3 py-2"
+                        >
+                          <span className="text-slate-700 font-medium truncate mr-2">
+                            {l.nombre}
+                          </span>
+                          <span className="text-slate-900 font-bold whitespace-nowrap">
+                            {l.cantidad >= 1000 && l.unidad === 'gr'
+                              ? `${(l.cantidad / 1000).toFixed(2)} kg`
+                              : `${l.cantidad.toFixed(2)} ${l.unidad}`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-200 flex justify-between items-center">
+                      <span className="text-sm font-semibold text-slate-700">
+                        Coste estimado:
+                      </span>
+                      <span className="text-lg font-bold text-emerald-700">
+                        {costeEstimado.toFixed(2)} €
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* BOTÓN CREAR */}
+          <div className="mt-8 flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => router.push('/producciones')}
+              className="px-6 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 font-medium transition-all shadow-sm text-sm"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={guardando}
+              className="px-8 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium transition-all shadow-sm hover:shadow-md text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {guardando ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/40 border-t-white"></div>
+                  Creando...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Crear Producción
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </main>
+    </div>
+  );
 }
