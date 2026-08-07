@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '../../lib/supabaseClient';
 
 interface Produccion {
   id_produccion: string;
@@ -52,6 +51,11 @@ const ESTADO_CONFIG: Record<string, { label: string; color: string }> = {
   cancelada: { label: 'Cancelada', color: 'bg-red-400' },
 };
 
+const MESES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+];
+
 export default function InventarioPage() {
   const router = useRouter();
   const [vista, setVista] = useState<Vista>('calendario');
@@ -62,7 +66,6 @@ export default function InventarioPage() {
   const [alertas, setAlertas] = useState<Alerta[]>([]);
   const [calendario, setCalendario] = useState<Produccion[]>([]);
 
-  // Calendario
   const [mesActual, setMesActual] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -78,13 +81,13 @@ export default function InventarioPage() {
       const res = await fetch('/api/producciones/inventario');
       const data = await res.json();
       if (data.ok) {
-        setProducciones(data.data.producciones);
-        setStockMap(new Map(Object.entries(data.data.stock)));
-        setAlertas(data.data.alertas_caducidad);
-        setCalendario(data.data.calendario);
+        setProducciones(data.data.producciones || []);
+        setStockMap(new Map(Object.entries(data.data.stock || {})));
+        setAlertas(data.data.alertas_caducidad || []);
+        setCalendario(data.data.calendario || []);
       }
     } catch (e) {
-      console.error(e);
+      console.error('Error cargando inventario:', e);
     }
     setLoading(false);
   }
@@ -94,10 +97,10 @@ export default function InventarioPage() {
   // =====================================================
   const primerDiaMes = new Date(mesActual.getFullYear(), mesActual.getMonth(), 1);
   const ultimoDiaMes = new Date(mesActual.getFullYear(), mesActual.getMonth() + 1, 0);
-  const diasMes = ultimoDiaMes.getDate();
-  const primerDiaSemana = primerDiaMes.getDay(); // 0=domingo
+  const primerDiaSemana = primerDiaMes.getDay();
+
   const inicioCalendario = new Date(primerDiaMes);
-  inicioCalendario.setDate(inicioCalendario.getDate() - ((primerDiaSemana + 6) % 7)); // lunes
+  inicioCalendario.setDate(inicioCalendario.getDate() - ((primerDiaSemana + 6) % 7));
 
   const diasCalendario: Date[] = [];
   for (let i = 0; i < 42; i++) {
@@ -130,18 +133,22 @@ export default function InventarioPage() {
     return fecha.getMonth() === mesActual.getMonth();
   }
 
-  const meses = [
-    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-  ];
-
   function cambiarMes(delta: number) {
     setMesActual(new Date(mesActual.getFullYear(), mesActual.getMonth() + delta, 1));
   }
 
-  // =====================================================
-  // ALERTAS contadores
-  // =====================================================
+  const proximas7dias = calendario
+    .filter((p) => {
+      const f = new Date(p.fecha_produccion);
+      const ahora = new Date();
+      const en7 = new Date(ahora);
+      en7.setDate(ahora.getDate() + 7);
+      return f >= ahora && f <= en7;
+    })
+    .sort(
+      (a, b) => new Date(a.fecha_produccion).getTime() - new Date(b.fecha_produccion).getTime()
+    );
+
   const alertasCriticas = alertas.filter(
     (a) => a.prioridad === 'caducado' || a.prioridad === 'critico'
   ).length;
@@ -175,13 +182,13 @@ export default function InventarioPage() {
               <button
                 onClick={cargar}
                 disabled={loading}
-                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium transition-all text-sm"
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium transition-all text-sm disabled:opacity-50"
               >
                 🔄 Actualizar
               </button>
               <button
                 onClick={() => router.push('/producciones/nueva')}
-                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium transition-all text-sm flex items-center gap-2"
+                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium transition-all text-sm"
               >
                 ➕ Nueva producción
               </button>
@@ -192,7 +199,7 @@ export default function InventarioPage() {
           <div className="flex gap-2 mt-4">
             <button
               onClick={() => setVista('calendario')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 vista === 'calendario'
                   ? 'bg-orange-600 text-white shadow-sm'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -202,7 +209,7 @@ export default function InventarioPage() {
             </button>
             <button
               onClick={() => setVista('alertas')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 relative ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all relative ${
                 vista === 'alertas'
                   ? 'bg-orange-600 text-white shadow-sm'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -217,7 +224,7 @@ export default function InventarioPage() {
             </button>
             <button
               onClick={() => setVista('stock')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 vista === 'stock'
                   ? 'bg-orange-600 text-white shadow-sm'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -240,7 +247,6 @@ export default function InventarioPage() {
             {/* ============ VISTA CALENDARIO ============ */}
             {vista === 'calendario' && (
               <div className="space-y-6">
-                {/* Stats rápidas */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
                     <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
@@ -260,15 +266,7 @@ export default function InventarioPage() {
                     <p className="text-xs text-amber-700 uppercase tracking-wider font-semibold">
                       Esta semana
                     </p>
-                    <p className="text-2xl font-bold text-amber-700 mt-1">
-                      {calendario.filter((p) => {
-                        const f = new Date(p.fecha_produccion);
-                        const ahora = new Date();
-                        const finSem = new Date(ahora);
-                        finSem.setDate(ahora.getDate() + 7);
-                        return f >= ahora && f <= finSem;
-                      }).length}
-                    </p>
+                    <p className="text-2xl font-bold text-amber-700 mt-1">{proximas7dias.length}</p>
                     <p className="text-xs text-slate-400 mt-1">planificadas</p>
                   </div>
                   <div className="bg-white rounded-xl border border-emerald-200 p-4 shadow-sm">
@@ -307,7 +305,7 @@ export default function InventarioPage() {
                       ‹
                     </button>
                     <h2 className="text-lg font-bold">
-                      {meses[mesActual.getMonth()]} {mesActual.getFullYear()}
+                      {MESES[mesActual.getMonth()]} {mesActual.getFullYear()}
                     </h2>
                     <button
                       onClick={() => cambiarMes(1)}
@@ -368,7 +366,6 @@ export default function InventarioPage() {
                     })}
                   </div>
 
-                  {/* Leyenda */}
                   <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex flex-wrap gap-3 text-xs">
                     {Object.entries(ESTADO_CONFIG).map(([k, v]) => (
                       <span key={k} className="flex items-center gap-1.5">
@@ -379,66 +376,48 @@ export default function InventarioPage() {
                   </div>
                 </div>
 
-                {/* Timeline próximas producciones */}
+                {/* Timeline próximas */}
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                   <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4">
-                    ⏱️ Próximas 7 días
+                    ⏱️ Próximos 7 días
                   </h3>
                   <div className="space-y-2">
-                    {calendario
-                      .filter((p) => {
-                        const f = new Date(p.fecha_produccion);
-                        const ahora = new Date();
-                        const en7 = new Date(ahora);
-                        en7.setDate(ahora.getDate() + 7);
-                        return f >= ahora && f <= en7;
-                      })
-                      .sort((a, b) =>
-                        new Date(a.fecha_produccion).getTime() - new Date(b.fecha_produccion).getTime()
-                      )
-                      .slice(0, 10)
-                      .map((p) => {
-                        const fecha = new Date(p.fecha_produccion);
-                        const cfg = ESTADO_CONFIG[p.estado] || ESTADO_CONFIG.planificada;
+                    {proximas7dias.slice(0, 10).map((p) => {
+                      const fecha = new Date(p.fecha_produccion);
+                      const cfg = ESTADO_CONFIG[p.estado] || ESTADO_CONFIG.planificada;
 
-                        return (
-                          <button
-                            key={p.id_produccion}
-                            onClick={() => router.push(`/producciones/${p.id_produccion}`)}
-                            className="w-full flex items-center gap-3 p-3 bg-slate-50 hover:bg-slate-100 rounded-lg transition text-left"
-                          >
-                            <div className={`w-2 h-12 rounded-full ${cfg.color}`}></div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-slate-900 text-sm truncate">{p.nombre}</p>
-                              <p className="text-xs text-slate-500">
-                                {p.cantidad_producida} {p.unidad_medida} · {cfg.label}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xs font-bold text-slate-700">
-                                {fecha.toLocaleDateString('es-ES', {
-                                  weekday: 'short',
-                                  day: '2-digit',
-                                  month: 'short',
-                                })}
-                              </p>
-                              <p className="text-[11px] text-slate-500">
-                                {fecha.toLocaleTimeString('es-ES', {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
-                              </p>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    {calendario.filter((p) => {
-                      const f = new Date(p.fecha_produccion);
-                      const ahora = new Date();
-                      const en7 = new Date(ahora);
-                      en7.setDate(ahora.getDate() + 7);
-                      return f >= ahora && f <= en7;
-                    }).length === 0 && (
+                      return (
+                        <button
+                          key={p.id_produccion}
+                          onClick={() => router.push(`/producciones/${p.id_produccion}`)}
+                          className="w-full flex items-center gap-3 p-3 bg-slate-50 hover:bg-slate-100 rounded-lg transition text-left"
+                        >
+                          <div className={`w-2 h-12 rounded-full ${cfg.color}`}></div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-slate-900 text-sm truncate">{p.nombre}</p>
+                            <p className="text-xs text-slate-500">
+                              {p.cantidad_producida} {p.unidad_medida} · {cfg.label}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs font-bold text-slate-700">
+                              {fecha.toLocaleDateString('es-ES', {
+                                weekday: 'short',
+                                day: '2-digit',
+                                month: 'short',
+                              })}
+                            </p>
+                            <p className="text-[11px] text-slate-500">
+                              {fecha.toLocaleTimeString('es-ES', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                    {proximas7dias.length === 0 && (
                       <p className="text-center text-sm text-slate-400 py-6">
                         No hay producciones planificadas para los próximos 7 días
                       </p>
@@ -451,7 +430,6 @@ export default function InventarioPage() {
             {/* ============ VISTA ALERTAS ============ */}
             {vista === 'alertas' && (
               <div className="space-y-6">
-                {/* Banner crítico */}
                 {alertasCriticas > 0 && (
                   <div className="bg-red-50 border-2 border-red-300 rounded-xl p-5 flex items-start gap-3">
                     <div className="text-3xl">🚨</div>
@@ -466,7 +444,6 @@ export default function InventarioPage() {
                   </div>
                 )}
 
-                {/* Lista de alertas */}
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                   <div className="px-6 py-4 bg-slate-900 text-white">
                     <h2 className="font-bold">Alertas por caducidad</h2>
@@ -488,7 +465,9 @@ export default function InventarioPage() {
                           <div
                             key={a.id}
                             className={`p-4 flex items-center gap-4 hover:bg-slate-50 transition ${
-                              a.prioridad === 'caducado' || a.prioridad === 'critico' ? 'bg-red-50/50' : ''
+                              a.prioridad === 'caducado' || a.prioridad === 'critico'
+                                ? 'bg-red-50/50'
+                                : ''
                             }`}
                           >
                             <div className={`w-12 h-12 rounded-xl ${cfg.bg} ${cfg.border} border flex items-center justify-center text-xl`}>
@@ -505,16 +484,23 @@ export default function InventarioPage() {
                                 Lote: {a.lote_numero}
                               </p>
                               <p className="text-xs text-slate-500">
-                                Stock: <span className="font-semibold text-slate-700">{a.cantidad_disponible} {a.unidad_medida}</span>
-                                {' · '}Caduca: {new Date(a.fecha_caducidad).toLocaleDateString('es-ES')}
+                                Stock:{' '}
+                                <span className="font-semibold text-slate-700">
+                                  {a.cantidad_disponible} {a.unidad_medida}
+                                </span>
+                                {' · '}Caduca:{' '}
+                                {new Date(a.fecha_caducidad).toLocaleDateString('es-ES')}
                               </p>
                             </div>
                             <div className="text-right">
                               <p className={`text-xl font-bold ${
-                                a.dias_hasta_caducidad < 0 ? 'text-red-600' :
-                                a.dias_hasta_caducidad <= 1 ? 'text-red-600' :
-                                a.dias_hasta_caducidad <= 3 ? 'text-orange-600' :
-                                a.dias_hasta_caducidad <= 7 ? 'text-amber-600' : 'text-emerald-600'
+                                a.dias_hasta_caducidad <= 1
+                                  ? 'text-red-600'
+                                  : a.dias_hasta_caducidad <= 3
+                                  ? 'text-orange-600'
+                                  : a.dias_hasta_caducidad <= 7
+                                  ? 'text-amber-600'
+                                  : 'text-emerald-600'
                               }`}>
                                 {a.dias_hasta_caducidad < 0
                                   ? `${Math.abs(a.dias_hasta_caducidad)}d`
@@ -538,13 +524,13 @@ export default function InventarioPage() {
             {/* ============ VISTA STOCK ============ */}
             {vista === 'stock' && (
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="px-6 py-4 bg-slate-900 text-white flex justify-between items-center">
-                  <div>
-                    <h2 className="font-bold">Stock de producto terminado</h2>
-                    <p className="text-xs text-slate-400 mt-1">
-                      {stockMap.size} productos · {Array.from(stockMap.values()).reduce((s, v) => s + v.lotes.length, 0)} lotes activos
-                    </p>
-                  </div>
+                <div className="px-6 py-4 bg-slate-900 text-white">
+                  <h2 className="font-bold">Stock de producto terminado</h2>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {stockMap.size} productos ·{' '}
+                    {Array.from(stockMap.values()).reduce((s, v) => s + v.lotes.length, 0)} lotes
+                    activos
+                  </p>
                 </div>
 
                 {stockMap.size === 0 ? (
@@ -558,20 +544,16 @@ export default function InventarioPage() {
                 ) : (
                   <div className="divide-y divide-slate-100">
                     {Array.from(stockMap.values())
-                      .sort((a, b) => {
-                        const da = a.dias_proximos ?? 999;
-                        const db = b.dias_proximos ?? 999;
-                        return da - db; // primero los que antes caducan
-                      })
+                      .sort((a, b) => (a.dias_proximos ?? 999) - (b.dias_proximos ?? 999))
                       .map((s) => {
-                        let urgencia = 'ok';
+                        let urgencia: keyof typeof PRIORIDAD_CONFIG = 'ok';
                         if (s.dias_proximos !== null) {
                           if (s.dias_proximos < 0) urgencia = 'caducado';
                           else if (s.dias_proximos <= 1) urgencia = 'critico';
                           else if (s.dias_proximos <= 3) urgencia = 'urgente';
                           else if (s.dias_proximos <= 7) urgencia = 'atencion';
                         }
-                        const cfg = PRIORIDAD_CONFIG[urgencia as keyof typeof PRIORIDAD_CONFIG];
+                        const cfg = PRIORIDAD_CONFIG[urgencia];
 
                         return (
                           <div key={s.producto} className="p-4 hover:bg-slate-50 transition">
@@ -584,16 +566,20 @@ export default function InventarioPage() {
                               </div>
                               <div className="text-right">
                                 <p className="text-xl font-bold text-slate-900">
-                                  {s.total_disponible.toLocaleString('es-ES', { maximumFractionDigits: 2 })}
+                                  {s.total_disponible.toLocaleString('es-ES', {
+                                    maximumFractionDigits: 2,
+                                  })}
                                 </p>
                                 <p className="text-xs text-slate-500">{s.unidad}</p>
                               </div>
                             </div>
 
                             <div className="space-y-1 mt-3">
-                              {s.lotes
-                                .sort((a, b) =>
-                                  new Date(a.fecha_caducidad).getTime() - new Date(b.fecha_caducidad).getTime()
+                              {[...s.lotes]
+                                .sort(
+                                  (a, b) =>
+                                    new Date(a.fecha_caducidad).getTime() -
+                                    new Date(b.fecha_caducidad).getTime()
                                 )
                                 .map((l) => {
                                   const cad = new Date(l.fecha_caducidad);
@@ -615,19 +601,29 @@ export default function InventarioPage() {
                                         </span>
                                         <span className="text-slate-400">·</span>
                                         <span className="text-slate-600">
-                                          {Number(l.cantidad_disponible).toLocaleString('es-ES', { maximumFractionDigits: 2 })} {s.unidad}
+                                          {Number(l.cantidad_disponible).toLocaleString('es-ES', {
+                                            maximumFractionDigits: 2,
+                                          })}{' '}
+                                          {s.unidad}
                                         </span>
                                       </div>
                                       <div className="flex items-center gap-2 shrink-0">
                                         <span className="text-slate-500">
-                                          {cad.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
+                                          {cad.toLocaleDateString('es-ES', {
+                                            day: '2-digit',
+                                            month: 'short',
+                                          })}
                                         </span>
                                         <span className={`px-2 py-0.5 rounded-full font-bold ${
-                                          dias < 0 ? 'bg-red-100 text-red-700' :
-                                          dias <= 1 ? 'bg-red-100 text-red-700' :
-                                          dias <= 3 ? 'bg-orange-100 text-orange-700' :
-                                          dias <= 7 ? 'bg-amber-100 text-amber-700' :
-                                          'bg-emerald-100 text-emerald-700'
+                                          dias < 0
+                                            ? 'bg-red-100 text-red-700'
+                                            : dias <= 1
+                                            ? 'bg-red-100 text-red-700'
+                                            : dias <= 3
+                                            ? 'bg-orange-100 text-orange-700'
+                                            : dias <= 7
+                                            ? 'bg-amber-100 text-amber-700'
+                                            : 'bg-emerald-100 text-emerald-700'
                                         }`}>
                                           {dias < 0 ? `${Math.abs(dias)}d ⚠️` : `${dias}d`}
                                         </span>
