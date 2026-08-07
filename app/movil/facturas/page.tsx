@@ -10,7 +10,7 @@ export default function MovilFacturasPage() {
 
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string>('');
-  const [fase, setFase] = useState<'idle' | 'textract' | 'openai'>('idle');
+  const [fase, setFase] = useState<'idle' | 'comprimir' | 'textract' | 'openai'>('idle');
   const [error, setError] = useState('');
 
   const procesando = fase !== 'idle';
@@ -25,15 +25,71 @@ export default function MovilFacturasPage() {
     }
   }
 
+  // =====================================================
+  // COMPRESIÓN EN EL MÓVIL (evita "Request Entity Too Large")
+  // =====================================================
+  async function comprimirImagen(original: File): Promise<File> {
+    if (!original.type.startsWith('image/')) return original;
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(original);
+
+      img.onload = () => {
+        try {
+          const maxDim = 1600;
+          let { width, height } = img;
+          const scale = Math.min(1, maxDim / Math.max(width, height));
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return resolve(original);
+
+          // Fondo blanco (por si el JPEG tiene transparencia)
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              URL.revokeObjectURL(url);
+              if (!blob) return resolve(original);
+              resolve(
+                new File([blob], original.name.replace(/\.\w+$/, '') + '.jpg', {
+                  type: 'image/jpeg',
+                })
+              );
+            },
+            'image/jpeg',
+            0.85
+          );
+        } catch {
+          resolve(original);
+        }
+      };
+
+      img.onerror = () => resolve(original);
+      img.src = url;
+    });
+  }
+
   async function analizar() {
     if (!file) return;
     setError('');
-    setFase('textract');
+    setFase('comprimir');
 
     try {
+      // 0. Comprimir en el móvil
+      const archivo = await comprimirImagen(file);
+
       // 1. AWS Textract
+      setFase('textract');
       const formData = new FormData();
-      formData.append('factura', file);
+      formData.append('factura', archivo);
 
       const resProc = await fetch('/api/facturas/procesar', {
         method: 'POST',
@@ -51,13 +107,21 @@ export default function MovilFacturasPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ texto: dataProc.texto }),
       });
-      const dataAna = await resAna.json();
+
+      // Si la respuesta no es JSON (p.ej. otro 413), leer como texto para el mensaje
+      const textoRes = await resAna.text();
+      let dataAna: any;
+      try {
+        dataAna = JSON.parse(textoRes);
+      } catch {
+        throw new Error(textoRes.slice(0, 80) || 'Error al analizar con IA');
+      }
 
       if (!resAna.ok || !dataAna.success) {
         throw new Error(dataAna.error || 'Error al analizar con IA');
       }
 
-      // 3. Misma mano que la web → página de revisión MÓVIL
+      // 3. Revisión móvil
       sessionStorage.setItem('factura_datos', JSON.stringify(dataAna.datos));
       router.push('/movil/facturas/revisar');
     } catch (e: any) {
@@ -79,7 +143,7 @@ export default function MovilFacturasPage() {
           </button>
           <div className="flex-1">
             <h1 className="text-xl font-bold text-slate-900">🧾 Escanear Factura</h1>
-            <p className="text-xs text-slate-500">Foto → AWS Textract → OpenAI → revisar</p>
+            <p className="text-xs text-slate-500">Foto → compresión → AWS → OpenAI → revisar</p>
           </div>
         </div>
 
@@ -160,7 +224,11 @@ export default function MovilFacturasPage() {
                 {procesando ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                    {fase === 'textract' ? 'Leyendo con AWS...' : 'Analizando con OpenAI...'}
+                    {fase === 'comprimir'
+                      ? 'Optimizando foto...'
+                      : fase === 'textract'
+                      ? 'Leyendo con AWS...'
+                      : 'Analizando con OpenAI...'}
                   </>
                 ) : (
                   <>🤖 Analizar con IA</>
@@ -181,9 +249,10 @@ export default function MovilFacturasPage() {
         <div className="mt-6 bg-white rounded-2xl border border-slate-200 p-4 text-xs text-slate-500 space-y-1">
           <p className="font-bold text-slate-700 text-sm mb-2">¿Cómo funciona?</p>
           <p>1️⃣ Foto a la factura con la cámara</p>
-          <p>2️⃣ AWS Textract lee el texto</p>
-          <p>3️⃣ OpenAI extrae proveedor, líneas y precios</p>
-          <p>4️⃣ Validas y guardas en la pantalla de revisión</p>
+          <p>2️⃣ Se optimiza en tu móvil (pesa 10x menos)</p>
+          <p>3️⃣ AWS Textract lee el texto</p>
+          <p>4️⃣ OpenAI extrae proveedor, líneas y precios</p>
+          <p>5️⃣ Validas y guardas en la pantalla de revisión</p>
         </div>
       </div>
     </div>
