@@ -1,6 +1,6 @@
 import { Inter } from 'next/font/google';
 import './globals.css';
-
+import PWARegistrar from './pwa-registrar';
 const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
