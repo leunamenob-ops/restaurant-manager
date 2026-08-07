@@ -4,12 +4,48 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 const MODULOS = [
-  { emoji: '🌡️', titulo: 'HACCP Rápido', desc: 'Registro de temperaturas en 10 seg', href: '/movil/haccp', color: 'from-teal-500 to-emerald-600' },
-  { emoji: '📦', titulo: 'Inventario Scanner', desc: 'Conteo rápido con cámara', href: '/movil/inventario', color: 'from-blue-500 to-cyan-600' },
-  { emoji: '🧾', titulo: 'Escanear Factura', desc: 'Foto → lectura automática', href: '/movil/facturas', color: 'from-pink-500 to-rose-600' },
-  { emoji: '🔍', titulo: 'Trazabilidad QR', desc: 'Escanea lotes y da salidas FIFO', href: '/movil/scan', color: 'from-orange-500 to-amber-600' },
-  { emoji: '🍳', titulo: 'Producciones', desc: 'Planifica y controla tandas', href: '/producciones', color: 'from-red-500 to-orange-600' },
-  { emoji: '📊', titulo: 'Inventario Central', desc: 'Calendario y caducidades', href: '/producciones/inventario', color: 'from-slate-600 to-slate-800' },
+  {
+    emoji: '🌡️',
+    titulo: 'HACCP Rápido',
+    desc: 'Registro de temperaturas en 10 seg',
+    href: '/haccp',
+    color: 'from-teal-500 to-emerald-600',
+  },
+  {
+    emoji: '📦',
+    titulo: 'Inventario Scanner',
+    desc: 'Conteo rápido con cámara',
+    href: '/inventarios/conteo-rapido',
+    color: 'from-blue-500 to-cyan-600',
+  },
+  {
+    emoji: '🧾',
+    titulo: 'Escanear Factura',
+    desc: 'Foto → lectura automática',
+    href: '/facturas/upload',
+    color: 'from-pink-500 to-rose-600',
+  },
+  {
+    emoji: '🔍',
+    titulo: 'Trazabilidad QR',
+    desc: 'Escanea lote y da salida FIFO',
+    href: '/movil/scan',
+    color: 'from-orange-500 to-amber-600',
+  },
+  {
+    emoji: '🍳',
+    titulo: 'Producciones',
+    desc: 'Planifica y controla tandas',
+    href: '/producciones',
+    color: 'from-red-500 to-orange-600',
+  },
+  {
+    emoji: '📊',
+    titulo: 'Inventario Central',
+    desc: 'Calendario y caducidades',
+    href: '/producciones/inventario',
+    color: 'from-slate-600 to-slate-800',
+  },
 ];
 
 export default function MovilHome() {
