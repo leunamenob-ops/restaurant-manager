@@ -50,12 +50,26 @@ interface MovStock {
   movimiento_tipo: string;
 }
 
+interface EnvaseInfo {
+  indice: number;
+  total: number;
+  formato: string;
+}
+
 const ESTADOS_CONFIG: Record<string, { label: string; emoji: string; bg: string; text: string; border: string }> = {
   planificada: { label: 'Planificada', emoji: '🟡', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
   en_proceso: { label: 'En proceso', emoji: '🔵', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
   terminada: { label: 'Terminada', emoji: '🟢', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
   cancelada: { label: 'Cancelada', emoji: '🔴', bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
 };
+
+const FORMATOS_ENVASE = [
+  { valor: '5', label: '5 L / 5 kg' },
+  { valor: '1', label: '1 L / 1 kg' },
+  { valor: '0.5', label: '500 ml / 500 g' },
+  { valor: '0.25', label: '250 ml / 250 g' },
+  { valor: '0.1', label: '100 ml / 100 g' },
+];
 
 function formatearFecha(f: string, conHora = false) {
   return new Date(f).toLocaleDateString('es-ES', {
@@ -81,22 +95,27 @@ function formatearCantidad(c: number, unidad: string) {
 }
 
 // =====================================================
-// ETIQUETA IMPRIMIBLE
+// ETIQUETA IMPRIMIBLE (con soporte de envase numerado)
 // =====================================================
 function Etiqueta({
   prod,
   lote,
   config,
+  envase,
 }: {
   prod: Produccion;
   lote: Lote | null;
   config: any;
+  envase?: EnvaseInfo | null;
 }) {
   const ancho = config?.ancho_mm || 50;
   const alto = config?.alto_mm || 30;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(
-    `https://kostsoftware.com/lote/${encodeURIComponent(prod.lote_numero)}`
-  )}`;
+
+  const qrData = envase
+    ? `https://kostsoftware.com/lote/${encodeURIComponent(prod.lote_numero)}?e=${envase.indice}`
+    : `https://kostsoftware.com/lote/${encodeURIComponent(prod.lote_numero)}`;
+
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(qrData)}`;
 
   const alergenosActivos = lote?.alergen_info
     ? Object.entries(lote.alergen_info)
@@ -114,6 +133,12 @@ function Etiqueta({
           {prod.nombre}
         </div>
         <div className="text-[9px] font-mono mt-0.5">Lote: {prod.lote_numero}</div>
+        {envase && (
+          <div className="text-[10px] font-bold mt-0.5">
+            🏷️ ENVASE {String(envase.indice).padStart(2, '0')}/
+            {String(envase.total).padStart(2, '0')} · {envase.formato}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-2 mt-1">
@@ -152,6 +177,11 @@ export default function FichaProduccionPage() {
   const [loading, setLoading] = useState(true);
   const [cambiandoEstado, setCambiandoEstado] = useState(false);
 
+  // ---------- ENVASES / ETIQUETAS ----------
+  const [formatoSel, setFormatoSel] = useState<string>('1');
+  const [capacidadCustom, setCapacidadCustom] = useState<number>(1);
+  const [numEnvasesManual, setNumEnvasesManual] = useState<number>(0);
+
   useEffect(() => {
     if (id) cargarTodo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -189,9 +219,6 @@ export default function FichaProduccionPage() {
     setLoading(false);
   }
 
-  // =====================================================
-  // CAMBIO DE ESTADO vía endpoint
-  // =====================================================
   async function cambiarEstado(nuevo: string) {
     if (cambiandoEstado) return;
     setCambiandoEstado(true);
@@ -234,9 +261,6 @@ export default function FichaProduccionPage() {
     }
   }
 
-  // =====================================================
-  // BLOQUE D: CANTIDAD REAL + MERMA REAL
-  // =====================================================
   async function guardarCantidadReal(m: Material, valor: number) {
     if (isNaN(valor) || valor < 0) return;
     if (valor === m.cantidad_real) return;
@@ -251,7 +275,6 @@ export default function FichaProduccionPage() {
       return;
     }
 
-    // Recalcular coste real y merma global de la producción
     const { data: mats } = await supabase
       .from('produccion_materiales')
       .select('coste_total, coste_unitario, cantidad_teorica')
@@ -313,6 +336,22 @@ export default function FichaProduccionPage() {
   );
   const desviacion = totalMateriales - costeTeorico;
 
+  // ---------- CÁLCULO DE ENVASES ----------
+  const capacidadEnvase =
+    formatoSel === 'custom' ? (capacidadCustom > 0 ? capacidadCustom : 1) : Number(formatoSel);
+
+  const envasesSugeridos = Math.max(
+    1,
+    Math.ceil(Number(produccion.cantidad_producida) / capacidadEnvase)
+  );
+
+  const numEnvases = Math.min(
+    numEnvasesManual > 0 ? numEnvasesManual : envasesSugeridos,
+    200
+  );
+
+  const formatoLabel = `${capacidadEnvase} ${produccion.unidad_medida}`;
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
       {/* ============ HEADER ============ */}
@@ -371,10 +410,7 @@ export default function FichaProduccionPage() {
                 onClick={() => window.print()}
                 className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium transition-all text-sm flex items-center gap-2"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
-                Imprimir etiqueta
+                🖨️ Imprimir {numEnvases} etiqueta{numEnvases > 1 ? 's' : ''}
               </button>
             </div>
           </div>
@@ -445,7 +481,7 @@ export default function FichaProduccionPage() {
               )}
             </div>
 
-            {/* DESPIECE CON CANTIDADES REALES EDITABLES */}
+            {/* DESPIECE */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
               <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-2">
                 🧮 Despiece ({materiales.length} ingredientes)
@@ -540,11 +576,7 @@ export default function FichaProduccionPage() {
                         <td colSpan={5} className="text-right text-xs text-slate-500 pt-1">
                           Desviación por merma:
                         </td>
-                        <td
-                          className={`text-right text-xs font-bold pt-1 ${
-                            desviacion > 0 ? 'text-red-600' : 'text-emerald-600'
-                          }`}
-                        >
+                        <td className={`text-right text-xs font-bold pt-1 ${desviacion > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                           {desviacion > 0 ? '+' : ''}
                           {desviacion.toFixed(2)} €
                         </td>
@@ -586,20 +618,86 @@ export default function FichaProduccionPage() {
 
           {/* ============ COLUMNA DERECHA ============ */}
           <div className="space-y-6">
-            {/* ETIQUETA */}
+            {/* ETIQUETAS + ENVASES */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
               <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-5">
-                🏷️ Etiqueta de trazabilidad
+                🏷️ Etiquetas de trazabilidad
               </h2>
+
+              {/* Vista previa (envase 1) */}
               <div className="flex justify-center">
-                <Etiqueta prod={produccion} lote={lote} config={configEtiqueta} />
+                <Etiqueta
+                  prod={produccion}
+                  lote={lote}
+                  config={configEtiqueta}
+                  envase={{ indice: 1, total: numEnvases, formato: formatoLabel }}
+                />
               </div>
-              <button
-                onClick={() => window.print()}
-                className="mt-5 w-full px-4 py-2.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium transition-all text-sm"
-              >
-                🖨️ Imprimir etiqueta
-              </button>
+
+              {/* Controles de envasado */}
+              <div className="mt-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Formato de envase
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={formatoSel}
+                      onChange={(e) => {
+                        setFormatoSel(e.target.value);
+                        setNumEnvasesManual(0);
+                      }}
+                      className="flex-1 px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition bg-white text-slate-700"
+                    >
+                      {FORMATOS_ENVASE.map((f) => (
+                        <option key={f.valor} value={f.valor}>
+                          {f.label}
+                        </option>
+                      ))}
+                      <option value="custom">✏️ Personalizado</option>
+                    </select>
+                    {formatoSel === 'custom' && (
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={capacidadCustom || ''}
+                        onChange={(e) => {
+                          setCapacidadCustom(Number(e.target.value));
+                          setNumEnvasesManual(0);
+                        }}
+                        placeholder="Cap."
+                        className="w-24 px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Nº de envases / etiquetas
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="200"
+                    value={numEnvases}
+                    onChange={(e) => setNumEnvasesManual(Number(e.target.value))}
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    💡 Tanda de {produccion.cantidad_producida} {produccion.unidad_medida} en envases de{' '}
+                    {formatoLabel} → sugerido: <strong>{envasesSugeridos}</strong>
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => window.print()}
+                  className="w-full px-4 py-2.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium transition-all text-sm"
+                >
+                  🖨️ Imprimir {numEnvases} etiqueta{numEnvases > 1 ? 's' : ''}
+                </button>
+              </div>
             </div>
 
             {/* TRAZABILIDAD */}
@@ -630,15 +728,30 @@ export default function FichaProduccionPage() {
                     {(lote?.cantidad_total ?? produccion.cantidad_producida) - (lote?.cantidad_consumida ?? 0)}
                   </span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Envases etiquetados:</span>
+                  <span className="font-bold text-orange-700">{numEnvases}</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </main>
 
-      {/* ============ VERSIÓN DE IMPRESIÓN ============ */}
+      {/* ============ IMPRESIÓN: N ETIQUETAS NUMERADAS ============ */}
       <div className="hidden print:block p-4">
-        <Etiqueta prod={produccion} lote={lote} config={configEtiqueta} />
+        <div className="grid grid-cols-2 gap-3">
+          {Array.from({ length: numEnvases }).map((_, i) => (
+            <div key={i} className="break-inside-avoid">
+              <Etiqueta
+                prod={produccion}
+                lote={lote}
+                config={configEtiqueta}
+                envase={{ indice: i + 1, total: numEnvases, formato: formatoLabel }}
+              />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
