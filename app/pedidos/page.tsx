@@ -66,15 +66,16 @@ export default function PedidosPage() {
       setProveedoresUnicos(proveedores.sort());
       setProductosFiltrados(productosTransformados);
 
-      // 🆕 Cargar líneas del carrito automático (las que añadieron las producciones)
+      // Cargar líneas del carrito automático (las que añadieron las producciones)
       const { data: autoLineas } = await supabase
         .from('carrito_compra')
         .select('*')
         .eq('estado', 'pendiente');
 
       if (autoLineas && autoLineas.length > 0) {
-        // Enriquecer con datos del ingrediente (categoría, unidad_compra, precio)
-        const ids = Array.from(new Set(autoLineas.map((l) => l.ingrediente_id).filter(Boolean)));
+        const ids = Array.from(
+          new Set(autoLineas.map((l) => l.ingrediente_id).filter(Boolean))
+        );
         let ingMap: Record<string, any> = {};
         if (ids.length > 0) {
           const { data: ings } = await supabase
@@ -87,7 +88,7 @@ export default function PedidosPage() {
         const carritoAuto = autoLineas.map((l) => {
           const ing = ingMap[l.ingrediente_id] || {};
           return {
-            id: l.id, // id del carrito_compra
+            id: l.id,
             ingrediente_id: l.ingrediente_id,
             nombre: l.ingrediente_nombre,
             categoria: ing.categoria || '',
@@ -95,9 +96,9 @@ export default function PedidosPage() {
             precio_compra_actual: Number(l.coste_unitario || ing.precio_compra_actual || 0),
             unidad_compra: l.unidad || ing.unidad_compra || 'ud',
             cantidad: Number(l.cantidad),
-            origen: l.origen, // 'produccion' o 'minimo'
+            origen: l.origen,
             origen_ref: l.origen_ref,
-            carrito_id: l.id, // para poder borrarlo luego
+            carrito_id: l.id,
           };
         });
 
@@ -165,12 +166,11 @@ export default function PedidosPage() {
   }
 
   // =====================================================
-  // AÑADIR AL CARRITO (manual) — usa ingrediente_id como identificador
+  // AÑADIR AL CARRITO (manual)
   // =====================================================
   function añadirAlCarrito(producto: any, cantidad: number) {
     const existente = carrito.find(
-      (item) =>
-        (item.ingrediente_id || item.id) === producto.id && !item.carrito_id
+      (item) => (item.ingrediente_id || item.id) === producto.id && !item.carrito_id
     );
 
     if (existente) {
@@ -189,18 +189,45 @@ export default function PedidosPage() {
     }
   }
 
-  function eliminarDelCarrito(item: any) {
-    setCarrito(carrito.filter((i) => i !== item));
+  // =====================================================
+  // ELIMINAR DEL CARRITO (sincronizado con carrito_compra)
+  // =====================================================
+  async function eliminarDelCarrito(item: any) {
+    setCarrito((prev) => prev.filter((i) => i.id !== item.id));
+
+    if (item.carrito_id) {
+      const { error } = await supabase
+        .from('carrito_compra')
+        .delete()
+        .eq('id', item.carrito_id);
+      if (error) console.warn('No se pudo eliminar de carrito_compra:', error);
+    }
   }
 
-  function actualizarCantidad(item: any, cantidad: number) {
+  // =====================================================
+  // ACTUALIZAR CANTIDAD (sincronizado con carrito_compra)
+  // =====================================================
+  async function actualizarCantidad(item: any, cantidad: number) {
     if (cantidad <= 0) {
       eliminarDelCarrito(item);
       return;
     }
-    setCarrito(
-      carrito.map((i) => (i === item ? { ...i, cantidad: Math.max(1, cantidad) } : i))
+
+    const nueva = cantidad;
+
+    setCarrito((prev) =>
+      prev.map((i) => (i.id === item.id ? { ...i, cantidad: nueva } : i))
     );
+
+    if (item.carrito_id) {
+      const costeTotal =
+        Math.round(nueva * Number(item.precio_compra_actual || 0) * 100) / 100;
+
+      await supabase
+        .from('carrito_compra')
+        .update({ cantidad: nueva, coste_total: costeTotal })
+        .eq('id', item.carrito_id);
+    }
   }
 
   function calcularTotalesPorProveedor() {
@@ -339,13 +366,11 @@ export default function PedidosPage() {
           }
         }
 
-        // 🆕 Recopilar ids de carrito_compra a eliminar
         data.items.forEach((item: any) => {
           if (item.carrito_id) idsCarritoAEliminar.push(item.carrito_id);
         });
       }
 
-      // 🆕 Eliminar de carrito_compra las líneas que se han procesado
       if (idsCarritoAEliminar.length > 0) {
         const { error: errClean } = await supabase
           .from('carrito_compra')
@@ -367,7 +392,6 @@ export default function PedidosPage() {
 
   const totalesPorProveedor = calcularTotalesPorProveedor();
 
-  // 🆕 Contadores para el header del carrito
   const lineasAuto = carrito.filter((i) => i.carrito_id).length;
   const lineasManual = carrito.length - lineasAuto;
 
@@ -624,7 +648,7 @@ export default function PedidosPage() {
               </button>
             </div>
 
-            {/* 🆕 Resumen de orígenes */}
+            {/* Resumen de orígenes */}
             {carrito.length > 0 && (
               <div className="px-6 pt-4 pb-2 flex flex-wrap gap-2">
                 {lineasAuto > 0 && (
