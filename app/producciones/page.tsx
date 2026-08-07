@@ -135,16 +135,23 @@ export default function ProduccionesPage() {
   }
 
   async function cambiarEstado(id: string, nuevoEstado: string) {
-    const { error } = await supabase
-      .from('producciones')
-      .update({ estado: nuevoEstado })
-      .eq('id_produccion', id);
+    const res = await fetch(`/api/producciones/${id}/estado`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        estado: nuevoEstado,
+        usuario: 'Sistema Producciones',
+      }),
+    });
 
-    if (error) {
-      alert(`Error: ${error.message}`);
-    } else {
-      cargarDatos();
+    const data = await res.json();
+
+    if (!data.ok) {
+      alert(`Error: ${data.error}`);
+      return;
     }
+
+    cargarDatos();
   }
 
   function diasHastaCaducidad(fechaCaducidad: string): number {
