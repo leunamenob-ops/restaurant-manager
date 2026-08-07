@@ -32,20 +32,28 @@ function round(n: number, decimales = 3) {
   return Math.round(n * p) / p;
 }
 
-function calcularFactor(cantidad: number, unidad: string, gramosReceta: number, porciones: number) {
+// =====================================================
+// FACTOR DE ESCALA (corregido)
+// =====================================================
+function calcularFactor(
+  cantidad: number,
+  unidad: string,
+  gramosReceta: number,
+  porciones: number
+) {
   const u = (unidad || '').toLowerCase();
 
+  // Unidades de peso/volumen → escala por gramos
   if (gramosReceta > 0) {
     if (u.includes('kg') || u.includes('kilo')) return (cantidad * 1000) / gramosReceta;
     if (u.includes('gramo') || u === 'g' || u === 'gr') return cantidad / gramosReceta;
-    if (u.includes('litro') || u === 'l' || u === 'ml') {
-      const gramos = u === 'ml' ? cantidad : cantidad * 1000;
-      return gramos / gramosReceta;
-    }
+    if (u.includes('litro') || u === 'l') return (cantidad * 1000) / gramosReceta;
+    if (u === 'ml') return cantidad / gramosReceta;
   }
 
+  // Unidades/porciones → escala por tandas de la receta
   if (porciones > 0) return cantidad / porciones;
-  return 1;
+  return cantidad; // 1 unidad = 1 tanda completa de la receta
 }
 
 function factorUnidad(u: string): number {
@@ -57,7 +65,11 @@ function factorUnidad(u: string): number {
   return 0;
 }
 
-function convertirAUnidadCompra(cantidad: number, unidadReceta: string, unidadCompra: string | null) {
+function convertirAUnidadCompra(
+  cantidad: number,
+  unidadReceta: string,
+  unidadCompra: string | null
+) {
   const a = factorUnidad(unidadReceta);
   const b = factorUnidad(unidadCompra || '');
   if (a === 0 || b === 0) return cantidad;
@@ -265,7 +277,12 @@ export async function POST(request: Request) {
           parseFloat(String(receta.produccion_gramos || '').replace(',', '.')) || 0;
         const porciones = Number(receta.porciones || 0);
 
-        factorAplicado = calcularFactor(cantidad, payloadProduccion.unidad_medida, gramosReceta, porciones);
+        factorAplicado = calcularFactor(
+          cantidad,
+          payloadProduccion.unidad_medida,
+          gramosReceta,
+          porciones
+        );
 
         const faltasCarrito: any[] = [];
 
