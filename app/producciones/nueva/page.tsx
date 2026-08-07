@@ -28,7 +28,9 @@ const UBICACIONES_SUGERIDAS = [
   'Abatidor',
 ];
 
-// Misma lógica de escalado que la API
+// =====================================================
+// FACTOR DE ESCALA (corregido) — misma lógica que la API
+// =====================================================
 function calcularFactor(
   cantidad: number,
   unidad: string,
@@ -37,18 +39,17 @@ function calcularFactor(
 ) {
   const u = (unidad || '').toLowerCase();
 
+  // Unidades de peso/volumen → escala por gramos
   if (gramosReceta > 0) {
     if (u.includes('kg') || u.includes('kilo')) return (cantidad * 1000) / gramosReceta;
     if (u.includes('gramo') || u === 'g' || u === 'gr') return cantidad / gramosReceta;
-    if (u.includes('litro') || u === 'l' || u === 'ml') {
-      const gramos = u === 'ml' ? cantidad : cantidad * 1000;
-      return gramos / gramosReceta;
-    }
+    if (u.includes('litro') || u === 'l') return (cantidad * 1000) / gramosReceta;
+    if (u === 'ml') return cantidad / gramosReceta;
   }
 
+  // Unidades/porciones → escala por tandas de la receta
   if (porciones > 0) return cantidad / porciones;
-
-  return 1;
+  return cantidad; // 1 unidad = 1 tanda completa de la receta
 }
 
 // Días sugeridos de caducidad según ubicación
@@ -222,7 +223,9 @@ export default function NuevaProduccionPage() {
         return;
       }
 
-      alert(`✅ Producción creada correctamente\nLote: ${data.lote_numero}`);
+      alert(
+        `✅ Producción creada correctamente\nLote: ${data.lote_numero}\nFactor: ×${data.factor_aplicado}\nMateriales: ${data.materiales_generados}\nAñadidos al carrito: ${data.carrito_lineas}`
+      );
       router.push('/producciones');
     } catch (error: any) {
       alert(`Error de conexión: ${error.message}`);
