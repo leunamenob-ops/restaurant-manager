@@ -38,7 +38,7 @@ export default function MovilFacturasPage() {
 
       img.onload = () => {
         try {
-          const maxDim = 2000;
+          const maxDim = 2500;
           let { width, height } = img;
           const scale = Math.min(1, maxDim / Math.max(width, height));
           width = Math.round(width * scale);
