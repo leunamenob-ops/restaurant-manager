@@ -20,19 +20,124 @@ export async function POST(request: Request) {
     const supabase = getSupabase();
 
     const body = await request.json().catch(() => ({}));
-    const productoNombre = body?.producto_nombre;
     const cantidad = Number(body?.cantidad);
     const destino = body?.destino || null;
     const responsable = body?.responsable || null;
+    const loteNumero = body?.lote_numero || null;
+    const productoNombre = body?.producto_nombre || null;
 
-    if (!productoNombre || !cantidad || cantidad <= 0) {
+    if (!cantidad || cantidad <= 0) {
       return NextResponse.json(
-        { ok: false, error: 'Faltan producto_nombre o cantidad válida' },
+        { ok: false, error: 'Cantidad inválida' },
         { status: 400 }
       );
     }
 
-    // FIFO: entradas con stock, ordenadas por caducidad (la más próxima primero)
+    // =====================================================
+    // MODO 1: SALIDA DE UN LOTE ESPECÍFICO (escaneo QR) con FIFO forzado
+    // =====================================================
+    if (loteNumero) {
+      const { data: entradasLote } = await supabase
+        .from('stock_producciones')
+        .select('*')
+        .eq('lote_numero', loteNumero)
+        .eq('movimiento_tipo', 'entrada')
+        .gt('cantidad_disponible', 0)
+        .order('fecha_caducidad', { ascending: true });
+
+      const entradaLote = (entradasLote || [])[0];
+
+      if (!entradaLote) {
+        return NextResponse.json(
+          { ok: false, error: 'Este lote no tiene stock disponible' },
+          { status: 400 }
+        );
+      }
+
+      // 🔒 VALIDACIÓN FIFO: ¿hay lotes más antiguos con stock?
+      const { data: antiguos } = await supabase
+        .from('stock_producciones')
+        .select('lote_numero, fecha_caducidad, cantidad_disponible')
+        .eq('producto_nombre', entradaLote.producto_nombre)
+        .eq('movimiento_tipo', 'entrada')
+        .gt('cantidad_disponible', 0)
+        .lt('fecha_caducidad', entradaLote.fecha_caducidad);
+
+      if (antiguos && antiguos.length > 0) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'FIFO_VIOLATION',
+            message:
+              '⚠️ Tienes un lote más antiguo en stock. Consúmelo antes (FIFO obligatorio).',
+            lotes_antiguos: antiguos,
+          },
+          { status: 409 }
+        );
+      }
+
+      // ✅ FIFO OK → consumir este lote
+      const tomar = Math.min(Number(entradaLote.cantidad_disponible), cantidad);
+      const nuevoDisponible = Number(entradaLote.cantidad_disponible) - tomar;
+
+      await supabase
+        .from('stock_producciones')
+        .update({
+          cantidad_disponible: nuevoDisponible,
+          fecha_salida: new Date().toISOString(),
+        })
+        .eq('id', entradaLote.id);
+
+      await supabase.from('stock_producciones').insert({
+        produccion_id: entradaLote.produccion_id,
+        producto_nombre: entradaLote.producto_nombre,
+        cantidad_disponible: tomar,
+        cantidad_inicial: tomar,
+        unidad_medida: entradaLote.unidad_medida,
+        ubicacion: destino || entradaLote.ubicacion,
+        fecha_entrada: new Date().toISOString(),
+        fecha_salida: new Date().toISOString(),
+        fecha_caducidad: entradaLote.fecha_caducidad,
+        lote_numero: entradaLote.lote_numero,
+        movimiento_tipo: 'salida',
+        responsable_movimiento: responsable,
+        observaciones: `Salida por escaneo QR a ${destino || 'servicio'}`,
+        hotel_id: entradaLote.hotel_id,
+      });
+
+      const { data: loteAct } = await supabase
+        .from('lotes')
+        .select('id, cantidad_consumida, cantidad_total')
+        .eq('produccion_id', entradaLote.produccion_id)
+        .single();
+
+      if (loteAct) {
+        const nuevaConsumida = Number(loteAct.cantidad_consumida || 0) + tomar;
+        await supabase
+          .from('lotes')
+          .update({
+            cantidad_consumida: nuevaConsumida,
+            estado: nuevaConsumida >= Number(loteAct.cantidad_total) ? 'consumido' : 'activo',
+          })
+          .eq('id', loteAct.id);
+      }
+
+      return NextResponse.json({
+        ok: true,
+        consumos: [{ lote: loteNumero, cantidad: tomar, agotado: nuevoDisponible <= 0 }],
+      });
+    }
+
+    // =====================================================
+    // MODO 2: FIFO GLOBAL por producto (botón Salida del listado)
+    // =====================================================
+    if (!productoNombre) {
+      return NextResponse.json(
+        { ok: false, error: 'Falta lote_numero o producto_nombre' },
+        { status: 400 }
+      );
+    }
+
     const { data: entradas, error: errEntradas } = await supabase
       .from('stock_producciones')
       .select('*')
@@ -52,10 +157,7 @@ export async function POST(request: Request) {
 
     if (disponibleTotal < cantidad) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: `Stock insuficiente. Disponible: ${disponibleTotal} · Solicitado: ${cantidad}`,
-        },
+        { ok: false, error: `Stock insuficiente. Disponible: ${disponibleTotal} · Solicitado: ${cantidad}` },
         { status: 400 }
       );
     }
@@ -69,18 +171,13 @@ export async function POST(request: Request) {
       const tomar = Math.min(Number(e.cantidad_disponible || 0), restante);
       if (tomar <= 0) continue;
 
-      // 1. Descontar de la entrada
       const nuevoDisponible = Number(e.cantidad_disponible) - tomar;
 
       await supabase
         .from('stock_producciones')
-        .update({
-          cantidad_disponible: nuevoDisponible,
-          fecha_salida: new Date().toISOString(),
-        })
+        .update({ cantidad_disponible: nuevoDisponible, fecha_salida: new Date().toISOString() })
         .eq('id', e.id);
 
-      // 2. Registrar movimiento de salida
       await supabase.from('stock_producciones').insert({
         produccion_id: e.produccion_id,
         producto_nombre: e.producto_nombre,
@@ -98,7 +195,6 @@ export async function POST(request: Request) {
         hotel_id: e.hotel_id,
       });
 
-      // 3. Actualizar trazabilidad del lote
       const { data: loteAct } = await supabase
         .from('lotes')
         .select('id, cantidad_consumida, cantidad_total')
@@ -116,13 +212,7 @@ export async function POST(request: Request) {
           .eq('id', loteAct.id);
       }
 
-      consumos.push({
-        lote: e.lote_numero,
-        cantidad: tomar,
-        caducidad: e.fecha_caducidad,
-        agotado: nuevoDisponible <= 0,
-      });
-
+      consumos.push({ lote: e.lote_numero, cantidad: tomar, agotado: nuevoDisponible <= 0 });
       restante -= tomar;
     }
 
