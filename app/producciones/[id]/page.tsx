@@ -94,8 +94,8 @@ function Etiqueta({
 }) {
   const ancho = config?.ancho_mm || 50;
   const alto = config?.alto_mm || 30;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(
-    prod.lote_numero
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(
+    `https://kostsoftware.com/lote/${encodeURIComponent(prod.lote_numero)}`
   )}`;
 
   const alergenosActivos = lote?.alergen_info
