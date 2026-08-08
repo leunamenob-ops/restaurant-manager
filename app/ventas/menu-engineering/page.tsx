@@ -4,14 +4,15 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 
-interface ItemME {
+interface PlatoME {
+  id: string;
   nombre: string;
   categoria: string;
+  precio: number;
+  coste: number;
+  margen: number;
+  foodCost: number;
   unidades: number;
-  margenUd: number;
-  totalMargen: number;
-  precioBase: number;
-  precioCoste: number;
   popular: boolean;
   rentable: boolean;
   cuadrante: 'estrella' | 'caballo' | 'puzzle' | 'perro';
@@ -21,8 +22,7 @@ const QUADS = {
   estrella: {
     emoji: '🌟',
     titulo: 'Estrellas',
-    desc: 'Alta popularidad + alto margen',
-    accion: 'Mantener y destacar en carta. Son tu motor de beneficio.',
+    accion: 'PROTEGER: no tocar precio ni receta. Máxima visibilidad en carta y en el servicio.',
     color: 'border-emerald-300 bg-emerald-50',
     text: 'text-emerald-700',
     dot: 'bg-emerald-500',
@@ -30,8 +30,7 @@ const QUADS = {
   caballo: {
     emoji: '🐴',
     titulo: 'Caballos de batalla',
-    desc: 'Alta popularidad + bajo margen',
-    accion: 'Venden mucho pero dejan poco: revisar precio o reducir coste.',
+    accion: 'SUBIR PRECIO progresivamente (+0,50/1€) o renegociar coste: venden solas pero dejan poco margen.',
     color: 'border-blue-300 bg-blue-50',
     text: 'text-blue-700',
     dot: 'bg-blue-500',
@@ -39,8 +38,7 @@ const QUADS = {
   puzzle: {
     emoji: '🧩',
     titulo: 'Puzzles',
-    desc: 'Baja popularidad + alto margen',
-    accion: 'Dejan buen margen pero no salen: promocionar y reposicionar en carta.',
+    accion: 'POTENCIAR: dejan buen margen pero no salen. Reposicionar en carta, sugerir en sala, promocionar.',
     color: 'border-amber-300 bg-amber-50',
     text: 'text-amber-700',
     dot: 'bg-amber-500',
@@ -48,8 +46,7 @@ const QUADS = {
   perro: {
     emoji: '🐕',
     titulo: 'Perros',
-    desc: 'Baja popularidad + bajo margen',
-    accion: 'Candidatos a eliminar o rediseñar por completo.',
+    accion: 'DECIDIR: ni venden ni dejan dinero. Rediseñar la receta, rebautizar o eliminar del menú.',
     color: 'border-red-300 bg-red-50',
     text: 'text-red-700',
     dot: 'bg-red-500',
@@ -58,56 +55,99 @@ const QUADS = {
 
 export default function MenuEngineeringPage() {
   const router = useRouter();
-  const [items, setItems] = useState<ItemME[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [imports, setImports] = useState<any[]>([]);
+  const [importSel, setImportSel] = useState<string>('');
+  const [items, setItems] = useState<PlatoME[]>([]);
+  const [sinVentas, setSinVentas] = useState<PlatoME[]>([]);
+  const [pendientes, setPendientes] = useState<any[]>([]);
   const [umbUds, setUmbUds] = useState(0);
   const [mediaMargen, setMediaMargen] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    cargar();
+    (async () => {
+      const { data } = await supabase
+        .from('ventas_imports')
+        .select('*')
+        .order('created_at', { ascending: false });
+      setImports(data || []);
+      if (data && data.length > 0) setImportSel(data[0].id);
+    })();
   }, []);
 
-  async function cargar() {
-    const { data } = await supabase
-      .from('ventas_lineas')
-      .select('nombre_articulo, categoria, unidades, total_margen, total_base, total_coste');
+  useEffect(() => {
+    if (importSel) cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importSel]);
 
-    // Agregar por artículo (por si hay varios meses importados)
-    const map = new Map<string, any>();
-    (data || []).forEach((l: any) => {
-      const acc = map.get(l.nombre_articulo) || {
-        nombre: l.nombre_articulo,
-        categoria: l.categoria || '',
-        unidades: 0,
-        totalMargen: 0,
-        totalBase: 0,
-        totalCoste: 0,
-      };
-      acc.unidades += Number(l.unidades || 0);
-      acc.totalMargen += Number(l.total_margen || 0);
-      acc.totalBase += Number(l.total_base || 0);
-      acc.totalCoste += Number(l.total_coste || 0);
-      map.set(l.nombre_articulo, acc);
+  async function cargar() {
+    setLoading(true);
+
+    const [plRes, recRes, linRes, alRes] = await Promise.all([
+      supabase.from('platos').select('*'),
+      supabase.from('recetas').select('id, coste_total'),
+      supabase.from('ventas_lineas').select('nombre_articulo, unidades').eq('import_id', importSel),
+      supabase.from('platos_tpv').select('plato_id, nombre_tpv'),
+    ]);
+
+    const ventasMap = new Map<string, number>();
+    (linRes.data || []).forEach((l: any) => {
+      ventasMap.set(
+        l.nombre_articulo,
+        (ventasMap.get(l.nombre_articulo) || 0) + Number(l.unidades || 0)
+      );
     });
 
-    const agregados: ItemME[] = Array.from(map.values()).map((a) => ({
-      ...a,
-      margenUd: a.unidades > 0 ? a.totalMargen / a.unidades : 0,
-      precioBase: a.unidades > 0 ? a.totalBase / a.unidades : 0,
-      precioCoste: a.unidades > 0 ? a.totalCoste / a.unidades : 0,
-      popular: false,
-      rentable: false,
-      cuadrante: 'perro' as const,
-    }));
+    const aliasMap = new Map<string, string[]>();
+    (alRes.data || []).forEach((a: any) => {
+      const arr = aliasMap.get(a.plato_id) || [];
+      arr.push(a.nombre_tpv);
+      aliasMap.set(a.plato_id, arr);
+    });
 
-    if (agregados.length > 0) {
-      const mediaUds = agregados.reduce((s, i) => s + i.unidades, 0) / agregados.length;
-      const umb = mediaUds * 0.7; // Kasavana & Smith
-      const mediaMarg = agregados.reduce((s, i) => s + i.margenUd, 0) / agregados.length;
+    const conDatos: PlatoME[] = [];
+    const sinV: PlatoME[] = [];
+    const pend: any[] = [];
 
-      agregados.forEach((i) => {
+    (plRes.data || []).forEach((p: any) => {
+      const receta = (recRes.data || []).find((r: any) => r.id === p.receta_id);
+
+      if (!receta) {
+        pend.push(p);
+        return;
+      }
+
+      const nombres = aliasMap.get(p.id) || (p.nombre_tpv ? [p.nombre_tpv] : []);
+      const unidades = nombres.reduce((s, n) => s + (ventasMap.get(n) || 0), 0);
+
+      const precio = Number(p.precio_venta || 0);
+      const coste = Number(receta.coste_total || 0);
+      const base: PlatoME = {
+        id: p.id,
+        nombre: p.nombre,
+        categoria: p.categoria || '',
+        precio,
+        coste,
+        margen: precio - coste,
+        foodCost: precio > 0 ? (coste / precio) * 100 : 0,
+        unidades,
+        popular: false,
+        rentable: false,
+        cuadrante: 'perro',
+      };
+
+      if (unidades > 0) conDatos.push(base);
+      else sinV.push(base);
+    });
+
+    if (conDatos.length > 0) {
+      const mediaUds = conDatos.reduce((s, i) => s + i.unidades, 0) / conDatos.length;
+      const umb = mediaUds * 0.7;
+      const mediaMarg = conDatos.reduce((s, i) => s + i.margen, 0) / conDatos.length;
+
+      conDatos.forEach((i) => {
         i.popular = i.unidades >= umb;
-        i.rentable = i.margenUd >= mediaMarg;
+        i.rentable = i.margen >= mediaMarg;
         i.cuadrante =
           i.popular && i.rentable
             ? 'estrella'
@@ -122,19 +162,22 @@ export default function MenuEngineeringPage() {
       setMediaMargen(mediaMarg);
     }
 
-    setItems(agregados.sort((a, b) => b.totalMargen - a.totalMargen));
+    setItems(conDatos.sort((a, b) => b.margen * b.unidades - a.margen * a.unidades));
+    setSinVentas(sinV);
+    setPendientes(pend);
     setLoading(false);
   }
 
+  const importActivo = imports.find((i) => i.id === importSel);
   const maxUds = Math.max(...items.map((i) => i.unidades), 1);
-  const maxMargen = Math.max(...items.map((i) => i.margenUd), 1);
-
-  const pct = (v: number, max: number) => Math.min(96, Math.max(4, (v / max) * 100));
+  const maxMargen = Math.max(...items.map((i) => i.margen), 1);
+  const pct = (v: number, max: number) => Math.min(95, Math.max(5, (v / max) * 100));
+  const eur = (n: number) => n.toFixed(2) + ' €';
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center gap-3">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex flex-wrap items-center gap-3">
           <button
             onClick={() => router.push('/ventas')}
             className="w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-xl flex items-center justify-center transition"
@@ -143,12 +186,25 @@ export default function MenuEngineeringPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
           </button>
-          <div>
+          <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold tracking-tight">🎯 Menu Engineering</h1>
-            <p className="text-sm text-slate-500">
-              Popularidad × Rentabilidad · método Kasavana & Smith
+            <p className="text-sm text-slate-500 truncate">
+              {importActivo
+                ? `${importActivo.punto_venta || importActivo.nombre_archivo} · ${importActivo.fecha_desde || ''} – ${importActivo.fecha_hasta || ''}`
+                : 'Popularidad TPV × Rentabilidad de escandallo'}
             </p>
           </div>
+          <select
+            value={importSel}
+            onChange={(e) => setImportSel(e.target.value)}
+            className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white font-semibold focus:ring-2 focus:ring-orange-500 outline-none"
+          >
+            {imports.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.nombre_archivo}
+              </option>
+            ))}
+          </select>
         </div>
       </header>
 
@@ -157,35 +213,28 @@ export default function MenuEngineeringPage() {
           <div className="py-16 text-center">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-orange-200 border-t-orange-600"></div>
           </div>
-        ) : items.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
-            <p className="text-4xl mb-3">📊</p>
-            <p className="font-semibold text-slate-700">Aún no hay ventas importadas</p>
-            <p className="text-sm text-slate-500 mt-1">Importa un cierre del TPV en /ventas</p>
-          </div>
         ) : (
           <>
-            {/* Resumen de umbrales */}
+            {/* Umbrales */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
                 <p className="text-xs text-slate-500 uppercase font-semibold">Umbral popularidad</p>
                 <p className="text-2xl font-bold mt-1">{umbUds.toFixed(0)} uds</p>
-                <p className="text-[11px] text-slate-400">70% de la media vendida</p>
+                <p className="text-[11px] text-slate-400">70% de la media vendida en este outlet</p>
               </div>
               <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
                 <p className="text-xs text-slate-500 uppercase font-semibold">Umbral rentabilidad</p>
-                <p className="text-2xl font-bold mt-1">{mediaMargen.toFixed(2)} €</p>
-                <p className="text-[11px] text-slate-400">margen medio por unidad</p>
+                <p className="text-2xl font-bold mt-1">{eur(mediaMargen)}</p>
+                <p className="text-[11px] text-slate-400">margen medio real por plato</p>
               </div>
             </div>
 
-            {/* MATRIZ VISUAL */}
+            {/* MATRIZ */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
               <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4">
-                📈 Matriz (X = unidades · Y = margen/ud)
+                📈 Matriz (X = unidades vendidas · Y = margen real por plato)
               </h2>
               <div className="relative h-96 bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
-                {/* líneas de umbral */}
                 <div
                   className="absolute top-0 bottom-0 border-l-2 border-dashed border-slate-400"
                   style={{ left: `${pct(umbUds, maxUds)}%` }}
@@ -195,28 +244,26 @@ export default function MenuEngineeringPage() {
                   style={{ bottom: `${pct(mediaMargen, maxMargen)}%` }}
                 ></div>
 
-                {/* etiquetas de cuadrantes */}
                 <span className="absolute top-2 right-3 text-xs font-bold text-amber-600">🧩 PUZZLE</span>
                 <span className="absolute top-2 left-3 text-xs font-bold text-red-500">🐕 PERRO</span>
                 <span className="absolute bottom-2 right-3 text-xs font-bold text-emerald-600">🌟 ESTRELLA</span>
                 <span className="absolute bottom-2 left-3 text-xs font-bold text-blue-600">🐴 CABALLO</span>
 
-                {/* puntos */}
                 {items.map((i) => (
                   <div
-                    key={i.nombre}
-                    title={`${i.nombre} · ${i.unidades} uds · ${i.margenUd.toFixed(2)} €/ud`}
-                    className={`absolute w-4 h-4 rounded-full ${QUADS[i.cuadrante].dot} border-2 border-white shadow cursor-pointer hover:scale-150 transition-transform`}
+                    key={i.id}
+                    title={`${i.nombre} · ${i.unidades} uds · margen ${i.margen.toFixed(2)} € · FC ${i.foodCost.toFixed(0)}%`}
+                    className={`absolute w-5 h-5 rounded-full ${QUADS[i.cuadrante].dot} border-2 border-white shadow cursor-pointer hover:scale-150 transition-transform`}
                     style={{
-                      left: `calc(${pct(i.unidades, maxUds)}% - 8px)`,
-                      bottom: `calc(${pct(i.margenUd, maxMargen)}% - 8px)`,
+                      left: `calc(${pct(i.unidades, maxUds)}% - 10px)`,
+                      bottom: `calc(${pct(i.margen, maxMargen)}% - 10px)`,
                     }}
                   ></div>
                 ))}
               </div>
             </div>
 
-            {/* LISTAS POR CUADRANTE */}
+            {/* PLAN DE ACCIÓN */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {(Object.keys(QUADS) as Array<keyof typeof QUADS>).map((q) => {
                 const cfg = QUADS[q];
@@ -229,22 +276,26 @@ export default function MenuEngineeringPage() {
                       <h3 className={`font-bold ${cfg.text}`}>{cfg.titulo}</h3>
                       <span className="ml-auto text-sm font-bold text-slate-500">{delQuad.length}</span>
                     </div>
-                    <p className="text-xs text-slate-600 mb-3">{cfg.accion}</p>
+                    <p className="text-xs text-slate-700 font-medium mb-3">{cfg.accion}</p>
 
                     {delQuad.length === 0 ? (
-                      <p className="text-xs text-slate-400">Sin artículos en este cuadrante</p>
+                      <p className="text-xs text-slate-400">Sin platos en este cuadrante</p>
                     ) : (
                       <div className="space-y-2">
                         {delQuad.map((i) => (
-                          <div key={i.nombre} className="bg-white rounded-xl px-3 py-2 shadow-sm">
+                          <div key={i.id} className="bg-white rounded-xl px-3 py-2 shadow-sm">
                             <div className="flex justify-between items-center">
                               <p className="font-semibold text-sm text-slate-800">{i.nombre}</p>
                               <p className={`text-sm font-bold ${cfg.text}`}>
-                                {i.totalMargen.toLocaleString('es-ES', { maximumFractionDigits: 0 })} €
+                                {(i.margen * i.unidades).toLocaleString('es-ES', { maximumFractionDigits: 0 })} €
                               </p>
                             </div>
                             <p className="text-[11px] text-slate-500 mt-0.5">
-                              {i.unidades} uds · {i.margenUd.toFixed(2)} €/ud · venta {i.precioBase.toFixed(2)} €
+                              {i.unidades} uds · margen {eur(i.margen)} · FC{' '}
+                              <span className={i.foodCost > 35 ? 'text-red-600 font-bold' : ''}>
+                                {i.foodCost.toFixed(0)}%
+                              </span>{' '}
+                              · PVP {eur(i.precio)}
                             </p>
                           </div>
                         ))}
@@ -254,6 +305,22 @@ export default function MenuEngineeringPage() {
                 );
               })}
             </div>
+
+            {/* Avisos */}
+            {(sinVentas.length > 0 || pendientes.length > 0) && (
+              <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 text-sm text-amber-800 space-y-1">
+                {sinVentas.map((p) => (
+                  <p key={p.id}>
+                    ⚠️ <strong>{p.nombre}</strong>: sin ventas en este reporte (¿no se vende en este outlet o falta mapeo TPV).
+                  </p>
+                ))}
+                {pendientes.map((p: any) => (
+                  <p key={p.id}>
+                    ⚠️ <strong>{p.nombre}</strong>: sin receta vinculada → sin coste real.
+                  </p>
+                ))}
+              </div>
+            )}
           </>
         )}
       </main>
