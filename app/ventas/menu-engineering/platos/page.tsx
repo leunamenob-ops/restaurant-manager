@@ -138,7 +138,7 @@ export default function PlatosPage() {
             <p className="text-sm text-slate-500">Coste real en vivo · precio de venta · enlace TPV</p>
           </div>
           <button
-            onClick={() => router.push('/menu-engineering/menus')}
+            onClick={() => router.push('/ventas/menu-engineering/menus')}
             className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium transition text-sm"
           >
             📋 Menús
