@@ -9,9 +9,35 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+const STOP = new Set(['DE', 'LA', 'EL', 'Y', 'CON', 'EN', 'DEL', 'LOS', 'LAS', 'AL', 'UD', 'UDS', 'UN', 'UNA', 'GR', 'KG', 'A', 'E', 'O']);
+
+function tokens(s: string) {
+  return new Set(
+    s
+      .toUpperCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length > 1 && !STOP.has(t))
+  );
+}
+
+function sim(a: string, b: string) {
+  const ta = tokens(a);
+  const tb = tokens(b);
+  if (!ta.size || !tb.size) return 0;
+  let inter = 0;
+  ta.forEach((t) => {
+    if (tb.has(t)) inter++;
+  });
+  return inter / Math.min(ta.size, tb.size);
+}
+
 interface PlatoME {
   id: string;
   nombre: string;
+  nombreTpv: string;
   categoria: string;
   precio: number;
   coste: number;
@@ -67,9 +93,8 @@ export default function MenuEngineeringPage() {
   const [imports, setImports] = useState<any[]>([]);
   const [importSel, setImportSel] = useState<string>('');
   const [items, setItems] = useState<PlatoME[]>([]);
-  const [sinVentas, setSinVentas] = useState<PlatoME[]>([]);
+  const [sinMatch, setSinMatch] = useState<PlatoME[]>([]);
   const [sinReceta, setSinReceta] = useState<any[]>([]);
-  const [sinTpv, setSinTpv] = useState<PlatoME[]>([]);
   const [umbUds, setUmbUds] = useState(0);
   const [mediaMargen, setMediaMargen] = useState(0);
 
@@ -107,17 +132,15 @@ export default function MenuEngineeringPage() {
   async function calcular() {
     if (!importSel) {
       setItems([]);
-      setSinVentas([]);
+      setSinMatch([]);
       setSinReceta([]);
-      setSinTpv([]);
       return;
     }
 
-    const [mpRes, plRes, recRes, alRes, linRes] = await Promise.all([
+    const [mpRes, plRes, recRes, linRes] = await Promise.all([
       supabase.from('menus_platos').select('plato_id').eq('menu_id', menuSel),
       supabase.from('platos').select('*'),
       supabase.from('recetas').select('id, coste_total'),
-      supabase.from('platos_tpv').select('plato_id, nombre_tpv'),
       supabase.from('ventas_lineas').select('nombre_articulo, unidades').eq('import_id', importSel),
     ]);
 
@@ -127,51 +150,47 @@ export default function MenuEngineeringPage() {
     (linRes.data || []).forEach((l: any) => {
       ventasMap.set(l.nombre_articulo, (ventasMap.get(l.nombre_articulo) || 0) + Number(l.unidades || 0));
     });
-
-    const aliasMap = new Map<string, string[]>();
-    (alRes.data || []).forEach((a: any) => {
-      const arr = aliasMap.get(a.plato_id) || [];
-      arr.push(a.nombre_tpv);
-      aliasMap.set(a.plato_id, arr);
-    });
+    const nombresVentas = Array.from(ventasMap.keys());
 
     const conDatos: PlatoME[] = [];
-    const sinV: PlatoME[] = [];
+    const sinM: PlatoME[] = [];
     const sinR: any[] = [];
-    const sinT: PlatoME[] = [];
 
     (plRes.data || [])
       .filter((p: any) => platoIds.has(p.id))
       .forEach((p: any) => {
         const receta = (recRes.data || []).find((r: any) => r.id === p.receta_id);
-
         if (!receta) {
           sinR.push(p);
           return;
         }
 
-        const nombres = aliasMap.get(p.id) || (p.nombre_tpv ? [p.nombre_tpv] : []);
-        const unidades = nombres.reduce((s, n) => s + (ventasMap.get(n) || 0), 0);
+        // Auto-emparejado por similitud de nombre
+        let mejor: { n: string; s: number } | null = null;
+        for (const n of nombresVentas) {
+          const s = sim(p.nombre, n);
+          if (s >= 0.6 && (!mejor || s > mejor.s)) mejor = { n, s };
+        }
 
         const precio = Number(p.precio_venta || 0);
         const coste = Number(receta.coste_total || 0);
         const base: PlatoME = {
           id: p.id,
           nombre: p.nombre,
+          nombreTpv: mejor?.n || '',
           categoria: p.categoria || '',
           precio,
           coste,
           margen: precio - coste,
           foodCost: precio > 0 ? (coste / precio) * 100 : 0,
-          unidades,
+          unidades: mejor ? ventasMap.get(mejor.n) || 0 : 0,
           popular: false,
           rentable: false,
           cuadrante: 'perro',
         };
 
-        if (nombres.length === 0) sinT.push(base);
-        else if (unidades > 0) conDatos.push(base);
-        else sinV.push(base);
+        if (mejor) conDatos.push(base);
+        else sinM.push(base);
       });
 
     if (conDatos.length > 0) {
@@ -191,9 +210,8 @@ export default function MenuEngineeringPage() {
     }
 
     setItems(conDatos.sort((a, b) => b.margen * b.unidades - a.margen * a.unidades));
-    setSinVentas(sinV);
+    setSinMatch(sinM);
     setSinReceta(sinR);
-    setSinTpv(sinT);
   }
 
   async function subir() {
@@ -209,7 +227,6 @@ export default function MenuEngineeringPage() {
 
       const res = await fetch('/api/ventas/importar', { method: 'POST', body: fd });
       const data = await res.json();
-
       if (!res.ok) throw new Error(data.error || 'Error al procesar');
 
       setResultado(data);
@@ -284,14 +301,13 @@ export default function MenuEngineeringPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-        {/* CIERRE TPV DEL MENÚ */}
+        {/* CIERRE TPV */}
         <div className="bg-white rounded-2xl shadow-sm border-2 border-amber-200 p-5">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex-1 min-w-[200px]">
               <p className="font-bold text-slate-900">📥 Cierre del TPV de "{menuActivo?.nombre || '—'}"</p>
-              <p className="text-xs text-slate-500">XLS · XLSX · CSV · TXT · PDF — se guarda por periodo</p>
+              <p className="text-xs text-slate-500">XLS · XLSX · CSV · TXT · PDF — se guarda por periodo y el emparejado plato↔artículo es automático</p>
             </div>
-
             {importsDelMenu.length > 0 && (
               <select
                 value={importSel}
@@ -372,22 +388,8 @@ export default function MenuEngineeringPage() {
             <p className="font-semibold text-slate-700">Este menú aún no tiene cierres importados</p>
             <p className="text-sm text-slate-500 mt-1">Sube el primer reporte del TPV para calcular la matriz</p>
           </div>
-        ) : items.length === 0 && sinTpv.length > 0 ? (
-          <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 text-sm text-amber-800">
-            <p className="font-bold mb-2">⚠️ Los platos del menú no tienen mapeo TPV</p>
-            <p className="mb-3">
-              Sin mapeo no sabemos cuántas unidades se vendieron. Ve a Gestión de Menús y asigna a cada plato su artículo del TPV.
-            </p>
-            <button
-              onClick={() => router.push('/ventas/menus')}
-              className="px-4 py-2 bg-amber-600 text-white rounded-lg font-bold text-xs hover:bg-amber-700 transition"
-            >
-              📋 Ir a Gestión de Menús
-            </button>
-          </div>
         ) : (
           <>
-            {/* Umbrales */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
                 <p className="text-xs text-slate-500 uppercase font-semibold">Umbral popularidad</p>
@@ -401,20 +403,13 @@ export default function MenuEngineeringPage() {
               </div>
             </div>
 
-            {/* Scatter */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
               <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4">
-                📈 Matriz (X = unidades vendidas · Y = margen real) · {importActivo?.fecha_desde || ''} – {importActivo?.fecha_hasta || ''}
+                📈 Matriz (X = unidades · Y = margen real) · {importActivo?.fecha_desde || ''} – {importActivo?.fecha_hasta || ''}
               </h2>
               <div className="relative h-96 bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
-                <div
-                  className="absolute top-0 bottom-0 border-l-2 border-dashed border-slate-400"
-                  style={{ left: `${pct(umbUds, maxUds)}%` }}
-                ></div>
-                <div
-                  className="absolute left-0 right-0 border-t-2 border-dashed border-slate-400"
-                  style={{ bottom: `${pct(mediaMargen, maxMargen)}%` }}
-                ></div>
+                <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-slate-400" style={{ left: `${pct(umbUds, maxUds)}%` }}></div>
+                <div className="absolute left-0 right-0 border-t-2 border-dashed border-slate-400" style={{ bottom: `${pct(mediaMargen, maxMargen)}%` }}></div>
 
                 <span className="absolute top-2 right-3 text-xs font-bold text-amber-600">🧩 PUZZLE</span>
                 <span className="absolute top-2 left-3 text-xs font-bold text-red-500">🐕 PERRO</span>
@@ -424,7 +419,7 @@ export default function MenuEngineeringPage() {
                 {items.map((i) => (
                   <div
                     key={i.id}
-                    title={`${i.nombre} · ${i.unidades} uds · margen ${i.margen.toFixed(2)} € · FC ${i.foodCost.toFixed(0)}%`}
+                    title={`${i.nombre} ↔ ${i.nombreTpv} · ${i.unidades} uds · margen ${i.margen.toFixed(2)} €`}
                     className={`absolute w-5 h-5 rounded-full ${QUADS[i.cuadrante].dot} border-2 border-white shadow cursor-pointer hover:scale-150 transition-transform`}
                     style={{
                       left: `calc(${pct(i.unidades, maxUds)}% - 10px)`,
@@ -435,12 +430,10 @@ export default function MenuEngineeringPage() {
               </div>
             </div>
 
-            {/* Cuadrantes con sugerencias */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {(Object.keys(QUADS) as Array<keyof typeof QUADS>).map((q) => {
                 const cfg = QUADS[q];
                 const delQuad = items.filter((i) => i.cuadrante === q);
-
                 return (
                   <div key={q} className={`rounded-2xl border-2 p-5 ${cfg.color}`}>
                     <div className="flex items-center gap-2 mb-1">
@@ -449,7 +442,6 @@ export default function MenuEngineeringPage() {
                       <span className="ml-auto text-sm font-bold text-slate-500">{delQuad.length}</span>
                     </div>
                     <p className="text-xs text-slate-700 font-medium mb-3">{cfg.accion}</p>
-
                     {delQuad.length === 0 ? (
                       <p className="text-xs text-slate-400">Sin platos en este cuadrante</p>
                     ) : (
@@ -463,11 +455,8 @@ export default function MenuEngineeringPage() {
                               </p>
                             </div>
                             <p className="text-[11px] text-slate-500 mt-0.5">
-                              {i.unidades} uds · margen {eur(i.margen)} · FC{' '}
-                              <span className={i.foodCost > 35 ? 'text-red-600 font-bold' : ''}>
-                                {i.foodCost.toFixed(0)}%
-                              </span>{' '}
-                              · PVP {eur(i.precio)}
+                              ↔ {i.nombreTpv} · {i.unidades} uds · margen {eur(i.margen)} · FC{' '}
+                              <span className={i.foodCost > 35 ? 'text-red-600 font-bold' : ''}>{i.foodCost.toFixed(0)}%</span> · PVP {eur(i.precio)}
                             </p>
                             <p className={`text-[11px] mt-1 font-semibold ${cfg.text}`}>{sugerencia(i)}</p>
                           </div>
@@ -479,17 +468,11 @@ export default function MenuEngineeringPage() {
               })}
             </div>
 
-            {/* Avisos */}
-            {(sinVentas.length > 0 || sinReceta.length > 0 || sinTpv.length > 0) && (
+            {(sinMatch.length > 0 || sinReceta.length > 0) && (
               <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 text-sm text-amber-800 space-y-1">
-                {sinTpv.map((p) => (
+                {sinMatch.map((p) => (
                   <p key={p.id}>
-                    🔗 <strong>{p.nombre}</strong>: sin mapeo TPV → asígnale su artículo en Gestión de Menús.
-                  </p>
-                ))}
-                {sinVentas.map((p) => (
-                  <p key={p.id}>
-                    ⚠️ <strong>{p.nombre}</strong>: mapeado pero sin ventas en este periodo.
+                    ⚠️ <strong>{p.nombre}</strong>: sin artículo equivalente en este cierre (¿no se vende en este outlet?).
                   </p>
                 ))}
                 {sinReceta.map((p: any) => (
