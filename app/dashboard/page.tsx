@@ -68,10 +68,10 @@ export default function DashboardPage() {
     },
     { 
       id: 5, 
-      nombre: 'Menu Engineering', 
-      descripcion: 'Matriz de rentabilidad: Estrellas, Caballos, Puzles y Perros.', 
+      nombre: 'Ventas & Menu Engineering', 
+      descripcion: 'Cierres del TPV, matriz de rentabilidad, platos y menús.', 
       icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a-2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, 
-      ruta: '/ventas/menu-engineering', 
+      ruta: '/ventas', 
       color: 'from-amber-50 to-white', 
       border: 'border-amber-200',
       iconBg: 'bg-amber-500',
@@ -81,7 +81,7 @@ export default function DashboardPage() {
       id: 6, 
       nombre: 'Inventarios', 
       descripcion: 'Conteos cíclicos, mermas y valoración de stock en tiempo real.', 
-      icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>, 
+      icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecard="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>, 
       ruta: '/inventarios', 
       color: 'from-indigo-50 to-white', 
       border: 'border-indigo-200',
@@ -103,7 +103,7 @@ export default function DashboardPage() {
       id: 8, 
       nombre: 'Facturas', 
       descripcion: 'Procesa facturas con IA. Extracción automática de datos y líneas de producto.', 
-      icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.707.707V19a2 2 0 01-2 2z" /></svg>, 
+      icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>, 
       ruta: '/facturas', 
       color: 'from-blue-50 to-white', 
       border: 'border-blue-200',
@@ -120,17 +120,6 @@ export default function DashboardPage() {
       border: 'border-orange-200',
       iconBg: 'bg-orange-500',
       hoverText: 'group-hover:text-orange-700'
-    },
-    { 
-      id: 10, 
-      nombre: 'Ventas TPV', 
-      descripcion: 'Importa cierres del TPV (ACI Dalí) y analiza ventas por outlet.', 
-      icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>, 
-      ruta: '/ventas', 
-      color: 'from-teal-50 to-white', 
-      border: 'border-teal-200',
-      iconBg: 'bg-teal-500',
-      hoverText: 'group-hover:text-teal-700'
     }
   ];
 
@@ -177,7 +166,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      {/* HEADER MODERNO */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row justify-between items-center py-4 gap-4">
@@ -209,7 +197,6 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* CONTENIDO PRINCIPAL */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="mb-10">
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">Módulos Disponibles</h2>
@@ -223,7 +210,6 @@ export default function DashboardPage() {
               onClick={() => router.push(modulo.ruta)}
               className={`group relative p-6 bg-gradient-to-br ${modulo.color} rounded-2xl border ${modulo.border} hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-300 hover:-translate-y-1 text-left overflow-hidden`}
             >
-              {/* Efecto de brillo sutil en hover */}
               <div className="absolute inset-0 bg-white/0 group-hover:bg-white/40 transition-colors duration-300"></div>
               
               <div className="relative z-10">
