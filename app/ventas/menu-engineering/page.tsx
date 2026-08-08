@@ -174,6 +174,22 @@ export default function MenuEngineeringPage() {
   const pct = (v: number, max: number) => Math.min(95, Math.max(5, (v / max) * 100));
   const eur = (n: number) => n.toFixed(2) + ' €';
 
+  function sugerencia(i: PlatoME): string {
+    const precioObj = i.coste > 0 ? i.coste / 0.3 : 0;
+    switch (i.cuadrante) {
+      case 'estrella':
+        return `💎 Proteger: mantener PVP ${eur(i.precio)} y garantizar stock. Motor de beneficio (${eur(i.margen * i.unidades)} totales).`;
+      case 'caballo':
+        return `💶 Subir PVP a ${precioObj.toFixed(2)} € (FC objetivo 30%) o renegociar coste. Vende ${i.unidades} uds pero deja solo ${eur(i.margen)}/ud.`;
+      case 'puzzle':
+        return `📢 Margen sólido de ${eur(i.margen)}/ud pero solo ${i.unidades} uds. Reposicionar en carta, foto destacada, sugerir en sala.`;
+      case 'perro':
+        return i.foodCost > 35
+          ? `🛠️ FC ${i.foodCost.toFixed(0)}% alto y ${i.unidades} uds: rediseñar receta o ajustar precio antes de eliminar.`
+          : `🗑️ ${i.unidades} uds y margen ${eur(i.margen)}/ud: valorar eliminar o rebautizar el plato.`;
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
@@ -263,7 +279,7 @@ export default function MenuEngineeringPage() {
               </div>
             </div>
 
-            {/* PLAN DE ACCIÓN */}
+            {/* PLAN DE ACCIÓN CON SUGERENCIAS POR PLATO */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {(Object.keys(QUADS) as Array<keyof typeof QUADS>).map((q) => {
                 const cfg = QUADS[q];
@@ -296,6 +312,9 @@ export default function MenuEngineeringPage() {
                                 {i.foodCost.toFixed(0)}%
                               </span>{' '}
                               · PVP {eur(i.precio)}
+                            </p>
+                            <p className={`text-[11px] mt-1 font-semibold ${cfg.text}`}>
+                              {sugerencia(i)}
                             </p>
                           </div>
                         ))}
