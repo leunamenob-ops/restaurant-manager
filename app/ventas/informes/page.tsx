@@ -119,7 +119,6 @@ export default function InformesPage() {
     })();
   }, [menuSel, imports]);
 
-  // ============ Emparejado plato ↔ artículo TPV por import ============
   function matchDe(importId: string) {
     const mapa = new Map<string, number>();
     lineas
@@ -152,7 +151,6 @@ export default function InformesPage() {
     });
   }
 
-  // ============ Filas del análisis (periodo o agregado) ============
   function filasAnalisis() {
     if (periodSel !== 'all') return matchDe(periodSel).filter((x) => x.matched && x.uds > 0);
 
@@ -180,10 +178,11 @@ export default function InformesPage() {
   const umbUds = mediaUds * 0.7;
   const mediaMarg = filas.length ? filas.reduce((s, x) => s + x.margenUd, 0) / filas.length : 0;
 
+  // ============ REGLA F&B: estrella exige FC ≤ 30% ============
   const conQuad = filas.map((x) => ({
     ...x,
     cuadrante:
-      x.uds >= umbUds && x.margenUd >= mediaMarg
+      x.uds >= umbUds && x.margenUd >= mediaMarg && x.fc <= 30
         ? 'estrella'
         : x.uds >= umbUds
         ? 'caballo'
@@ -204,7 +203,6 @@ export default function InformesPage() {
   const topUds = [...conQuad].sort((a, b) => b.uds - a.uds).slice(0, 5);
   const bottom = [...conQuad].sort((a, b) => a.margenTotal - b.margenTotal).slice(0, 3);
 
-  // ============ Medidas + potencial ============
   const medidas: any[] = [];
   let potencial = 0;
 
@@ -226,7 +224,6 @@ export default function InformesPage() {
     medidas.push({ emoji: '💎', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', texto: `Proteger ${x.nombre}: no tocar precio ni receta, garantizar stock`, impacto: `${eur(x.margenTotal)} en juego` });
   });
 
-  // ============ Evolución por meses ============
   const porPeriodo = importsRel.map((imp) => ({ imp, rows: matchDe(imp.id) }));
   const topEst = [...filas].sort((a, b) => b.uds - a.uds).slice(0, 6);
 
@@ -291,7 +288,6 @@ export default function InformesPage() {
           </div>
         ) : (
           <>
-            {/* A) KPIs */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
               <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4">
                 💰 Rentabilidad · {etiquetaPeriodo}
@@ -322,7 +318,6 @@ export default function InformesPage() {
               </div>
             </div>
 
-            {/* B) Tops */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                 <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4">🏆 Top 5 por margen</h2>
@@ -373,7 +368,6 @@ export default function InformesPage() {
               </div>
             </div>
 
-            {/* C) Resumen matriz */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
               <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4">🎯 Matriz · {etiquetaPeriodo}</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -390,7 +384,6 @@ export default function InformesPage() {
               </div>
             </div>
 
-            {/* D) Medidas */}
             <div className="bg-white rounded-2xl shadow-sm border-2 border-slate-900 p-6">
               <div className="flex flex-wrap items-center gap-3 mb-4">
                 <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">📋 Medidas a tomar</h2>
@@ -412,7 +405,6 @@ export default function InformesPage() {
               </div>
             </div>
 
-            {/* E) Evolución por meses */}
             {importsRel.length >= 2 ? (
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 overflow-x-auto">
                 <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4">📅 Evolución por meses (unidades vendidas)</h2>
