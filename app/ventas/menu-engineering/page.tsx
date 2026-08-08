@@ -165,7 +165,6 @@ export default function MenuEngineeringPage() {
           return;
         }
 
-        // Auto-emparejado por similitud de nombre
         let mejor: { n: string; s: number } | null = null;
         for (const n of nombresVentas) {
           const s = sim(p.nombre, n);
@@ -245,19 +244,26 @@ export default function MenuEngineeringPage() {
     }
   }
 
+  // =====================================================
+  // SUGERENCIAS INTELIGENTES POR PLATO
+  // =====================================================
   function sugerencia(i: PlatoME): string {
-    const precioObj = i.coste > 0 ? i.coste / 0.3 : 0;
+    const precioFC30 = i.coste > 0 ? i.coste / 0.3 : 0;
+    const precioMargenMedio = i.coste + mediaMargen;
+
     switch (i.cuadrante) {
       case 'estrella':
         return `💎 Proteger: mantener PVP ${eur(i.precio)} y garantizar stock. Motor de beneficio (${eur(i.margen * i.unidades)} totales).`;
       case 'caballo':
-        return `💶 Subir PVP a ${precioObj.toFixed(2)} € (FC objetivo 30%) o renegociar coste. Vende ${i.unidades} uds pero deja ${eur(i.margen)}/ud.`;
+        if (i.foodCost > 30)
+          return `💶 FC ${i.foodCost.toFixed(0)}% alto: subir PVP a ${precioFC30.toFixed(2)} € (FC objetivo 30%) o renegociar coste.`;
+        return `💶 Popular con FC sano (${i.foodCost.toFixed(0)}%) pero margen bajo la media: subir PVP a ${precioMargenMedio.toFixed(2)} € para igualar el margen medio, o usarlo como gancho de tráfico.`;
       case 'puzzle':
         return `📢 Margen sólido de ${eur(i.margen)}/ud pero solo ${i.unidades} uds. Reposicionar en carta, foto destacada, sugerir en sala.`;
       case 'perro':
         return i.foodCost > 35
           ? `🛠️ FC ${i.foodCost.toFixed(0)}% alto y ${i.unidades} uds: rediseñar receta o ajustar precio antes de eliminar.`
-          : `🗑️ ${i.unidades} uds y margen ${eur(i.margen)}/ud: valorar eliminar o rebautizar el plato.`;
+          : `🗑️ ${i.unidades} uds y margen ${eur(i.margen)}/ud: valorar eliminar, rebautizar o convertir en entrante/compartir.`;
     }
   }
 
