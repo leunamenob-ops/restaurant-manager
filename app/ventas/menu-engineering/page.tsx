@@ -1,8 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '../../lib/supabaseClient';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 interface PlatoME {
   id: string;
@@ -30,7 +35,7 @@ const QUADS = {
   caballo: {
     emoji: '🐴',
     titulo: 'Caballos de batalla',
-    accion: 'SUBIR PRECIO progresivamente (+0,50/1€) o renegociar coste: venden solas pero dejan poco margen.',
+    accion: 'SUBIR PRECIO progresivamente o renegociar coste: venden solas pero dejan poco margen.',
     color: 'border-blue-300 bg-blue-50',
     text: 'text-blue-700',
     dot: 'bg-blue-500',
@@ -38,7 +43,7 @@ const QUADS = {
   puzzle: {
     emoji: '🧩',
     titulo: 'Puzzles',
-    accion: 'POTENCIAR: dejan buen margen pero no salen. Reposicionar en carta, sugerir en sala, promocionar.',
+    accion: 'POTENCIAR: dejan buen margen pero no salen. Reposicionar en carta, sugerir en sala.',
     color: 'border-amber-300 bg-amber-50',
     text: 'text-amber-700',
     dot: 'bg-amber-500',
@@ -46,7 +51,7 @@ const QUADS = {
   perro: {
     emoji: '🐕',
     titulo: 'Perros',
-    accion: 'DECIDIR: ni venden ni dejan dinero. Rediseñar la receta, rebautizar o eliminar del menú.',
+    accion: 'DECIDIR: ni venden ni dejan dinero. Rediseñar, rebautizar o eliminar del menú.',
     color: 'border-red-300 bg-red-50',
     text: 'text-red-700',
     dot: 'bg-red-500',
@@ -55,47 +60,72 @@ const QUADS = {
 
 export default function MenuEngineeringPage() {
   const router = useRouter();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const [menus, setMenus] = useState<any[]>([]);
+  const [menuSel, setMenuSel] = useState<string>('');
   const [imports, setImports] = useState<any[]>([]);
   const [importSel, setImportSel] = useState<string>('');
   const [items, setItems] = useState<PlatoME[]>([]);
   const [sinVentas, setSinVentas] = useState<PlatoME[]>([]);
-  const [pendientes, setPendientes] = useState<any[]>([]);
+  const [sinReceta, setSinReceta] = useState<any[]>([]);
+  const [sinTpv, setSinTpv] = useState<PlatoME[]>([]);
   const [umbUds, setUmbUds] = useState(0);
   const [mediaMargen, setMediaMargen] = useState(0);
-  const [loading, setLoading] = useState(true);
+
+  const [file, setFile] = useState<File | null>(null);
+  const [subiendo, setSubiendo] = useState(false);
+  const [error, setError] = useState('');
+  const [resultado, setResultado] = useState<any>(null);
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
-        .from('ventas_imports')
-        .select('*')
-        .order('created_at', { ascending: false });
-      setImports(data || []);
-      if (data && data.length > 0) setImportSel(data[0].id);
+      const [mRes, iRes] = await Promise.all([
+        supabase.from('menus').select('*').order('created_at', { ascending: false }),
+        supabase.from('ventas_imports').select('*').order('created_at', { ascending: false }),
+      ]);
+      setMenus(mRes.data || []);
+      setImports(iRes.data || []);
+      if (mRes.data && mRes.data.length > 0) setMenuSel(mRes.data[0].id);
     })();
   }, []);
 
   useEffect(() => {
-    if (importSel) cargar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [importSel]);
+    if (!menuSel) return;
+    const delMenu = imports.filter((i) => i.menu_id === menuSel);
+    setImportSel(delMenu[0]?.id || '');
+    setResultado(null);
+    setError('');
+    // eslint-disable-next-line
+  }, [menuSel]);
 
-  async function cargar() {
-    setLoading(true);
+  useEffect(() => {
+    if (menuSel) calcular();
+    // eslint-disable-next-line
+  }, [menuSel, importSel]);
 
-    const [plRes, recRes, linRes, alRes] = await Promise.all([
+  async function calcular() {
+    if (!importSel) {
+      setItems([]);
+      setSinVentas([]);
+      setSinReceta([]);
+      setSinTpv([]);
+      return;
+    }
+
+    const [mpRes, plRes, recRes, alRes, linRes] = await Promise.all([
+      supabase.from('menus_platos').select('plato_id').eq('menu_id', menuSel),
       supabase.from('platos').select('*'),
       supabase.from('recetas').select('id, coste_total'),
-      supabase.from('ventas_lineas').select('nombre_articulo, unidades').eq('import_id', importSel),
       supabase.from('platos_tpv').select('plato_id, nombre_tpv'),
+      supabase.from('ventas_lineas').select('nombre_articulo, unidades').eq('import_id', importSel),
     ]);
+
+    const platoIds = new Set((mpRes.data || []).map((x: any) => x.plato_id));
 
     const ventasMap = new Map<string, number>();
     (linRes.data || []).forEach((l: any) => {
-      ventasMap.set(
-        l.nombre_articulo,
-        (ventasMap.get(l.nombre_articulo) || 0) + Number(l.unidades || 0)
-      );
+      ventasMap.set(l.nombre_articulo, (ventasMap.get(l.nombre_articulo) || 0) + Number(l.unidades || 0));
     });
 
     const aliasMap = new Map<string, string[]>();
@@ -107,38 +137,42 @@ export default function MenuEngineeringPage() {
 
     const conDatos: PlatoME[] = [];
     const sinV: PlatoME[] = [];
-    const pend: any[] = [];
+    const sinR: any[] = [];
+    const sinT: PlatoME[] = [];
 
-    (plRes.data || []).forEach((p: any) => {
-      const receta = (recRes.data || []).find((r: any) => r.id === p.receta_id);
+    (plRes.data || [])
+      .filter((p: any) => platoIds.has(p.id))
+      .forEach((p: any) => {
+        const receta = (recRes.data || []).find((r: any) => r.id === p.receta_id);
 
-      if (!receta) {
-        pend.push(p);
-        return;
-      }
+        if (!receta) {
+          sinR.push(p);
+          return;
+        }
 
-      const nombres = aliasMap.get(p.id) || (p.nombre_tpv ? [p.nombre_tpv] : []);
-      const unidades = nombres.reduce((s, n) => s + (ventasMap.get(n) || 0), 0);
+        const nombres = aliasMap.get(p.id) || (p.nombre_tpv ? [p.nombre_tpv] : []);
+        const unidades = nombres.reduce((s, n) => s + (ventasMap.get(n) || 0), 0);
 
-      const precio = Number(p.precio_venta || 0);
-      const coste = Number(receta.coste_total || 0);
-      const base: PlatoME = {
-        id: p.id,
-        nombre: p.nombre,
-        categoria: p.categoria || '',
-        precio,
-        coste,
-        margen: precio - coste,
-        foodCost: precio > 0 ? (coste / precio) * 100 : 0,
-        unidades,
-        popular: false,
-        rentable: false,
-        cuadrante: 'perro',
-      };
+        const precio = Number(p.precio_venta || 0);
+        const coste = Number(receta.coste_total || 0);
+        const base: PlatoME = {
+          id: p.id,
+          nombre: p.nombre,
+          categoria: p.categoria || '',
+          precio,
+          coste,
+          margen: precio - coste,
+          foodCost: precio > 0 ? (coste / precio) * 100 : 0,
+          unidades,
+          popular: false,
+          rentable: false,
+          cuadrante: 'perro',
+        };
 
-      if (unidades > 0) conDatos.push(base);
-      else sinV.push(base);
-    });
+        if (nombres.length === 0) sinT.push(base);
+        else if (unidades > 0) conDatos.push(base);
+        else sinV.push(base);
+      });
 
     if (conDatos.length > 0) {
       const mediaUds = conDatos.reduce((s, i) => s + i.unidades, 0) / conDatos.length;
@@ -149,13 +183,7 @@ export default function MenuEngineeringPage() {
         i.popular = i.unidades >= umb;
         i.rentable = i.margen >= mediaMarg;
         i.cuadrante =
-          i.popular && i.rentable
-            ? 'estrella'
-            : i.popular
-            ? 'caballo'
-            : i.rentable
-            ? 'puzzle'
-            : 'perro';
+          i.popular && i.rentable ? 'estrella' : i.popular ? 'caballo' : i.rentable ? 'puzzle' : 'perro';
       });
 
       setUmbUds(umb);
@@ -164,15 +192,41 @@ export default function MenuEngineeringPage() {
 
     setItems(conDatos.sort((a, b) => b.margen * b.unidades - a.margen * a.unidades));
     setSinVentas(sinV);
-    setPendientes(pend);
-    setLoading(false);
+    setSinReceta(sinR);
+    setSinTpv(sinT);
   }
 
-  const importActivo = imports.find((i) => i.id === importSel);
-  const maxUds = Math.max(...items.map((i) => i.unidades), 1);
-  const maxMargen = Math.max(...items.map((i) => i.margen), 1);
-  const pct = (v: number, max: number) => Math.min(95, Math.max(5, (v / max) * 100));
-  const eur = (n: number) => n.toFixed(2) + ' €';
+  async function subir() {
+    if (!file || !menuSel) return;
+    setSubiendo(true);
+    setError('');
+    setResultado(null);
+
+    try {
+      const fd = new FormData();
+      fd.append('archivo', file);
+      fd.append('menu_id', menuSel);
+
+      const res = await fetch('/api/ventas/importar', { method: 'POST', body: fd });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || 'Error al procesar');
+
+      setResultado(data);
+      const { data: iRes } = await supabase
+        .from('ventas_imports')
+        .select('*')
+        .order('created_at', { ascending: false });
+      setImports(iRes || []);
+      setImportSel(data.import_id);
+      setFile(null);
+      if (fileRef.current) fileRef.current.value = '';
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setSubiendo(false);
+    }
+  }
 
   function sugerencia(i: PlatoME): string {
     const precioObj = i.coste > 0 ? i.coste / 0.3 : 0;
@@ -180,7 +234,7 @@ export default function MenuEngineeringPage() {
       case 'estrella':
         return `💎 Proteger: mantener PVP ${eur(i.precio)} y garantizar stock. Motor de beneficio (${eur(i.margen * i.unidades)} totales).`;
       case 'caballo':
-        return `💶 Subir PVP a ${precioObj.toFixed(2)} € (FC objetivo 30%) o renegociar coste. Vende ${i.unidades} uds pero deja solo ${eur(i.margen)}/ud.`;
+        return `💶 Subir PVP a ${precioObj.toFixed(2)} € (FC objetivo 30%) o renegociar coste. Vende ${i.unidades} uds pero deja ${eur(i.margen)}/ud.`;
       case 'puzzle':
         return `📢 Margen sólido de ${eur(i.margen)}/ud pero solo ${i.unidades} uds. Reposicionar en carta, foto destacada, sugerir en sala.`;
       case 'perro':
@@ -189,6 +243,15 @@ export default function MenuEngineeringPage() {
           : `🗑️ ${i.unidades} uds y margen ${eur(i.margen)}/ud: valorar eliminar o rebautizar el plato.`;
     }
   }
+
+  const menuActivo = menus.find((m) => m.id === menuSel);
+  const importsDelMenu = imports.filter((i) => i.menu_id === menuSel);
+  const importActivo = imports.find((i) => i.id === importSel);
+
+  const maxUds = Math.max(...items.map((i) => i.unidades), 1);
+  const maxMargen = Math.max(...items.map((i) => i.margen), 1);
+  const pct = (v: number, max: number) => Math.min(95, Math.max(5, (v / max) * 100));
+  const eur = (n: number) => n.toFixed(2) + ' €';
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
@@ -204,20 +267,16 @@ export default function MenuEngineeringPage() {
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold tracking-tight">🎯 Menu Engineering</h1>
-            <p className="text-sm text-slate-500 truncate">
-              {importActivo
-                ? `${importActivo.punto_venta || importActivo.nombre_archivo} · ${importActivo.fecha_desde || ''} – ${importActivo.fecha_hasta || ''}`
-                : 'Popularidad TPV × Rentabilidad de escandallo'}
-            </p>
+            <p className="text-sm text-slate-500">Elige menú → sube cierre TPV → matriz y sugerencias</p>
           </div>
           <select
-            value={importSel}
-            onChange={(e) => setImportSel(e.target.value)}
+            value={menuSel}
+            onChange={(e) => setMenuSel(e.target.value)}
             className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white font-semibold focus:ring-2 focus:ring-orange-500 outline-none"
           >
-            {imports.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.nombre_archivo}
+            {menus.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.nombre}
               </option>
             ))}
           </select>
@@ -225,9 +284,106 @@ export default function MenuEngineeringPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-        {loading ? (
-          <div className="py-16 text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-orange-200 border-t-orange-600"></div>
+        {/* CIERRE TPV DEL MENÚ */}
+        <div className="bg-white rounded-2xl shadow-sm border-2 border-amber-200 p-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex-1 min-w-[200px]">
+              <p className="font-bold text-slate-900">📥 Cierre del TPV de "{menuActivo?.nombre || '—'}"</p>
+              <p className="text-xs text-slate-500">XLS · XLSX · CSV · TXT · PDF — se guarda por periodo</p>
+            </div>
+
+            {importsDelMenu.length > 0 && (
+              <select
+                value={importSel}
+                onChange={(e) => setImportSel(e.target.value)}
+                className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white font-semibold focus:ring-2 focus:ring-amber-500 outline-none"
+              >
+                {importsDelMenu.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.fecha_desde || ''} – {i.fecha_hasta || ''} · {Number(i.total_base || 0).toLocaleString('es-ES', { maximumFractionDigits: 0 })} €
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div className="mt-4 flex flex-col sm:flex-row gap-3">
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xls,.xlsx,.csv,.txt,.pdf"
+              className="hidden"
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+            />
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="flex-1 border-2 border-dashed border-slate-300 rounded-xl p-4 text-center text-sm font-semibold text-slate-700 hover:border-amber-400 hover:bg-amber-50/40 transition"
+            >
+              {file ? `📄 ${file.name}` : 'Selecciona el reporte de ventas'}
+            </button>
+            <button
+              onClick={subir}
+              disabled={!file || subiendo}
+              className="px-6 py-3 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-xl font-bold text-sm hover:from-amber-700 hover:to-orange-700 disabled:from-slate-300 disabled:to-slate-300 transition flex items-center justify-center gap-2"
+            >
+              {subiendo ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                  Importando...
+                </>
+              ) : (
+                <>🚀 Importar</>
+              )}
+            </button>
+          </div>
+
+          {error && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-semibold text-red-700">
+              ❌ {error}
+            </div>
+          )}
+
+          {resultado && (
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <div className="bg-slate-50 rounded-lg p-2">
+                <p className="text-[10px] text-slate-500 uppercase">Artículos</p>
+                <p className="font-bold">{resultado.lineas_count}</p>
+              </div>
+              <div className="bg-blue-50 rounded-lg p-2">
+                <p className="text-[10px] text-blue-700 uppercase">Ventas</p>
+                <p className="font-bold text-blue-700">
+                  {Number(resultado.totales.base).toLocaleString('es-ES', { maximumFractionDigits: 0 })} €
+                </p>
+              </div>
+              <div className="bg-emerald-50 rounded-lg p-2">
+                <p className="text-[10px] text-emerald-700 uppercase">Margen</p>
+                <p className="font-bold text-emerald-700">
+                  {Number(resultado.totales.margen).toLocaleString('es-ES', { maximumFractionDigits: 0 })} €
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* MATRIZ */}
+        {!importSel ? (
+          <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
+            <p className="text-4xl mb-3">📥</p>
+            <p className="font-semibold text-slate-700">Este menú aún no tiene cierres importados</p>
+            <p className="text-sm text-slate-500 mt-1">Sube el primer reporte del TPV para calcular la matriz</p>
+          </div>
+        ) : items.length === 0 && sinTpv.length > 0 ? (
+          <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 text-sm text-amber-800">
+            <p className="font-bold mb-2">⚠️ Los platos del menú no tienen mapeo TPV</p>
+            <p className="mb-3">
+              Sin mapeo no sabemos cuántas unidades se vendieron. Ve a Gestión de Menús y asigna a cada plato su artículo del TPV.
+            </p>
+            <button
+              onClick={() => router.push('/ventas/menus')}
+              className="px-4 py-2 bg-amber-600 text-white rounded-lg font-bold text-xs hover:bg-amber-700 transition"
+            >
+              📋 Ir a Gestión de Menús
+            </button>
           </div>
         ) : (
           <>
@@ -236,19 +392,19 @@ export default function MenuEngineeringPage() {
               <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
                 <p className="text-xs text-slate-500 uppercase font-semibold">Umbral popularidad</p>
                 <p className="text-2xl font-bold mt-1">{umbUds.toFixed(0)} uds</p>
-                <p className="text-[11px] text-slate-400">70% de la media vendida en este outlet</p>
+                <p className="text-[11px] text-slate-400">70% de la media vendida en este periodo</p>
               </div>
               <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
                 <p className="text-xs text-slate-500 uppercase font-semibold">Umbral rentabilidad</p>
                 <p className="text-2xl font-bold mt-1">{eur(mediaMargen)}</p>
-                <p className="text-[11px] text-slate-400">margen medio real por plato</p>
+                <p className="text-[11px] text-slate-400">margen medio real por plato (escandallo vivo)</p>
               </div>
             </div>
 
-            {/* MATRIZ */}
+            {/* Scatter */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
               <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4">
-                📈 Matriz (X = unidades vendidas · Y = margen real por plato)
+                📈 Matriz (X = unidades vendidas · Y = margen real) · {importActivo?.fecha_desde || ''} – {importActivo?.fecha_hasta || ''}
               </h2>
               <div className="relative h-96 bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
                 <div
@@ -279,7 +435,7 @@ export default function MenuEngineeringPage() {
               </div>
             </div>
 
-            {/* PLAN DE ACCIÓN CON SUGERENCIAS POR PLATO */}
+            {/* Cuadrantes con sugerencias */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {(Object.keys(QUADS) as Array<keyof typeof QUADS>).map((q) => {
                 const cfg = QUADS[q];
@@ -313,9 +469,7 @@ export default function MenuEngineeringPage() {
                               </span>{' '}
                               · PVP {eur(i.precio)}
                             </p>
-                            <p className={`text-[11px] mt-1 font-semibold ${cfg.text}`}>
-                              {sugerencia(i)}
-                            </p>
+                            <p className={`text-[11px] mt-1 font-semibold ${cfg.text}`}>{sugerencia(i)}</p>
                           </div>
                         ))}
                       </div>
@@ -326,14 +480,19 @@ export default function MenuEngineeringPage() {
             </div>
 
             {/* Avisos */}
-            {(sinVentas.length > 0 || pendientes.length > 0) && (
+            {(sinVentas.length > 0 || sinReceta.length > 0 || sinTpv.length > 0) && (
               <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 text-sm text-amber-800 space-y-1">
-                {sinVentas.map((p) => (
+                {sinTpv.map((p) => (
                   <p key={p.id}>
-                    ⚠️ <strong>{p.nombre}</strong>: sin ventas en este reporte (¿no se vende en este outlet o falta mapeo TPV).
+                    🔗 <strong>{p.nombre}</strong>: sin mapeo TPV → asígnale su artículo en Gestión de Menús.
                   </p>
                 ))}
-                {pendientes.map((p: any) => (
+                {sinVentas.map((p) => (
+                  <p key={p.id}>
+                    ⚠️ <strong>{p.nombre}</strong>: mapeado pero sin ventas en este periodo.
+                  </p>
+                ))}
+                {sinReceta.map((p: any) => (
                   <p key={p.id}>
                     ⚠️ <strong>{p.nombre}</strong>: sin receta vinculada → sin coste real.
                   </p>
