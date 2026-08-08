@@ -16,16 +16,27 @@ function parseNum(v: any): number | null {
   if (typeof v !== 'string') return null;
   const s = v.trim();
   if (!s || !/^-?[\d.,]+$/.test(s)) return null;
-  const clean = s.includes(',') && s.includes('.')
-    ? s.replace(/,/g, '')
-    : s.includes(',')
-    ? s.replace(',', '.')
-    : s;
+  const clean =
+    s.includes(',') && s.includes('.')
+      ? s.replace(/,/g, '')
+      : s.includes(',')
+      ? s.replace(',', '.')
+      : s;
   const n = parseFloat(clean);
   return isNaN(n) ? null : n;
 }
 
-// Línea de texto (PDF/TXT sin columnas) → celdas [codigo, nombre, ...nums]
+// Código de artículo: texto "00000057" o número 57 (reponer ceros)
+function aCodigo(raw: any): string | null {
+  const s = String(raw ?? '').trim();
+  if (/^\d{6,10}$/.test(s)) return s;
+  if (typeof raw === 'number' && Number.isInteger(raw)) {
+    const p = String(raw).padStart(8, '0');
+    if (/^\d{6,10}$/.test(p)) return p;
+  }
+  return null;
+}
+
 function lineaTextoACeldas(line: string): any[] | null {
   const m = line.match(/^(\d{6,10})[\s|;]+(.+)$/);
   if (!m) return null;
@@ -57,24 +68,39 @@ function celdasALineas(rows: any[][]) {
     }
 
     const noVacias = celdas.map((c) => String(c ?? '').trim()).filter(Boolean);
+
     if (noVacias.length === 1) {
       const t = noVacias[0];
       if (!punto_venta && /BAR|RESTAURANTE|PISCINA|CAFETER|COCINA/i.test(t) && t.length < 40) {
         punto_venta = t;
-      } else if (/^[A-ZÁÉÍÓÚÑ0-9\s\/&-]{3,30}$/.test(t) && !/TOTAL|ARTICULO|CATEGOR|GRUPO|PAG|NATURALEZA|SALON|MEDIA/i.test(t)) {
+      } else if (
+        /^[A-ZÁÉÍÓÚÑ0-9\s\/&-]{3,30}$/.test(t) &&
+        !/TOTAL|ARTICULO|CATEGOR|GRUPO|PAG|NATURALEZA|SALON|MEDIA/i.test(t)
+      ) {
         categoria = t;
       }
       continue;
     }
 
-    const codigo = String(celdas[0] ?? '').trim();
-    if (!/^\d{6,10}$/.test(codigo)) continue;
+    // Buscar código en las primeras 4 celdas
+    let codigo = '';
+    let idx = -1;
+    for (let k = 0; k < Math.min(celdas.length, 4); k++) {
+      const c = aCodigo(celdas[k]);
+      if (c) {
+        codigo = c;
+        idx = k;
+        break;
+      }
+    }
+    if (!codigo) continue;
 
+    // Nombre = primer texto no numérico después del código
     let nombreArt = '';
     const nums: number[] = [];
-    for (const c of celdas) {
-      const s = String(c ?? '').trim();
-      if (!s || s === codigo) continue;
+    for (let k = idx + 1; k < celdas.length; k++) {
+      const s = String(celdas[k] ?? '').trim();
+      if (!s) continue;
       const n = parseNum(s);
       if (n === null) {
         if (!nombreArt) nombreArt = s;
@@ -82,6 +108,7 @@ function celdasALineas(rows: any[][]) {
         nums.push(n);
       }
     }
+
     if (!nombreArt || nums.length < 6) continue;
 
     lineas.push({
@@ -115,10 +142,13 @@ export async function POST(request: NextRequest) {
     let rows: any[][] = [];
 
     if (nameLow.endsWith('.xls') || nameLow.endsWith('.xlsx')) {
-      const buf = await file.arrayBuffer();
-      const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
+      const buf = Buffer.from(await file.arrayBuffer());
+      const wb = XLSX.read(buf, { type: 'buffer' });
+      for (const sheetName of wb.SheetNames) {
+        const ws = wb.Sheets[sheetName];
+        const r = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false }) as any[][];
+        rows.push(...r);
+      }
     } else if (nameLow.endsWith('.pdf')) {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const res = await textract.send(
@@ -132,20 +162,16 @@ export async function POST(request: NextRequest) {
         rows.push(c || [l]);
       }
     } else {
-      // TXT / CSV
       const text = await file.text();
       for (const l of text.split(/\r?\n/)) {
         if (!l.trim()) continue;
-        let cells: string[];
-        if (l.includes('\t')) cells = l.split('\t');
-        else if (l.includes(';')) cells = l.split(';');
-        else if (l.includes('|')) cells = l.split('|');
+        if (l.includes('\t')) rows.push(l.split('\t'));
+        else if (l.includes(';')) rows.push(l.split(';'));
+        else if (l.includes('|')) rows.push(l.split('|'));
         else {
           const c = lineaTextoACeldas(l.trim());
           rows.push(c || [l]);
-          continue;
         }
-        rows.push(cells);
       }
     }
 
@@ -153,7 +179,10 @@ export async function POST(request: NextRequest) {
 
     if (lineas.length === 0) {
       return NextResponse.json(
-        { error: 'No se detectaron líneas de artículos. Usa XLS/XLSX, o CSV/TXT con columnas separadas por tabulaciones.' },
+        {
+          error:
+            'No se detectaron líneas de artículos. Usa XLS/XLSX, o CSV/TXT con columnas separadas por tabulaciones.',
+        },
         { status: 400 }
       );
     }
