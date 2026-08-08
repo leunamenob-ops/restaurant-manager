@@ -10,7 +10,12 @@ export default function VentasPage() {
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState('');
   const [resultado, setResultado] = useState<any>(null);
-
+<button
+  onClick={() => router.push('/ventas/informes')}
+  className="ml-auto px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium transition text-sm"
+>
+  📊 Informes
+</button>
   async function procesar() {
     if (!file) return;
     setProcesando(true);
