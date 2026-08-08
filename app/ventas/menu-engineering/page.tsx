@@ -53,7 +53,7 @@ const QUADS = {
   estrella: {
     emoji: '🌟',
     titulo: 'Estrellas',
-    accion: 'PROTEGER: no tocar precio ni receta. Máxima visibilidad en carta y en el servicio.',
+    accion: 'PROTEGER: venden y dejan margen con FC sano. No tocar precio ni receta.',
     color: 'border-emerald-300 bg-emerald-50',
     text: 'text-emerald-700',
     dot: 'bg-emerald-500',
@@ -61,7 +61,7 @@ const QUADS = {
   caballo: {
     emoji: '🐴',
     titulo: 'Caballos de batalla',
-    accion: 'SUBIR PRECIO progresivamente o renegociar coste: venden solas pero dejan poco margen.',
+    accion: 'Venden solas pero dejan poco margen (o FC alto): subir precio o renegociar coste.',
     color: 'border-blue-300 bg-blue-50',
     text: 'text-blue-700',
     dot: 'bg-blue-500',
@@ -200,8 +200,15 @@ export default function MenuEngineeringPage() {
       conDatos.forEach((i) => {
         i.popular = i.unidades >= umb;
         i.rentable = i.margen >= mediaMarg;
+        // REGLA F&B: estrella exige FC ≤ 30%
         i.cuadrante =
-          i.popular && i.rentable ? 'estrella' : i.popular ? 'caballo' : i.rentable ? 'puzzle' : 'perro';
+          i.popular && i.rentable && i.foodCost <= 30
+            ? 'estrella'
+            : i.popular
+            ? 'caballo'
+            : i.rentable
+            ? 'puzzle'
+            : 'perro';
       });
 
       setUmbUds(umb);
@@ -244,19 +251,16 @@ export default function MenuEngineeringPage() {
     }
   }
 
-  // =====================================================
-  // SUGERENCIAS INTELIGENTES POR PLATO
-  // =====================================================
   function sugerencia(i: PlatoME): string {
     const precioFC30 = i.coste > 0 ? i.coste / 0.3 : 0;
     const precioMargenMedio = i.coste + mediaMargen;
 
     switch (i.cuadrante) {
       case 'estrella':
-        return `💎 Proteger: mantener PVP ${eur(i.precio)} y garantizar stock. Motor de beneficio (${eur(i.margen * i.unidades)} totales).`;
+        return `💎 Proteger: mantener PVP ${eur(i.precio)} con FC ${i.foodCost.toFixed(0)}% sano. Motor de beneficio (${eur(i.margen * i.unidades)} totales).`;
       case 'caballo':
         if (i.foodCost > 30)
-          return `💶 FC ${i.foodCost.toFixed(0)}% alto: subir PVP a ${precioFC30.toFixed(2)} € (FC objetivo 30%) o renegociar coste.`;
+          return `⚠️ FC ${i.foodCost.toFixed(0)}% alto: subir PVP a ${precioFC30.toFixed(2)} € (FC objetivo 30%) o renegociar coste del ingrediente principal.`;
         return `💶 Popular con FC sano (${i.foodCost.toFixed(0)}%) pero margen bajo la media: subir PVP a ${precioMargenMedio.toFixed(2)} € para igualar el margen medio, o usarlo como gancho de tráfico.`;
       case 'puzzle':
         return `📢 Margen sólido de ${eur(i.margen)}/ud pero solo ${i.unidades} uds. Reposicionar en carta, foto destacada, sugerir en sala.`;
@@ -405,7 +409,7 @@ export default function MenuEngineeringPage() {
               <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
                 <p className="text-xs text-slate-500 uppercase font-semibold">Umbral rentabilidad</p>
                 <p className="text-2xl font-bold mt-1">{eur(mediaMargen)}</p>
-                <p className="text-[11px] text-slate-400">margen medio real por plato (escandallo vivo)</p>
+                <p className="text-[11px] text-slate-400">margen medio real · 🌟 exige además FC ≤ 30%</p>
               </div>
             </div>
 
@@ -417,15 +421,16 @@ export default function MenuEngineeringPage() {
                 <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-slate-400" style={{ left: `${pct(umbUds, maxUds)}%` }}></div>
                 <div className="absolute left-0 right-0 border-t-2 border-dashed border-slate-400" style={{ bottom: `${pct(mediaMargen, maxMargen)}%` }}></div>
 
-                <span className="absolute top-2 right-3 text-xs font-bold text-amber-600">🧩 PUZZLE</span>
-                <span className="absolute top-2 left-3 text-xs font-bold text-red-500">🐕 PERRO</span>
-                <span className="absolute bottom-2 right-3 text-xs font-bold text-emerald-600">🌟 ESTRELLA</span>
-                <span className="absolute bottom-2 left-3 text-xs font-bold text-blue-600">🐴 CABALLO</span>
+                {/* ETIQUETAS CORRECTAS */}
+                <span className="absolute top-2 right-3 text-xs font-bold text-emerald-600">🌟 ESTRELLA</span>
+                <span className="absolute bottom-2 right-3 text-xs font-bold text-blue-600">🐴 CABALLO</span>
+                <span className="absolute top-2 left-3 text-xs font-bold text-amber-600">🧩 PUZZLE</span>
+                <span className="absolute bottom-2 left-3 text-xs font-bold text-red-500">🐕 PERRO</span>
 
                 {items.map((i) => (
                   <div
                     key={i.id}
-                    title={`${i.nombre} ↔ ${i.nombreTpv} · ${i.unidades} uds · margen ${i.margen.toFixed(2)} €`}
+                    title={`${i.nombre} ↔ ${i.nombreTpv} · ${i.unidades} uds · margen ${i.margen.toFixed(2)} € · FC ${i.foodCost.toFixed(0)}%`}
                     className={`absolute w-5 h-5 rounded-full ${QUADS[i.cuadrante].dot} border-2 border-white shadow cursor-pointer hover:scale-150 transition-transform`}
                     style={{
                       left: `calc(${pct(i.unidades, maxUds)}% - 10px)`,
