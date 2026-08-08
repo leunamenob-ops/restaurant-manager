@@ -188,4 +188,52 @@ export default function InformesPage() {
             </div>
 
             {/* IMPORTS REGISTRADOS */}
-            <div className="bg-white rounded-2xl shadow
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+              <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4">
+                 Reportes TPV importados ({imports.length})
+              </h2>
+              <div className="space-y-2">
+                {imports.map((i) => (
+                  <div key={i.id} className="flex justify-between items-center bg-slate-50 rounded-lg px-4 py-2.5 text-sm">
+                    <div>
+                      <p className="font-semibold text-slate-800">{i.nombre_archivo}</p>
+                      <p className="text-xs text-slate-500">
+                        {i.punto_venta || '—'} · {i.fecha_desde || ''} – {i.fecha_hasta || ''} · {i.lineas_count} artículos
+                      </p>
+                    </div>
+                    <p className="font-bold text-blue-700">{eur(Number(i.total_base || 0))}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* TOP 10 FUSIONADO */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+              <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-5">
+                🏆 Top 10 artículos (fusionados por punto de venta)
+              </h2>
+              <div className="space-y-3">
+                {top.map((t) => (
+                  <div key={t.nombre}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="font-semibold text-slate-800">
+                        {t.nombre} <span className="text-slate-400">· {t.unidades} uds</span>
+                      </span>
+                      <span className="font-bold text-emerald-700">{eur(t.margen)}</span>
+                    </div>
+                    <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full"
+                        style={{ width: `${(t.margen / maxTop) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
