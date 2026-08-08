@@ -21,8 +21,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // Definición de módulos - Facturas reemplaza Análisis de Costes (posición 8)
-  // Análisis de Costes + Informes combinados en posición 9
   const todosLosModulos: Modulo[] = [
     { 
       id: 1, 
@@ -39,7 +37,7 @@ export default function DashboardPage() {
       id: 2, 
       nombre: 'Recetas', 
       descripcion: 'Escandallos vivos, Food Cost y fichas técnicas con fotos.', 
-      icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M17 16h.01" /></svg>, 
+      icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6 4h.01M17 16h.01" /></svg>, 
       ruta: '/recetas', 
       color: 'from-emerald-50 to-white', 
       border: 'border-emerald-200',
@@ -50,7 +48,7 @@ export default function DashboardPage() {
       id: 3, 
       nombre: 'Pedidos', 
       descripcion: 'Genera y gestiona aprovisionamientos a proveedores.', 
-      icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>, 
+      icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 18 18 0 01-8 0z" /></svg>, 
       ruta: '/pedidos', 
       color: 'from-pink-50 to-white', 
       border: 'border-pink-200',
@@ -72,8 +70,8 @@ export default function DashboardPage() {
       id: 5, 
       nombre: 'Menu Engineering', 
       descripcion: 'Matriz de rentabilidad: Estrellas, Caballos, Puzles y Perros.', 
-      icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, 
-      ruta: '/menu_engineering', 
+      icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a-2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, 
+      ruta: '/ventas/menu-engineering', 
       color: 'from-amber-50 to-white', 
       border: 'border-amber-200',
       iconBg: 'bg-amber-500',
@@ -105,7 +103,7 @@ export default function DashboardPage() {
       id: 8, 
       nombre: 'Facturas', 
       descripcion: 'Procesa facturas con IA. Extracción automática de datos y líneas de producto.', 
-      icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>, 
+      icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.707.707V19a2 2 0 01-2 2z" /></svg>, 
       ruta: '/facturas', 
       color: 'from-blue-50 to-white', 
       border: 'border-blue-200',
@@ -117,11 +115,22 @@ export default function DashboardPage() {
       nombre: 'Análisis e Informes', 
       descripcion: 'KPIs financieros, márgenes y exportación de reportes en PDF y Excel.', 
       icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>, 
-      ruta: '/informes', 
+      ruta: '/ventas/informes', 
       color: 'from-orange-50 to-white', 
       border: 'border-orange-200',
       iconBg: 'bg-orange-500',
       hoverText: 'group-hover:text-orange-700'
+    },
+    { 
+      id: 10, 
+      nombre: 'Ventas TPV', 
+      descripcion: 'Importa cierres del TPV (ACI Dalí) y analiza ventas por outlet.', 
+      icono: <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>, 
+      ruta: '/ventas', 
+      color: 'from-teal-50 to-white', 
+      border: 'border-teal-200',
+      iconBg: 'bg-teal-500',
+      hoverText: 'group-hover:text-teal-700'
     }
   ];
 
