@@ -1,436 +1,237 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect } from "react";
 
-export default function LandingPage() {
-  const router = useRouter();
-  const [showLogin, setShowLogin] = useState(false);
-  const [codigo, setCodigo] = useState('');
-  const [pin, setPin] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+export default function Page() {
   const [scrolled, setScrolled] = useState(false);
-  
-  // Estados para la sección interactiva "Así funciona"
-  const [activeTab, setActiveTab] = useState<'escandallos' | 'inventario' | 'menu'>('escandallos');
-  
-  // Estado para el acordeón de FAQ
-  const [openFaq, setOpenFaq] = useState<string | null>(null);
+  const [showLogin, setShowLogin] = useState(false);
+  const [ventasMensuales, setVentasMensuales] = useState(45000);
+  const [activeModule, setActiveModule] = useState<number>(5);
+  const [activeTestimonial, setActiveTestimonial] = useState(0);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-  
-    const usuarioTemp = {
-      id: codigo || 'B0001',
-      nombre: 'Admin Temporal',
-      cargo: 'Administrador',
-      rol: 'ADMIN',
-      hotel_id: '00000000-0000-0000-0000-000000000001'
-    };
-  
-    const permisosTemp = {
-      'proveedores': { puede_ver: true, puede_crear: true, puede_editar: true, puede_eliminar: true, puede_exportar: true },
-      'recetas': { puede_ver: true, puede_crear: true, puede_editar: true, puede_eliminar: true, puede_exportar: true },
-      'pedidos': { puede_ver: true, puede_crear: true, puede_editar: true, puede_eliminar: true, puede_exportar: true },
-      'haccp': { puede_ver: true, puede_crear: true, puede_editar: true, puede_eliminar: true, puede_exportar: true },
-      'menu-engineering': { puede_ver: true, puede_crear: true, puede_editar: true, puede_eliminar: true, puede_exportar: true },
-      'inventarios': { puede_ver: true, puede_crear: true, puede_editar: true, puede_eliminar: true, puede_exportar: true },
-      'producciones': { puede_ver: true, puede_crear: true, puede_editar: true, puede_eliminar: true, puede_exportar: true },
-      'analisis-costes': { puede_ver: true, puede_crear: true, puede_editar: true, puede_eliminar: true, puede_exportar: true },
-      'informes': { puede_ver: true, puede_crear: true, puede_editar: true, puede_eliminar: true, puede_exportar: true },
-    };
-  
-    sessionStorage.setItem('usuario', JSON.stringify(usuarioTemp));
-    sessionStorage.setItem('permisos', JSON.stringify(permisosTemp));
-    sessionStorage.setItem('hotel_id', usuarioTemp.hotel_id);
-  
-    router.push('/dashboard');
-    setLoading(false);
-  }
+  const fugaFB = Math.round(ventasMensuales * 0.058);
+  const ahorroAnual = Math.round(fugaFB * 12);
+  const recuperacionMensual = Math.round(fugaFB * 0.85);
+  const horasAhorradas = Math.round(ventasMensuales / 2500);
 
-  const faqs = [
-    {
-      id: 'tpv',
-      q: '¿Se integra con mi TPV o sistema de ventas actual?',
-      a: 'Sí. KOST Software cuenta con conectores API nativos para los principales TPVs del mercado (Lightspeed, CoverManager, Glovo, etc.), sincronizando tus ventas reales con el stock teórico en tiempo real.'
+  const testimonials = [
+    { quote: "En 3 meses recuperamos el 100% de la inversión. El food cost bajó del 32% al 24%.", author: "Carlos Mendoza", role: "Director F&B, Hotel Resort 5*", location: "Mallorca" },
+    { quote: "Dejamos de perder 2.400€ al mes en mermas no detectadas. KOST se paga solo.", author: "Ana Rodríguez", role: "Propietaria, Grupo Restauración", location: "Barcelona" },
+    { quote: "La matriz nos mostró 3 platos estrella con FC del 38%. Los ajustamos y ganamos 1.800€/mes extra.", author: "Miguel Torres", role: "Chef Ejecutivo", location: "Madrid" }
+  ];
+
+  // Galería de platos reales (imágenes en /public/img/)
+  const gallery = [
+    { img: "/img/ceviche.jpg", name: "Ceviche Peruano", fc: "26.5%", margen: "73.5%", tag: "🐴 Caballo" },
+    { img: "/img/burger.jpg", name: "Clásica Burger Cheddar", fc: "17.4%", margen: "82.6%", tag: "🌟 Estrella" },
+    { img: "/img/mariscada.jpg", name: "Mariscada Mar y Fuego", fc: "22.5%", margen: "77.5%", tag: "🌟 Estrella" },
+    { img: "/img/cesar.jpg", name: "César Clásica", fc: "7.5%", margen: "92.5%", tag: "🌟 Estrella" }
+  ];
+
+  const modulesData = [
+    { id: 1, badge: "MÓDULO 01", title: "Proveedores y Control de Compras", subtitle: "Cada céntimo de compra bajo lupa, sin sorpresas.", icon: "📦",
+      features: ["Alertas automáticas cuando un proveedor sube precios", "Histórico visual de precios para negociar con datos", "Comparativa entre proveedores del mismo producto", "Detección de alternativas más económicas"],
+      preview: (
+        <div className="space-y-3">
+          <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex justify-between items-center">
+            <div><p className="font-bold text-sm text-slate-900">Distribuidora Horeca</p><p className="text-xs text-slate-500">142 productos</p></div>
+            <span className="text-xs bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded">Activo</span>
+          </div>
+          <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-3">
+            <p className="text-xs font-bold text-amber-900">⚠️ Alerta de Precio</p>
+            <p className="text-xs text-amber-800 mt-1">Aceite Oliva 5L: <b>+2,48€ (+12.4%)</b></p>
+            <p className="text-[10px] text-amber-700 mt-1">Impacto anual: +892€</p>
+          </div>
+        </div>
+      )
     },
-    {
-      id: 'tiempo',
-      q: '¿Cuánto tiempo se tarda en cargar mis recetas e ingredientes?',
-      a: 'Menos de lo que crees. Ofrecemos importación masiva vía Excel/CSV y nuestro equipo de onboarding te asiste para tener tu carta digitalizada y con escandallos calculados en menos de 48 horas.'
+    { id: 2, badge: "MÓDULO 02", title: "Recetas con Escandallos Vivos", subtitle: "El coste de cada plato se recalcula solo.", icon: "📖",
+      features: ["Escandallos que se actualizan con cada factura", "Semáforo: verde ≤28%, ámbar 28-32%, rojo >32%", "Fichas técnicas con fotos y alérgenos", "Soporte de sub-recetas"],
+      preview: (
+        <div className="bg-white p-4 rounded-lg border border-slate-200">
+          <div className="flex justify-between items-start mb-3 pb-3 border-b border-slate-100">
+            <div><h4 className="font-bold text-slate-900">Solomillo al Whisky</h4><p className="text-xs text-slate-500">PVP: 18,50€</p></div>
+            <span className="text-xs font-bold bg-emerald-100 text-emerald-700 px-2 py-1 rounded">FC: 21.8%</span>
+          </div>
+          <div className="space-y-1.5 text-xs">
+            <div className="flex justify-between"><span className="text-slate-600">Solomillo (220g)</span><span className="font-mono font-bold">3,40€</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">Salsa Whisky</span><span className="font-mono font-bold">0,45€</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">Guarnición</span><span className="font-mono font-bold">0,18€</span></div>
+          </div>
+        </div>
+      )
     },
-    {
-      id: 'nube',
-      q: '¿Necesito instalar algún programa o funciona en la nube?',
-      a: 'Es 100% SaaS en la nube. Funciona directamente desde el navegador de tu ordenador, tablet o móvil, sin instalaciones, sin servidores propios y con actualizaciones automáticas.'
+    { id: 3, badge: "MÓDULO 03", title: "Pedidos Inteligentes", subtitle: "Compras automáticas según stock y ventas.", icon: "🛒",
+      features: ["Borradores automáticos según stock y previsión", "Envío directo por WhatsApp o email", "Verificación de entregas", "Historial completo"],
+      preview: (
+        <div className="bg-white p-4 rounded-lg border border-slate-200">
+          <div className="flex justify-between items-center mb-3"><span className="text-xs font-mono font-bold text-slate-500">PED-2026-0892</span><span className="bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded text-xs">Enviado</span></div>
+          <p className="font-bold text-slate-900 mb-3">Frutas y Verduras La Huerta</p>
+          <div className="bg-slate-50 p-3 rounded text-xs space-y-1.5 font-mono text-slate-700">
+            <div className="flex justify-between"><span>• 20kg Tomate</span><span className="font-bold">48,00€</span></div>
+            <div className="flex justify-between"><span>• 5kg Aguacate</span><span className="font-bold">22,50€</span></div>
+          </div>
+        </div>
+      )
     },
-    {
-      id: 'cocina',
-      q: '¿Es complicado de usar para el equipo de cocina?',
-      a: 'No. La interfaz está diseñada para ser intuitiva. Los cocineros solo necesitan acceder a las fichas técnicas con fotos y procedimientos desde una tablet en la cocina, sin tocar la parte financiera.'
+    { id: 4, badge: "MÓDULO 04", title: "HACCP / APPCC Digital", subtitle: "Sanidad 100% digital. Cero papel.", icon: "🛡️",
+      features: ["Checklists diarios en tablet", "Control de temperaturas con alertas", "Incidencias NO-OK con acciones correctivas", "Trazabilidad con QR"],
+      preview: (
+        <div className="bg-white p-4 rounded-lg border border-slate-200">
+          <div className="flex justify-between items-center mb-3"><span className="text-xs font-bold">Cumplimiento Hoy</span><span className="text-2xl font-black text-emerald-600 font-mono">94%</span></div>
+          <div className="w-full bg-slate-100 rounded-full h-2.5 mb-4"><div className="bg-emerald-500 h-2.5 rounded-full" style={{width:'94%'}}></div></div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg"><p className="font-bold text-emerald-900">✓ Cámaras</p></div>
+            <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg"><p className="font-bold text-emerald-900">✓ Aceites</p></div>
+          </div>
+        </div>
+      )
+    },
+    { id: 5, badge: "⭐ MÓDULO ESTRELLA", title: "Menu Engineering con IA", subtitle: "Tu TPV + escandallos = decisiones reales.", icon: "🎯",
+      features: ["Import automático de cierres TPV (XLS, CSV, PDF con IA)", "Matriz Kasavana-Smith: Estrellas, Caballos, Puzzles, Perros", "Regla F&B: Estrella requiere FC ≤ 30%", "Sugerencias: 'Subir X a Y€ → +Z€/mes'"],
+      preview: (
+        <div className="bg-slate-900 text-white p-4 rounded-lg space-y-3">
+          <div className="flex justify-between items-center text-xs border-b border-slate-700 pb-2"><span className="font-bold text-amber-400">Matriz Agosto</span><span className="bg-emerald-900/50 text-emerald-400 font-mono px-2 py-0.5 rounded text-[10px]">TPV Conectado</span></div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-emerald-900/30 border border-emerald-500/30 p-2.5 rounded"><p className="font-black text-emerald-400 text-xs">🌟 ESTRELLAS</p><p className="text-slate-300 text-[10px]">14 platos</p></div>
+            <div className="bg-blue-900/30 border border-blue-500/30 p-2.5 rounded"><p className="font-black text-blue-400 text-xs">🐴 CABALLOS</p><p className="text-slate-300 text-[10px]">8 platos</p></div>
+          </div>
+          <div className="bg-amber-900/40 border border-amber-500/30 p-3 rounded-lg">
+            <p className="text-amber-200 font-bold text-xs">💡 Sugerencia IA</p>
+            <p className="text-slate-300 text-[11px] mt-1">Subir "Arroz A Banda" a 17,30€</p>
+            <p className="text-emerald-400 font-mono font-bold text-xs mt-1">+340 €/mes</p>
+          </div>
+        </div>
+      )
+    },
+    { id: 6, badge: "MÓDULO 06", title: "Inventarios y Mermas", subtitle: "Stock valorado en tiempo real.", icon: "📊",
+      features: ["Conteos cíclicos por zonas", "Stock Teórico (TPV) vs Real", "Registro de mermas clasificado", "Alertas de stock mínimo"],
+      preview: (
+        <div className="bg-white p-4 rounded-lg border border-slate-200 space-y-2 text-xs">
+          <div className="flex justify-between items-center py-2 border-b border-slate-50"><span className="text-slate-700">Entrecot Vaca</span><span className="bg-rose-100 text-rose-700 font-mono font-bold px-2 py-0.5 rounded">-18%</span></div>
+          <div className="flex justify-between items-center py-2"><span className="text-slate-700">Ginebra Premium</span><span className="bg-emerald-100 text-emerald-700 font-mono font-bold px-2 py-0.5 rounded">OK</span></div>
+        </div>
+      )
+    },
+    { id: 7, badge: "MÓDULO 07", title: "Producciones y Mise en Place", subtitle: "Cocina planificada, no improvisada.", icon: "👨🍳",
+      features: ["Planificación según reservas", "Descuento automático de materias primas", "Control de caducidades", "Estandarización entre turnos"],
+      preview: (
+        <div className="bg-white p-4 rounded-lg border border-slate-200 space-y-2">
+          <div className="p-2.5 bg-slate-50 rounded-lg flex justify-between items-center"><div><p className="font-bold text-xs">Fondo Ternera (15L)</p><p className="text-[10px] text-slate-500">Cad: 12/Ago</p></div><span className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-1 rounded">✓</span></div>
+          <div className="p-2.5 bg-amber-50 rounded-lg flex justify-between items-center"><div><p className="font-bold text-xs">Salsa Tomate (8L)</p><p className="text-[10px] text-slate-500">Cad: 10/Ago</p></div><span className="bg-amber-600 text-white text-[10px] font-bold px-2 py-1 rounded">⏳</span></div>
+        </div>
+      )
+    },
+    { id: 8, badge: "MÓDULO 08", title: "Facturas con IA", subtitle: "Foto → datos en segundos.", icon: "📸",
+      features: ["OCR con IA: foto/PDF → datos automáticos", "Desglose de líneas e impuestos", "Actualización instantánea de costes", "Imputación al P&L"],
+      preview: (
+        <div className="bg-white p-4 rounded-lg border border-slate-200">
+          <div className="flex items-center gap-3 mb-3"><div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center"><span className="text-emerald-700 font-black text-xs">PDF</span></div><div><p className="text-xs font-bold">Factura_Carnes.pdf</p><p className="text-[10px] text-slate-500">IA · 100% precisión</p></div></div>
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 text-xs text-emerald-900">✓ 14 líneas → escandallos actualizados</div>
+        </div>
+      )
+    },
+    { id: 9, badge: "MÓDULO 09", title: "Informes y P&L Real", subtitle: "La cuenta de explotación que se entiende.", icon: "📈",
+      features: ["P&L: Ventas TPV × Compras × Food Cost", "Desviación teórico vs real", "Evolución y estacionalidad", "Export PDF y Excel"],
+      preview: (
+        <div className="bg-white p-4 rounded-lg border border-slate-200 space-y-2 text-xs">
+          <div className="flex justify-between"><span className="text-slate-700">Ventas TPV</span><span className="font-mono font-bold">48.200€</span></div>
+          <div className="flex justify-between"><span className="text-slate-700">Compras</span><span className="font-mono font-bold text-rose-600">-12.800€</span></div>
+          <div className="flex justify-between pt-2 border-t border-slate-100 text-sm font-bold"><span>Margen Bruto</span><span className="font-mono text-emerald-600">73,4%</span></div>
+        </div>
+      )
     }
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      
-      {/* ================= NAVBAR ================= */}
-      <nav className={`fixed top-0 w-full z-40 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm' : 'bg-transparent'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 bg-gradient-to-br from-emerald-600 to-cyan-600 rounded-lg flex items-center justify-center shadow-md">
-                <span className="text-white font-bold text-lg">K</span>
-              </div>
-              <span className="text-lg font-bold text-slate-800 tracking-tight hidden sm:block">
-                KOST Software™
-              </span>
-            </div>
-            <button
-              onClick={() => setShowLogin(true)}
-              className="px-5 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium transition-all text-sm shadow-lg hover:shadow-xl"
-            >
-              Acceder al Panel
-            </button>
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-emerald-500 selection:text-white">
+      <style>{`
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-up { animation: fadeUp .6s ease both; }
+        .d1 { animation-delay: .1s } .d2 { animation-delay: .2s } .d3 { animation-delay: .3s } .d4 { animation-delay: .4s }
+      `}</style>
+
+      {/* HEADER */}
+      <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm py-3' : 'bg-transparent py-5'}`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-600/30"><span className="text-white font-black text-xl">K</span></div>
+            <div><span className="text-xl font-black text-slate-900 block leading-none">KOST<span className="text-emerald-600">.</span></span><span className="text-[10px] text-slate-500 font-mono tracking-widest uppercase block mt-0.5">Software F&B</span></div>
+          </div>
+          <div className="flex items-center gap-6">
+            <nav className="hidden lg:flex items-center gap-6">
+              <a href="#modulos" className="text-sm font-semibold text-slate-600 hover:text-emerald-600">Módulos</a>
+              <a href="#carta" className="text-sm font-semibold text-slate-600 hover:text-emerald-600">Carta Real</a>
+              <a href="#calculadora" className="text-sm font-semibold text-slate-600 hover:text-emerald-600">ROI</a>
+            </nav>
+            <button onClick={() => setShowLogin(true)} className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-sm shadow-md">Acceder</button>
           </div>
         </div>
-      </nav>
+      </header>
 
-      {/* ================= HERO SECTION ================= */}
-      <section className="relative pt-32 pb-20 lg:pt-40 lg:pb-28 overflow-hidden">
-        <div className="absolute inset-0 -z-10">
-          <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-cyan-100/40 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob"></div>
-          <div className="absolute top-0 left-0 w-[800px] h-[800px] bg-emerald-100/40 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-2000"></div>
-        </div>
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-center">
-            {/* Texto Hero */}
-            <div className="max-w-2xl">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold mb-6 border border-emerald-200">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                Nuevo: Módulo de Alertas de Precios en Tiempo Real
-              </div>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 leading-[1.1] tracking-tight mb-6">
-                Toma el control absoluto del <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-cyan-600">Food Cost</span> sin perderte en Excel.
-              </h1>
-              <p className="text-lg sm:text-xl text-slate-600 mb-8 leading-relaxed">
-                KOST automatiza el cálculo de escandallos, el control de inventarios y la relación con proveedores para proteger tus márgenes de beneficio en tiempo real.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <button
-                  onClick={() => setShowLogin(true)}
-                  className="px-8 py-4 bg-emerald-600 text-white rounded-xl font-semibold text-lg shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200"
-                >
-                  Probar 14 días gratis
-                </button>
-                <button className="px-8 py-4 bg-white text-slate-700 border border-slate-200 rounded-xl font-semibold text-lg hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 flex items-center justify-center gap-2">
-                  <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  Ver demo interactiva
-                </button>
-              </div>
-              <p className="mt-6 text-sm text-slate-500 flex items-center gap-4">
-                <span className="flex items-center gap-1.5"><svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg> Sin tarjeta de crédito</span>
-                <span className="flex items-center gap-1.5"><svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg> Setup en 48h</span>
-              </p>
+      {/* HERO */}
+      <section className="relative pt-32 pb-20 lg:pt-40 lg:pb-28 bg-gradient-to-b from-white to-slate-50 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-12 gap-12 items-center">
+          <div className="lg:col-span-7 space-y-6">
+            <div className="fade-up inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 border-2 border-emerald-200 text-emerald-800 text-xs font-bold">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Plataforma Integral F&B · Web + App Móvil
             </div>
+            <h1 className="fade-up d1 text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 leading-[1.1] tracking-tight">
+              Convierte el caos de tu cocina en <span className="text-emerald-600">decisiones rentables</span> en tiempo real
+            </h1>
+            <p className="fade-up d2 text-lg text-slate-600 leading-relaxed max-w-2xl">
+              Costes, APPCC, inventarios y TPV unificados. Recupera hasta el <strong>85% de las pérdidas ocultas</strong> en mermas y escandallos desfasados.
+            </p>
+            <div className="fade-up d3 flex flex-col sm:flex-row gap-4 pt-2">
+              <button onClick={() => setShowLogin(true)} className="px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-xl shadow-emerald-600/30 transition hover:scale-105">Solicitar Demo Gratuita →</button>
+              <a href="#calculadora" className="px-8 py-4 bg-white border-2 border-slate-300 rounded-xl font-bold hover:border-emerald-600 hover:text-emerald-600 text-center">💰 Calcular mis Pérdidas</a>
+            </div>
+            <div className="fade-up d4 pt-6 border-t border-slate-200 grid grid-cols-3 gap-4 text-sm font-medium text-slate-600">
+              <span>✓ Multi-Outlet</span><span>✓ TPV Conectado</span><span>✓ Setup 48h</span>
+            </div>
+          </div>
 
-            {/* UI Mockup (CSS Puro) */}
-            <div className="relative lg:ml-auto w-full max-w-lg lg:max-w-none">
-              <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-                {/* Fake Browser Header */}
-                <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center gap-2">
-                  <div className="flex gap-1.5">
-                    <div className="w-3 h-3 rounded-full bg-red-400"></div>
-                    <div className="w-3 h-3 rounded-full bg-amber-400"></div>
-                    <div className="w-3 h-3 rounded-full bg-emerald-400"></div>
-                  </div>
-                  <div className="flex-1 bg-white rounded-md h-6 mx-4 border border-slate-200 flex items-center px-2 text-xs text-slate-400">
-                    app.kostsoftware.com/dashboard
-                  </div>
-                </div>
-                
-                {/* Fake Dashboard Content */}
-                <div className="p-6 space-y-6">
-                  <div className="flex justify-between items-end">
-                    <div>
-                      <p className="text-sm text-slate-500 font-medium">Food Cost Global (Octubre)</p>
-                      <p className="text-3xl font-bold text-slate-900">24.8%</p>
-                    </div>
-                    <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-md flex items-center gap-1">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-                      -1.2% vs mes anterior
-                    </span>
-                  </div>
-                  
-                  {/* Fake Chart */}
-                  <div className="h-32 flex items-end justify-between gap-2">
-                    {[40, 65, 45, 80, 55, 90, 70].map((h, i) => (
-                      <div key={i} className="w-full bg-slate-100 rounded-t-sm relative group">
-                        <div 
-                          className={`absolute bottom-0 w-full rounded-t-sm transition-all duration-500 ${i === 5 ? 'bg-emerald-500' : 'bg-cyan-400'}`} 
-                          style={{ height: `${h}%` }}
-                        ></div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Fake Alert Card */}
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-3">
-                    <div className="bg-amber-100 p-1.5 rounded-md text-amber-600 mt-0.5">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-amber-900">Alerta de Proveedor</p>
-                      <p className="text-xs text-amber-800 mt-1">El precio del <span className="font-bold">Aceite de Oliva (5L)</span> ha subido un 12%. El coste de la "Ensalada César" ha variado +0.15€.</p>
-                    </div>
-                  </div>
+          <div className="fade-up d2 lg:col-span-5">
+            <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
+              <img src="/img/ceviche.jpg" alt="Ceviche Peruano" className="w-full h-80 object-cover" />
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/90 to-transparent p-4">
+                <p className="text-white font-bold">Ceviche Peruano</p>
+                <div className="flex gap-2 mt-1">
+                  <span className="text-[10px] bg-emerald-500 text-white font-bold px-2 py-0.5 rounded">FC 26.5%</span>
+                  <span className="text-[10px] bg-white/20 text-white font-bold px-2 py-0.5 rounded">🐴 Caballo de batalla</span>
                 </div>
               </div>
-              
-              {/* Decorative elements behind mockup */}
-              <div className="absolute -z-10 top-10 -right-10 w-full h-full bg-gradient-to-br from-cyan-500 to-emerald-500 rounded-2xl opacity-20 blur-2xl"></div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ================= ASÍ FUNCIONA POR DENTRO (INTERACTIVO) ================= */}
-      <section className="py-20 bg-white border-y border-slate-100">
+      {/* CARTA REAL (fotos) */}
+      <section id="carta" className="py-16 bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-4 tracking-tight">Así funciona por dentro</h2>
-            <p className="text-lg text-slate-600">Tres pilares operativos diseñados para eliminar las pérdidas invisibles de tu cocina.</p>
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-black text-slate-900">Tu carta, analizada plato a plato</h2>
+            <p className="text-slate-600 mt-2 text-sm">Cada receta con su food cost y su posición en la matriz, en vivo</p>
           </div>
-
-          <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
-            {/* Tabs */}
-            <div className="lg:w-1/3 space-y-2">
-              {[
-                { id: 'escandallos', title: 'Escandallos Vivos', desc: 'El coste de tus platos se recalcula automáticamente cuando un proveedor cambia el precio de un ingrediente.' },
-                { id: 'inventario', title: 'Inventario y Mermas', desc: 'Compara en un clic el stock teórico (según ventas) con el stock real del almacén.' },
-                { id: 'menu', title: 'Menu Engineering', desc: 'Matriz de rentabilidad que clasifica tus platos en Estrellas, Caballos de Batalla, Puzles y Perros.' }
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`w-full text-left p-5 rounded-xl border transition-all duration-200 ${
-                    activeTab === tab.id 
-                      ? 'bg-slate-900 border-slate-900 text-white shadow-lg' 
-                      : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  <h3 className="font-bold text-lg mb-1">{tab.title}</h3>
-                  <p className={`text-sm ${activeTab === tab.id ? 'text-slate-300' : 'text-slate-500'}`}>{tab.desc}</p>
-                </button>
-              ))}
-            </div>
-
-            {/* Visual Display */}
-            <div className="lg:w-2/3 bg-slate-50 rounded-2xl border border-slate-200 p-6 sm:p-8 flex items-center justify-center min-h-[400px]">
-              {activeTab === 'escandallos' && (
-                <div className="w-full max-w-md bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-4">
-                    <span className="font-semibold text-slate-800">Solomillo al Whisky</span>
-                    <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-medium">Food Cost: 22%</span>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-600">Solomillo (200g)</span>
-                      <span className="font-medium text-slate-900">4.50 €</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-600">Nata (50ml)</span>
-                      <span className="font-medium text-slate-900">0.30 €</span>
-                    </div>
-                    <div className="flex justify-between text-sm bg-amber-50 p-2 rounded border border-amber-100">
-                      <span className="text-amber-800 flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-                        Whisky (30ml)
-                      </span>
-                      <span className="font-bold text-amber-700">1.20 € <span className="text-xs font-normal text-amber-600 line-through ml-1">1.05 €</span></span>
-                    </div>
-                  </div>
-                  <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
-                    <span className="text-sm text-slate-500">Coste Total Actualizado</span>
-                    <span className="text-xl font-bold text-slate-900">6.00 €</span>
-                  </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {gallery.map((g, i) => (
+              <div key={i} className="group rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-xl transition bg-white">
+                <div className="relative h-44 overflow-hidden">
+                  <img src={g.img} alt={g.name} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                  <span className="absolute top-2 right-2 text-[10px] bg-white/90 text-slate-800 font-bold px-2 py-1 rounded">{g.tag}</span>
                 </div>
-              )}
-
-              {activeTab === 'inventario' && (
-                <div className="w-full max-w-md space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-                    <h4 className="font-semibold text-slate-800 mb-4">Desviación de Inventario (Semanal)</h4>
-                    <div className="space-y-4">
-                      {[
-                        { item: 'Harina de Trigo', teorico: '50 kg', real: '48 kg', diff: '-4%', status: 'bg-emerald-500' },
-                        { item: 'Gamba Blanca', teorico: '10 kg', real: '7.5 kg', diff: '-25%', status: 'bg-red-500' },
-                        { item: 'Aceite de Girasol', teorico: '20 L', real: '19.5 L', diff: '-2.5%', status: 'bg-emerald-500' }
-                      ].map((row, i) => (
-                        <div key={i} className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-slate-800">{row.item}</p>
-                            <p className="text-xs text-slate-500">Teórico: {row.teorico} | Real: {row.real}</p>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className={`text-xs font-bold px-2 py-1 rounded text-white ${row.status}`}>{row.diff}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'menu' && (
-                <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-lg text-center">
-                        <p className="text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1">Estrellas</p>
-                        <p className="text-sm text-emerald-900 font-medium">Alta Popularidad<br/>Alto Margen</p>
-                        <p className="text-xs text-emerald-600 mt-2">Ej: Solomillo, Ensalada</p>
-                      </div>
-                      <div className="bg-cyan-50 border border-cyan-200 p-4 rounded-lg text-center">
-                        <p className="text-xs font-bold text-cyan-800 uppercase tracking-wider mb-1">Caballos de Batalla</p>
-                        <p className="text-sm text-cyan-900 font-medium">Alta Popularidad<br/>Bajo Margen</p>
-                        <p className="text-xs text-cyan-600 mt-2">Ej: Menú del día</p>
-                      </div>
-                      <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg text-center">
-                        <p className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-1">Puzles</p>
-                        <p className="text-sm text-amber-900 font-medium">Baja Popularidad<br/>Alto Margen</p>
-                        <p className="text-xs text-amber-600 mt-2">Ej: Vino de la casa</p>
-                      </div>
-                      <div className="bg-red-50 border border-red-200 p-4 rounded-lg text-center">
-                        <p className="text-xs font-bold text-red-800 uppercase tracking-wider mb-1">Perros</p>
-                        <p className="text-sm text-red-900 font-medium">Baja Popularidad<br/>Bajo Margen</p>
-                        <p className="text-xs text-red-600 mt-2">Ej: Postre X (Eliminar)</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ================= PAIN VS SOLUTION (FEATURES) ================= */}
-      <section className="py-20 bg-slate-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-24">
-          
-          {/* Feature 1 */}
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div>
-              <div className="inline-block px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold mb-4">EL PROBLEMA</div>
-              <h3 className="text-3xl font-bold text-slate-900 mb-4">¿Pierdes margen sin saber qué ingrediente subió de precio?</h3>
-              <p className="text-lg text-slate-600 mb-6">Las facturas de los proveedores cambian cada semana. Si actualizas tus recetas a mano, siempre vas con retraso y tus precios de venta no reflejan la realidad.</p>
-              <div className="flex items-start gap-3 p-4 bg-white rounded-xl border border-emerald-200 shadow-sm">
-                <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600 mt-1">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                </div>
-                <div>
-                  <h4 className="font-bold text-slate-900">La Solución KOST: Alertas Inteligentes</h4>
-                  <p className="text-sm text-slate-600 mt-1">El sistema cruza tus últimas facturas con tus escandallos. Si un ingrediente sube más de un 5%, recibes una alerta y el Food Cost del plato se recalcula al instante.</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white p-6 rounded-2xl shadow-xl border border-slate-200">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-cyan-100 rounded-lg flex items-center justify-center text-cyan-600">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-                </div>
-                <span className="font-bold text-slate-800">Módulo de Proveedores</span>
-              </div>
-              <div className="space-y-3">
-                {['Centralización de todas las fichas de producto', 'Histórico de evolución de precios de compra', 'Comparativa automática entre proveedores'].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3 text-sm text-slate-700">
-                    <svg className="w-5 h-5 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Feature 2 */}
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="order-2 lg:order-1 bg-white p-6 rounded-2xl shadow-xl border border-slate-200">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center text-indigo-600">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
-                </div>
-                <span className="font-bold text-slate-800">Módulo de Inventarios y HACCP</span>
-              </div>
-              <div className="space-y-3">
-                {['Conteos cíclicos rápidos desde el móvil', 'Cálculo automático de mermas y desperdicio', 'Checklists de limpieza y control de temperaturas (APPCC)'].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3 text-sm text-slate-700">
-                    <svg className="w-5 h-5 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="order-1 lg:order-2">
-              <div className="inline-block px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold mb-4">EL PROBLEMA</div>
-              <h3 className="text-3xl font-bold text-slate-900 mb-4">¿Haces inventario a ojo y las cuentas nunca cuadran?</h3>
-              <p className="text-lg text-slate-600 mb-6">El stock teórico que te dice el TPV rara vez coincide con la realidad. Las mermas, los errores de comanda y el desperdicio se comen tu beneficio en silencio.</p>
-              <div className="flex items-start gap-3 p-4 bg-white rounded-xl border border-emerald-200 shadow-sm">
-                <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600 mt-1">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                </div>
-                <div>
-                  <h4 className="font-bold text-slate-900">La Solución KOST: Trazabilidad Total</h4>
-                  <p className="text-sm text-slate-600 mt-1">Digitaliza tus conteos. El sistema te muestra exactamente dónde está la desviación y te obliga a justificar las mermas, integrando además los controles sanitarios obligatorios.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-      {/* ================= FAQ SECTION ================= */}
-      <section className="py-20 bg-white">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-slate-900 mb-4">Preguntas Frecuentes</h2>
-            <p className="text-slate-600">Resolvemos las dudas técnicas más comunes de los profesionales del sector.</p>
-          </div>
-          
-          <div className="space-y-4">
-            {faqs.map((faq) => (
-              <div key={faq.id} className="border border-slate-200 rounded-xl overflow-hidden">
-                <button
-                  onClick={() => setOpenFaq(openFaq === faq.id ? null : faq.id)}
-                  className="w-full flex justify-between items-center p-5 text-left bg-white hover:bg-slate-50 transition-colors"
-                >
-                  <span className="font-semibold text-slate-900 pr-4">{faq.q}</span>
-                  <svg 
-                    className={`w-5 h-5 text-slate-500 flex-shrink-0 transition-transform duration-200 ${openFaq === faq.id ? 'rotate-180' : ''}`} 
-                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                <div 
-                  className={`overflow-hidden transition-all duration-300 ease-in-out ${openFaq === faq.id ? 'max-h-48 opacity-100' : 'max-h-0 opacity-0'}`}
-                >
-                  <div className="p-5 pt-0 text-slate-600 leading-relaxed border-t border-slate-100 mt-2">
-                    {faq.a}
+                <div className="p-4">
+                  <p className="font-bold text-slate-900 text-sm">{g.name}</p>
+                  <div className="flex justify-between mt-2 text-xs">
+                    <span className="text-slate-500">FC <b className={parseFloat(g.fc) > 30 ? 'text-rose-600' : 'text-emerald-600'}>{g.fc}</b></span>
+                    <span className="text-slate-500">Margen <b className="text-emerald-600">{g.margen}</b></span>
                   </div>
                 </div>
               </div>
@@ -439,113 +240,143 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ================= FINAL CTA ================= */}
-      <section className="py-20 bg-slate-900 text-white">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl sm:text-4xl font-bold mb-6 tracking-tight">Deja de adivinar. Empieza a controlar.</h2>
-          <p className="text-lg text-slate-400 mb-8 max-w-2xl mx-auto">
-            Únete a los restaurantes que han recuperado hasta un 5% de su facturación anual simplemente digitalizando sus escandallos e inventarios.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button
-              onClick={() => setShowLogin(true)}
-              className="px-8 py-4 bg-emerald-600 text-white rounded-xl font-semibold text-lg hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/50"
-            >
-              Comenzar prueba gratuita de 14 días
-            </button>
-            <button className="px-8 py-4 bg-transparent text-white border border-slate-700 rounded-xl font-semibold text-lg hover:bg-slate-800 transition-all">
-              Hablar con un experto
-            </button>
+      {/* DIFERENCIALES */}
+      <section className="py-12 bg-slate-100 border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {[
+            { icon: "⚡", title: "Escandallos Vivos", desc: "Se actualizan solos con cada factura" },
+            { icon: "🎯", title: "Menu Engineering Real", desc: "Basado en ventas reales del TPV" },
+            { icon: "🤖", title: "IA en Facturas", desc: "Cero picado manual" },
+            { icon: "🛡️", title: "APPCC Digital", desc: "Sanidad sin papel con QR" },
+            { icon: "🏢", title: "Multi-Outlet", desc: "Cada local analizado aparte" }
+          ].map((it, i) => (
+            <div key={i} className="bg-white p-5 rounded-xl border border-slate-200 text-center hover:shadow-lg hover:border-emerald-300 transition">
+              <div className="text-3xl mb-2">{it.icon}</div>
+              <h3 className="font-bold text-slate-900 text-sm mb-1">{it.title}</h3>
+              <p className="text-xs text-slate-600">{it.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* MÓDULOS */}
+      <section id="modulos" className="py-20 bg-slate-50 border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-3xl mx-auto mb-14">
+            <h2 className="text-3xl sm:text-4xl font-black text-slate-900">Todo tu negocio F&B bajo control</h2>
+            <p className="text-slate-600 mt-3">Selecciona cualquier módulo para verlo en acción</p>
+          </div>
+          <div className="grid lg:grid-cols-12 gap-8 items-start">
+            <div className="lg:col-span-5 space-y-2">
+              {modulesData.map((m) => (
+                <button key={m.id} onClick={() => setActiveModule(m.id)}
+                  className={`w-full text-left p-4 rounded-xl border-2 transition flex items-center justify-between ${activeModule === m.id ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg' : 'bg-white text-slate-700 border-slate-200 hover:border-emerald-300'}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl ${activeModule === m.id ? 'bg-emerald-700' : 'bg-slate-100'}`}>{m.icon}</div>
+                    <div>
+                      <p className={`text-xs font-mono font-bold ${activeModule === m.id ? 'text-emerald-100' : 'text-slate-400'}`}>{m.badge}</p>
+                      <p className="text-sm font-bold leading-snug">{m.title}</p>
+                    </div>
+                  </div>
+                  <span>›</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="lg:col-span-7 lg:sticky lg:top-28">
+              {(() => {
+                const mod = modulesData.find(m => m.id === activeModule) || modulesData[4];
+                return (
+                  <div key={mod.id} className="fade-up bg-white border-2 border-slate-200 rounded-2xl p-6 sm:p-8 shadow-lg space-y-6">
+                    <div>
+                      <span className="text-xs font-mono font-bold text-emerald-700 bg-emerald-100 px-3 py-1 rounded border border-emerald-200">{mod.badge}</span>
+                      <h3 className="text-2xl font-black text-slate-900 mt-2">{mod.title}</h3>
+                      <p className="text-sm text-slate-600 mt-1">{mod.subtitle}</p>
+                    </div>
+                    <div><p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Vista en vivo:</p>{mod.preview}</div>
+                    <div className="space-y-3">
+                      <p className="text-xs font-bold text-slate-900 uppercase tracking-wider">Capacidades:</p>
+                      {mod.features.map((f, i) => (
+                        <div key={i} className="flex items-start gap-2.5 text-sm text-slate-700">
+                          <svg className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                          <span>{f}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={() => setShowLogin(true)} className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm shadow-md">Ver {mod.title} en Acción →</button>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ================= FOOTER ================= */}
-      <footer className="bg-slate-950 text-slate-400 py-12 border-t border-slate-900">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-emerald-600 to-cyan-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold">K</span>
-              </div>
-              <span className="text-white font-bold text-lg">KOST Software™</span>
-            </div>
-            <div className="flex gap-8 text-sm">
-              <a href="#" className="hover:text-white transition-colors">Privacidad</a>
-              <a href="#" className="hover:text-white transition-colors">Términos</a>
-              <a href="#" className="hover:text-white transition-colors">Contacto</a>
-            </div>
-            <p className="text-sm text-slate-600">© {new Date().getFullYear()} KOST Software. Todos los derechos reservados.</p>
+      {/* TESTIMONIOS */}
+      <section className="py-20 bg-white border-b border-slate-200">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl font-black text-slate-900 mb-10">Lo que dicen nuestros clientes</h2>
+          <div className="bg-gradient-to-br from-emerald-50 to-slate-50 rounded-2xl p-8 sm:p-12 border-2 border-emerald-200 shadow-lg text-left">
+            <p className="text-xl sm:text-2xl text-slate-800 leading-relaxed mb-6 font-medium">"{testimonials[activeTestimonial].quote}"</p>
+            <p className="font-bold text-slate-900">{testimonials[activeTestimonial].author}</p>
+            <p className="text-sm text-slate-600">{testimonials[activeTestimonial].role} · {testimonials[activeTestimonial].location}</p>
           </div>
+          <div className="flex justify-center gap-2 mt-6">
+            {testimonials.map((_, i) => (
+              <button key={i} onClick={() => setActiveTestimonial(i)} className={`h-3 rounded-full transition-all ${activeTestimonial === i ? 'bg-emerald-600 w-8' : 'bg-slate-300 w-3'}`} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CALCULADORA */}
+      <section id="calculadora" className="py-20 bg-gradient-to-br from-slate-900 to-slate-800 text-white">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white/5 backdrop-blur-sm rounded-3xl p-8 sm:p-12 border border-white/10 shadow-2xl space-y-8">
+            <div className="text-center space-y-3">
+              <h2 className="text-3xl sm:text-4xl font-black">¿Cuánto dinero estás perdiendo ahora mismo?</h2>
+              <p className="text-slate-300 text-sm">La hostelería pierde de media un 5,8% en fugas de margen no detectadas</p>
+            </div>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold">Facturación Mensual:</span>
+                <span className="text-3xl font-black text-emerald-400 font-mono">{ventasMensuales.toLocaleString('es-ES')}€</span>
+              </div>
+              <input type="range" min="10000" max="250000" step="5000" value={ventasMensuales} onChange={(e) => setVentasMensuales(Number(e.target.value))} className="w-full h-3 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-600" />
+            </div>
+            <div className="grid sm:grid-cols-3 gap-4">
+              <div className="bg-rose-500/20 p-5 rounded-2xl border border-rose-500/30"><p className="text-xs font-bold text-rose-300 uppercase mb-2">Pérdidas / mes</p><p className="text-3xl font-black text-rose-400 font-mono">-{fugaFB.toLocaleString('es-ES')}€</p></div>
+              <div className="bg-emerald-500/20 p-5 rounded-2xl border border-emerald-500/30"><p className="text-xs font-bold text-emerald-300 uppercase mb-2">Recuperación / año</p><p className="text-3xl font-black text-emerald-400 font-mono">+{ahorroAnual.toLocaleString('es-ES')}€</p></div>
+              <div className="bg-blue-500/20 p-5 rounded-2xl border border-blue-500/30"><p className="text-xs font-bold text-blue-300 uppercase mb-2">Horas ahorradas / mes</p><p className="text-3xl font-black text-blue-400 font-mono">{horasAhorradas}h</p></div>
+            </div>
+            <div className="text-center">
+              <button onClick={() => setShowLogin(true)} className="px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl shadow-xl hover:scale-105 transition">Recuperar {recuperacionMensual.toLocaleString('es-ES')}€/mes →</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="py-16 bg-slate-900 text-white text-center">
+        <div className="max-w-5xl mx-auto px-4 space-y-6">
+          <h2 className="text-3xl sm:text-4xl font-black">¿Listo para recuperar tu margen?</h2>
+          <p className="text-slate-400">Setup en 48 horas. Sin permanencia.</p>
+          <button onClick={() => setShowLogin(true)} className="px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl shadow-xl">Comenzar con KOST →</button>
+          <p className="text-xs text-slate-500 font-mono pt-8 border-t border-slate-800">© 2026 KOST Software F&B</p>
         </div>
       </footer>
 
-      {/* ================= MODAL LOGIN (INTACTO) ================= */}
+      {/* MODAL */}
       {showLogin && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md relative animate-in fade-in zoom-in duration-200">
-            <button
-              onClick={() => { setShowLogin(false); setError(''); }}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold"
-            >
-              ×
-            </button>
-            
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-emerald-600 to-cyan-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-                <span className="text-white text-3xl font-bold">K</span>
-              </div>
-              <h3 className="text-2xl font-bold text-gray-800">Iniciar Sesión</h3>
-              <p className="text-gray-500 text-sm mt-1">Accede a tu panel de control</p>
-            </div>
-
-            <form onSubmit={handleLogin} className="space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Código de usuario</label>
-                <input
-                  type="text"
-                  value={codigo}
-                  onChange={(e) => setCodigo(e.target.value)}
-                  placeholder="Ej: B0001"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">PIN</label>
-                <input
-                  type="password"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  placeholder="****"
-                  maxLength={4}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
-                  required
-                />
-              </div>
-
-              {error && (
-                <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm border border-red-200">
-                  {error}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 bg-gradient-to-r from-emerald-600 to-cyan-600 text-white rounded-lg font-semibold hover:from-emerald-700 hover:to-cyan-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all shadow-md"
-              >
-                {loading ? 'Entrando...' : 'Acceder al Sistema'}
-              </button>
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="fade-up bg-white rounded-2xl p-8 max-w-md w-full space-y-5 shadow-2xl relative">
+            <button onClick={() => setShowLogin(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 text-xl font-bold">✕</button>
+            <div><h3 className="text-2xl font-black text-slate-900">Acceder a KOST</h3><p className="text-sm text-slate-500 mt-1">Introduce tus credenciales</p></div>
+            <form onSubmit={(e) => { e.preventDefault(); setShowLogin(false); }} className="space-y-4">
+              <input type="email" required placeholder="gerencia@restaurante.com" className="w-full bg-slate-50 border-2 border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-600" />
+              <input type="password" required placeholder="••••••••" className="w-full bg-slate-50 border-2 border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-600" />
+              <button type="submit" className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm">Entrar al Sistema →</button>
             </form>
-
-            <div className="mt-6 pt-6 border-t border-gray-100">
-              <p className="text-xs text-gray-500 text-center bg-gray-50 p-3 rounded-lg">
-                💡 <strong>Usuarios de prueba:</strong> B**** a B**** <br/>
-                🔑 <strong>PIN:</strong> **** (ADMIN) o **** (USER)
-              </p>
-            </div>
           </div>
         </div>
       )}
