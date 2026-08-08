@@ -15,7 +15,6 @@ export default function MenusPage() {
   const [links, setLinks] = useState<any[]>([]);
   const [platos, setPlatos] = useState<any[]>([]);
   const [recetas, setRecetas] = useState<any[]>([]);
-  const [tpvMap, setTpvMap] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
 
   const [modal, setModal] = useState(false);
@@ -28,24 +27,16 @@ export default function MenusPage() {
   }, []);
 
   async function cargar() {
-    const [mRes, mpRes, plRes, recRes, linRes] = await Promise.all([
+    const [mRes, mpRes, plRes, recRes] = await Promise.all([
       supabase.from('menus').select('*').order('created_at', { ascending: false }),
       supabase.from('menus_platos').select('*'),
       supabase.from('platos').select('*'),
       supabase.from('recetas').select('id, nombre, coste_total, precio_venta').order('nombre'),
-      supabase.from('ventas_lineas').select('nombre_articulo, unidades'),
     ]);
-
-    const mapa = new Map<string, number>();
-    (linRes.data || []).forEach((l: any) => {
-      mapa.set(l.nombre_articulo, (mapa.get(l.nombre_articulo) || 0) + Number(l.unidades || 0));
-    });
-
     setMenus(mRes.data || []);
     setLinks(mpRes.data || []);
     setPlatos(plRes.data || []);
     setRecetas(recRes.data || []);
-    setTpvMap(mapa);
     setLoading(false);
   }
 
@@ -79,14 +70,12 @@ export default function MenusPage() {
     return 'bg-red-100 text-red-700 border-red-300';
   }
 
-  // Añadir receta al menú → crea el plato técnico si no existe
   async function addReceta(menuId: string, recetaId: string) {
     if (!recetaId) return;
     const rec = recetas.find((r) => r.id === recetaId);
     if (!rec) return;
 
     let platoId: string | null = null;
-
     const { data: existente } = await supabase
       .from('platos')
       .select('id')
@@ -106,7 +95,6 @@ export default function MenusPage() {
         })
         .select()
         .single();
-
       if (error) {
         alert(`Error creando plato: ${error.message}`);
         return;
@@ -127,14 +115,6 @@ export default function MenusPage() {
     await supabase
       .from('platos')
       .update({ precio_venta: valor === '' ? null : parseFloat(valor) })
-      .eq('id', platoId);
-    cargar();
-  }
-
-  async function updateTpv(platoId: string, nombreTpv: string) {
-    await supabase
-      .from('platos')
-      .update({ nombre_tpv: nombreTpv || null })
       .eq('id', platoId);
     cargar();
   }
@@ -202,22 +182,13 @@ export default function MenusPage() {
           <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
             <p className="text-4xl mb-3">📋</p>
             <p className="font-semibold text-slate-700">Aún no hay menús</p>
-            <p className="text-sm text-slate-500 mt-1">
-              Crea tu primer menú (Carta Chiringuito, Menú del Día, Navidad...) y móntalo con recetas
-            </p>
-            <button
-              onClick={() => setModal(true)}
-              className="mt-5 px-6 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium text-sm"
-            >
-              ➕ Crear primer menú
-            </button>
+            <p className="text-sm text-slate-500 mt-1">Crea tu primer menú y móntalo con recetas</p>
           </div>
         ) : (
           menus.map((m) => {
             const met = metricas(m);
             return (
               <div key={m.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                {/* Cabecera del menú */}
                 <div className="p-5 flex flex-wrap items-center gap-4">
                   <div className="flex-1 min-w-[200px]">
                     <h2 className="font-bold text-lg text-slate-900">{m.nombre}</h2>
@@ -267,7 +238,6 @@ export default function MenusPage() {
                   </div>
                 </div>
 
-                {/* Montaje desde RECETAS */}
                 {abierto === m.id && (
                   <div className="border-t border-slate-200 bg-slate-50 p-5 space-y-3">
                     {platosDe(m.id).map(({ link, plato, receta }: any) => (
@@ -278,13 +248,9 @@ export default function MenusPage() {
                               {receta?.nombre || plato.nombre}
                             </p>
                             <p className="text-[11px] text-slate-500">
-                              Coste vivo {receta ? eur(receta.coste_total) : '—'} ·
-                              {plato.nombre_tpv
-                                ? ` TPV: ${plato.nombre_tpv} (${tpvMap.get(plato.nombre_tpv) || 0} uds)`
-                                : ' sin mapeo TPV'}
+                              Coste vivo {receta ? eur(receta.coste_total) : '—'}
                             </p>
                           </div>
-
                           <div className="w-24">
                             <label className="block text-[9px] text-slate-400 uppercase">PVP €</label>
                             <input
@@ -295,29 +261,6 @@ export default function MenusPage() {
                               className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-right focus:ring-2 focus:ring-orange-500 outline-none"
                             />
                           </div>
-
-                          <div className="w-48">
-                            <label className="block text-[9px] text-slate-400 uppercase">Artículo TPV</label>
-                            <select
-                              value={plato.nombre_tpv || ''}
-                              onChange={(e) => updateTpv(plato.id, e.target.value)}
-                              className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-[11px] bg-white focus:ring-2 focus:ring-orange-500 outline-none"
-                            >
-                              <option value="">— Sin mapeo —</option>
-                              {plato.nombre_tpv && (
-                                <option value={plato.nombre_tpv}>{plato.nombre_tpv}</option>
-                              )}
-                              {Array.from(tpvMap.entries())
-                                .filter(([n]) => n !== plato.nombre_tpv)
-                                .sort((a, b) => b[1] - a[1])
-                                .map(([n, u]) => (
-                                  <option key={n} value={n}>
-                                    {n} · {u} uds
-                                  </option>
-                                ))}
-                            </select>
-                          </div>
-
                           <button
                             onClick={() => removePlato(link.id)}
                             className="px-2.5 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition"
@@ -351,7 +294,6 @@ export default function MenusPage() {
         )}
       </main>
 
-      {/* MODAL NUEVO MENÚ */}
       {modal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl">
@@ -381,9 +323,7 @@ export default function MenusPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">
-                  Precio cerrado (€) — opcional
-                </label>
+                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Precio cerrado (€) — opcional</label>
                 <input
                   type="number"
                   step="0.01"
